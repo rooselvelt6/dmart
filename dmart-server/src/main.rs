@@ -17,6 +17,25 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: String,
+    version: String,
+    timestamp: String,
+}
+
+async fn health_check() -> impl axum::response::IntoResponse {
+    let now = chrono::Utc::now().to_rfc3339();
+    let response = HealthResponse {
+        status: "healthy".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        timestamp: now,
+    };
+    (axum::http::StatusCode::OK, axum::Json(response))
+}
+
 async fn spa_handler() -> impl IntoResponse {
     let dist_path = std::env::var("DMART_DIST_PATH")
         .unwrap_or_else(|_| "./dist".to_string());
@@ -59,6 +78,8 @@ async fn main() -> anyhow::Result<()> {
 
     // API Router
     let api_router = Router::new()
+        // Health check
+        .route("/health", get(health_check))
         // Patients
         .route("/patients", get(api::patients::list_patients).post(api::patients::create_patient))
         .route("/patients/{id}", get(api::patients::get_patient).put(api::patients::update_patient).delete(api::patients::delete_patient))

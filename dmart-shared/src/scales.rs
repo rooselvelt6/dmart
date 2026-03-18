@@ -28,8 +28,8 @@ fn points_pam(p: f32) -> u32 {
         p if p >= 160.0 => 4,
         p if p >= 130.0 => 3,
         p if p >= 110.0 => 2,
-        p if p >= 70.0  => 0,
-        p if p >= 50.0  => 2,
+        p if p >= 70.0 => 0,
+        p if p >= 50.0 => 2,
         _ => 4,
     }
 }
@@ -40,9 +40,9 @@ fn points_fc(fc: f32) -> u32 {
         fc if fc >= 180.0 => 4,
         fc if fc >= 140.0 => 3,
         fc if fc >= 110.0 => 2,
-        fc if fc >= 70.0  => 0,
-        fc if fc >= 55.0  => 2,
-        fc if fc >= 40.0  => 3,
+        fc if fc >= 70.0 => 0,
+        fc if fc >= 55.0 => 2,
+        fc if fc >= 40.0 => 3,
         _ => 4,
     }
 }
@@ -55,7 +55,7 @@ fn points_fr(fr: f32) -> u32 {
         fr if fr >= 25.0 => 1,
         fr if fr >= 12.0 => 0,
         fr if fr >= 10.0 => 1,
-        fr if fr >= 6.0  => 2,
+        fr if fr >= 6.0 => 2,
         _ => 4,
     }
 }
@@ -133,7 +133,11 @@ fn points_creatinina(cr: f32, falla_aguda: bool) -> u32 {
         cr if cr >= 0.6 => 0,
         _ => 2,
     };
-    if falla_aguda { pts * 2 } else { pts }
+    if falla_aguda {
+        pts * 2
+    } else {
+        pts
+    }
 }
 
 /// Hematocrito (%)
@@ -154,8 +158,8 @@ fn points_leucocitos(wbc: f32) -> u32 {
         w if w >= 40.0 => 4,
         w if w >= 20.0 => 2,
         w if w >= 15.0 => 1,
-        w if w >= 3.0  => 0,
-        w if w >= 1.0  => 2,
+        w if w >= 3.0 => 0,
+        w if w >= 1.0 => 2,
         _ => 4,
     }
 }
@@ -171,11 +175,11 @@ fn points_gcs(gcs: u8) -> u32 {
 
 fn points_edad(edad: u8) -> u32 {
     match edad {
-        0..=44  => 0,
+        0..=44 => 0,
         45..=54 => 2,
         55..=64 => 3,
         65..=74 => 5,
-        _       => 6,
+        _ => 6,
     }
 }
 
@@ -194,7 +198,11 @@ fn points_cronicas(data: &ApacheIIData) -> u32 {
         return 0;
     }
     // No quirúrgico o cirugía de emergencia → 5 pts; electiva → 2 pts
-    if data.cirugia_no_operado { 5 } else { 2 }
+    if data.cirugia_no_operado {
+        5
+    } else {
+        2
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,8 +210,7 @@ fn points_cronicas(data: &ApacheIIData) -> u32 {
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn calculate_apache_ii_score(data: &ApacheIIData) -> u32 {
-    let aps =
-        points_temperatura(data.temperatura)
+    let aps = points_temperatura(data.temperatura)
         + points_pam(data.presion_arterial_media)
         + points_fc(data.frecuencia_cardiaca)
         + points_fr(data.frecuencia_respiratoria)
@@ -244,28 +251,51 @@ pub struct ApacheIIBreakdown {
 }
 
 pub fn apache_ii_breakdown(data: &ApacheIIData) -> ApacheIIBreakdown {
-    let temperatura   = points_temperatura(data.temperatura);
-    let pam           = points_pam(data.presion_arterial_media);
-    let fc            = points_fc(data.frecuencia_cardiaca);
-    let fr            = points_fr(data.frecuencia_respiratoria);
-    let oxigenacion   = points_oxigenacion(data.fio2, data.pao2, data.a_ado2);
-    let ph            = points_ph(data.ph_arterial);
-    let sodio         = points_sodio(data.sodio_serico);
-    let potasio       = points_potasio(data.potasio_serico);
-    let creatinina_p  = points_creatinina(data.creatinina, data.falla_renal_aguda);
-    let hematocrito   = points_hematocrito(data.hematocrito);
-    let leucocitos    = points_leucocitos(data.leucocitos);
-    let gcs_pts       = points_gcs(data.gcs_total);
-    let aps_total     = temperatura + pam + fc + fr + oxigenacion + ph
-                        + sodio + potasio + creatinina_p + hematocrito + leucocitos + gcs_pts;
-    let edad_pts      = points_edad(data.edad);
-    let cronicas_pts  = points_cronicas(data);
-    let total         = aps_total + edad_pts + cronicas_pts;
+    let temperatura = points_temperatura(data.temperatura);
+    let pam = points_pam(data.presion_arterial_media);
+    let fc = points_fc(data.frecuencia_cardiaca);
+    let fr = points_fr(data.frecuencia_respiratoria);
+    let oxigenacion = points_oxigenacion(data.fio2, data.pao2, data.a_ado2);
+    let ph = points_ph(data.ph_arterial);
+    let sodio = points_sodio(data.sodio_serico);
+    let potasio = points_potasio(data.potasio_serico);
+    let creatinina_p = points_creatinina(data.creatinina, data.falla_renal_aguda);
+    let hematocrito = points_hematocrito(data.hematocrito);
+    let leucocitos = points_leucocitos(data.leucocitos);
+    let gcs_pts = points_gcs(data.gcs_total);
+    let aps_total = temperatura
+        + pam
+        + fc
+        + fr
+        + oxigenacion
+        + ph
+        + sodio
+        + potasio
+        + creatinina_p
+        + hematocrito
+        + leucocitos
+        + gcs_pts;
+    let edad_pts = points_edad(data.edad);
+    let cronicas_pts = points_cronicas(data);
+    let total = aps_total + edad_pts + cronicas_pts;
 
     ApacheIIBreakdown {
-        temperatura, pam, fc, fr, oxigenacion, ph, sodio, potasio,
-        creatinina: creatinina_p, hematocrito, leucocitos, gcs_pts,
-        aps_total, edad_pts, cronicas_pts, total,
+        temperatura,
+        pam,
+        fc,
+        fr,
+        oxigenacion,
+        ph,
+        sodio,
+        potasio,
+        creatinina: creatinina_p,
+        hematocrito,
+        leucocitos,
+        gcs_pts,
+        aps_total,
+        edad_pts,
+        cronicas_pts,
+        total,
     }
 }
 
@@ -273,14 +303,14 @@ pub fn apache_ii_breakdown(data: &ApacheIIData) -> ApacheIIBreakdown {
 /// Curva derivada de los datos originales de Knaus et al. 1985 (aproximación)
 pub fn mortality_risk(score: u32) -> f32 {
     match score {
-        0..=4   => 4.0,
-        5..=9   => 8.0,
+        0..=4 => 4.0,
+        5..=9 => 8.0,
         10..=14 => 15.0,
         15..=19 => 25.0,
         20..=24 => 40.0,
         25..=29 => 55.0,
         30..=34 => 73.0,
-        _       => 85.0,
+        _ => 85.0,
     }
 }
 
@@ -332,35 +362,51 @@ mod tests {
     fn test_normal_patient_low_score() {
         let data = normal_patient();
         let score = calculate_apache_ii_score(&data);
-        assert!(score < 10, "Normal patient should score < 10, got: {}", score);
+        assert!(
+            score < 10,
+            "Normal patient should score < 10, got: {}",
+            score
+        );
     }
 
     #[test]
     fn test_critical_patient_high_score() {
         let mut data = normal_patient();
-        data.temperatura = 42.0;        // +4
+        data.temperatura = 42.0; // +4
         data.presion_arterial_media = 180.0; // +4
-        data.frecuencia_cardiaca = 190.0;    // +4
+        data.frecuencia_cardiaca = 190.0; // +4
         data.frecuencia_respiratoria = 55.0; // +4
-        data.ph_arterial = 7.10;        // +4
-        data.sodio_serico = 185.0;      // +4
-        data.potasio_serico = 7.5;      // +4
-        data.creatinina = 4.0;          // +4
-        data.hematocrito = 15.0;        // +4
-        data.leucocitos = 45.0;         // +4
-        data.gcs_total = 3;             // +12
-        data.edad = 75;                 // +6
+        data.ph_arterial = 7.10; // +4
+        data.sodio_serico = 185.0; // +4
+        data.potasio_serico = 7.5; // +4
+        data.creatinina = 4.0; // +4
+        data.hematocrito = 15.0; // +4
+        data.leucocitos = 45.0; // +4
+        data.gcs_total = 3; // +12
+        data.edad = 75; // +6
         data.insuficiencia_hepatica = true;
         data.cirugia_no_operado = true; // +5
         let score = calculate_apache_ii_score(&data);
-        assert!(score >= 30, "Critical patient should score >= 30, got: {}", score);
+        assert!(
+            score >= 30,
+            "Critical patient should score >= 30, got: {}",
+            score
+        );
     }
 
     #[test]
     fn test_gcs_total() {
-        let gcs = GcsData { apertura_ocular: 4, respuesta_verbal: 5, respuesta_motora: 6 };
+        let gcs = GcsData {
+            apertura_ocular: 4,
+            respuesta_verbal: 5,
+            respuesta_motora: 6,
+        };
         assert_eq!(gcs.total(), 15);
-        let gcs2 = GcsData { apertura_ocular: 1, respuesta_verbal: 1, respuesta_motora: 1 };
+        let gcs2 = GcsData {
+            apertura_ocular: 1,
+            respuesta_verbal: 1,
+            respuesta_motora: 1,
+        };
         assert_eq!(gcs2.total(), 3);
     }
 }
