@@ -5,14 +5,9 @@ use crate::pages::{
 };
 use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
-use leptos::html::window;
 use leptos::prelude::*;
-use leptos_router::components::*;
 use leptos_router::components::{Redirect, Route, Router, Routes, A};
 use leptos_router::hooks::use_location;
-use leptos_router::hooks::*;
-use leptos_router::hooks::*;
-use leptos_router::path;
 use leptos_router::path;
 
 #[component]

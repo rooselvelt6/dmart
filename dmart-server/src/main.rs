@@ -24,7 +24,7 @@ async fn spa_handler() -> impl IntoResponse {
     
     match std::fs::read_to_string(&index_path) {
         Ok(content) => (StatusCode::OK, Html(content)),
-        Err(_) => (StatusCode::NOT_FOUND, Html("<h1>404 - Not Found</h1><p>Index not found</p>")),
+        Err(_) => (StatusCode::NOT_FOUND, Html("<h1>404 - Not Found</h1><p>Index not found</p>".to_string())),
     }
 }
 
@@ -81,10 +81,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/login", get(spa_handler))
         .route("/patients", get(spa_handler))
         .route("/patients/new", get(spa_handler))
-        .route("/patients/:id", get(spa_handler))
-        .route("/patients/:id/edit", get(spa_handler))
-        .route("/patients/:id/measure", get(spa_handler))
-        .get(spa_handler)
+        .route("/patients/{id}", get(spa_handler))
+        .route("/patients/{id}/edit", get(spa_handler))
+        .route("/patients/{id}/measure", get(spa_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 

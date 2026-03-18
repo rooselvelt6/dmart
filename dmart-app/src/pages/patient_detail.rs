@@ -1,10 +1,16 @@
 use leptos::prelude::*;
 use leptos::either::Either;
+use leptos::task::spawn_local;
 use leptos_router::hooks::*;
 use dmart_shared::models::*;
 use crate::api;
 use crate::components::severity_badge::SeverityBadge;
 use crate::components::chart::EvolutionChart;
+
+fn show_alert(msg: &str) {
+    web_sys::window()
+        .and_then(|w| w.alert_with_message(msg).ok());
+}
 
 #[component]
 pub fn PatientDetailPage() -> impl IntoView {
@@ -19,6 +25,29 @@ pub fn PatientDetailPage() -> impl IntoView {
     let measurements_res = LocalResource::new(move || {
         let pid = id();
         async move { api::get_measurements(&pid).await }
+    });
+
+    let show_delete_modal = RwSignal::new(false);
+    let deleting = RwSignal::new(false);
+    let navigate = use_navigate();
+
+    let do_delete = StoredValue::new(move || {
+        let pid = id();
+        deleting.set(true);
+        let nav = navigate.clone();
+        spawn_local(async move {
+            match api::delete_patient(&pid).await {
+                Ok(_) => {
+                    deleting.set(false);
+                    nav("/patients", Default::default());
+                },
+                Err(e) => {
+                    deleting.set(false);
+                    show_delete_modal.set(false);
+                    show_alert(&format!("Error al eliminar: {}", e));
+                }
+            }
+        });
     });
 
     view! {
@@ -43,12 +72,18 @@ pub fn PatientDetailPage() -> impl IntoView {
                                         </div>
                                     </div>
                                     <div class="flex gap-3">
+                                        <a href=format!("/patients/{}/edit", p.patient_id) class="btn-outline flex items-center gap-2">
+                                            "✏️ Editar"
+                                        </a>
                                         <a href=format!("/api/patients/{}/export/pdf", p.patient_id) target="_blank" class="btn-outline flex items-center gap-2">
                                             "📄 PDF"
                                         </a>
                                         <a href=format!("/api/patients/{}/export/csv", p.patient_id) class="btn-outline flex items-center gap-2">
                                             "📊 CSV"
                                         </a>
+                                        <button on:click=move |_| show_delete_modal.set(true) class="btn-danger flex items-center gap-2">
+                                            "🗑️ Eliminar"
+                                        </button>
                                         <a href=format!("/patients/{}/measure", p.patient_id) class="btn-primary">
                                             "+ Nueva Medición"
                                         </a>
@@ -170,6 +205,32 @@ pub fn PatientDetailPage() -> impl IntoView {
                     _ => Either::Right(view! { <div class="text-center p-20 text-uci-critical">"Paciente no encontrado"</div> }),
                 })}
             </Suspense>
+
+            // Delete Confirmation Modal
+            <Show when=move || show_delete_modal.get()>
+                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+                    <div class="glass-card p-8 max-w-md mx-4">
+                        <h3 class="text-xl font-bold text-uci-text mb-4">"Confirmar Eliminación"</h3>
+                        <p class="text-uci-muted mb-6">"¿Está seguro de eliminar este paciente? Esta acción no se puede deshacer y se eliminarán todas las mediciones asociadas."</p>
+                        <div class="flex gap-3 justify-end">
+                            <button 
+                                on:click=move |_| show_delete_modal.set(false)
+                                class="btn-outline"
+                                disabled=deleting
+                            >
+                                "Cancelar"
+                            </button>
+                            <button 
+                                on:click=move |_| do_delete.with_value(|f| f())
+                                class="btn-danger"
+                                disabled=deleting
+                            >
+                                {move || if deleting.get() { "Eliminando..." } else { "Eliminar Paciente" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Show>
         </div>
     }
 }

@@ -123,6 +123,16 @@ pub fn MeasurementPage() -> impl IntoView {
                                                 on_change=move |v| set_apache.update(|a| a.fio2 = v) />
 
                                             <ScaleSlider 
+                                                label="PaO2 (Presión Arterial O2)" unit="mmHg" min=0.0 max=500.0 step=1.0
+                                                value=Signal::derive(move || apache.get().pao2.unwrap_or(80.0))
+                                                on_change=move |v| set_apache.update(|a| a.pao2 = Some(v)) />
+
+                                            <ScaleSlider 
+                                                label="A-aDO2 (Gradiente Alveolo-Art.)" unit="mmHg" min=0.0 max=600.0 step=1.0
+                                                value=Signal::derive(move || apache.get().a_ado2.unwrap_or(0.0))
+                                                on_change=move |v| set_apache.update(|a| a.a_ado2 = Some(v)) />
+
+                                            <ScaleSlider 
                                                 label="pH Arterial" unit="" min=7.0 max=7.8 step=0.01
                                                 value=Signal::derive(move || apache.get().ph_arterial)
                                                 on_change=move |v| set_apache.update(|a| a.ph_arterial = v) />
@@ -145,7 +155,7 @@ pub fn MeasurementPage() -> impl IntoView {
                                             <div class="mb-6 flex items-center justify-between p-4 bg-uci-surface rounded-xl border border-uci-border">
                                                 <div>
                                                     <div class="text-[12px] font-bold text-uci-muted uppercase mb-1">"Falla Renal Aguda"</div>
-                                                    <div class="text-[10px] text-uci-muted">"Si es true, duplica puntos de Creatinina"</div>
+                                                    <div class="text-[10px] text-uci-muted">"Duplica puntos de Creatinina"</div>
                                                 </div>
                                                 <Toggle 
                                                     value=Signal::derive(move || apache.get().falla_renal_aguda)
@@ -224,7 +234,62 @@ pub fn MeasurementPage() -> impl IntoView {
                                         </div>
                                     </section>
 
-                                    // 4. Notas
+                                    // 4. Datos del Paciente (Edad y Comorbilidades)
+                                    <section>
+                                        <h2 class="text-uci-text font-bold text-lg mb-6 flex items-center gap-3">
+                                            <span class="w-8 h-8 rounded-lg bg-uci-accent/20 flex items-center justify-center text-uci-accent">"👤"</span>
+                                            "Datos del Paciente"
+                                        </h2>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12">
+                                            <ScaleSlider 
+                                                label="Edad del Paciente" unit="años" min=0.0 max=120.0 step=1.0
+                                                value=Signal::derive(move || apache.get().edad as f32)
+                                                on_change=move |v| set_apache.update(|a| a.edad = v as u8) />
+                                        </div>
+                                        <div class="mt-6 bg-uci-card/30 p-6 rounded-2xl border border-uci-border">
+                                            <h3 class="text-sm font-bold text-uci-text mb-4">"Enfermedades Crónicas Severas (5 puntos si existen)"</h3>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
+                                                    <div class="text-xs text-uci-muted">"Insuficiencia Hepática"</div>
+                                                    <Toggle 
+                                                        value=Signal::derive(move || apache.get().insuficiencia_hepatica)
+                                                        on_change=move |v| set_apache.update(|a| a.insuficiencia_hepatica = v) />
+                                                </div>
+                                                <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
+                                                    <div class="text-xs text-uci-muted">"Cardiovascular Severa"</div>
+                                                    <Toggle 
+                                                        value=Signal::derive(move || apache.get().cardiovascular_severa)
+                                                        on_change=move |v| set_apache.update(|a| a.cardiovascular_severa = v) />
+                                                </div>
+                                                <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
+                                                    <div class="text-xs text-uci-muted">"Insuficiencia Respiratoria"</div>
+                                                    <Toggle 
+                                                        value=Signal::derive(move || apache.get().insuficiencia_respiratoria)
+                                                        on_change=move |v| set_apache.update(|a| a.insuficiencia_respiratoria = v) />
+                                                </div>
+                                                <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
+                                                    <div class="text-xs text-uci-muted">"Insuficiencia Renal Crónica"</div>
+                                                    <Toggle 
+                                                        value=Signal::derive(move || apache.get().insuficiencia_renal)
+                                                        on_change=move |v| set_apache.update(|a| a.insuficiencia_renal = v) />
+                                                </div>
+                                                <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
+                                                    <div class="text-xs text-uci-muted">"Inmunocomprometido"</div>
+                                                    <Toggle 
+                                                        value=Signal::derive(move || apache.get().inmunocomprometido)
+                                                        on_change=move |v| set_apache.update(|a| a.inmunocomprometido = v) />
+                                                </div>
+                                                <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
+                                                    <div class="text-xs text-uci-muted">"Cirugía de Emergencia / No Quirúrgico"</div>
+                                                    <Toggle 
+                                                        value=Signal::derive(move || apache.get().cirugia_no_operado)
+                                                        on_change=move |v| set_apache.update(|a| a.cirugia_no_operado = v) />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    // 5. Notas
                                     <section class="pb-20">
                                         <FormField label="Notas Clínicas / Observaciones">
                                             <textarea 
