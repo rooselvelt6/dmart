@@ -1,0 +1,24 @@
+# Build artifacts
+/target
+/dist
+
+# Database files
+/data
+dmart-server/data
+
+# Logs
+*.log
+server_*.log
+
+# Environment files
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,52 @@
+[package]
+name = "dmart-server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "dmart-server"
+path = "src/main.rs"
+
+[dependencies]
+dmart-shared = { path = "../dmart-shared" }
+
+# Web framework
+axum = { version = "0.8", features = ["multipart"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+
+# Database
+surrealdb = { version = "2", features = ["kv-rocksdb"] }
+
+# Cache
+redis = { version = "0.27", features = ["aio", "tokio-comp"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Export
+printpdf = "0.7"
+csv = "1.3"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Cryptography
+chacha20poly1305 = "0.10"
+aes = "0.8"
+argon2 = "0.5"
+rand = "0.8"
+zeroize = { version = "1.7", features = ["derive"] }
+base64 = "0.22"
+sha2 = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+hmac = "0.12"

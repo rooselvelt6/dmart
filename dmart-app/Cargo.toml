@@ -1,0 +1,44 @@
+[package]
+name = "dmart-app"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+dmart-shared = { path = "../dmart-shared" }
+
+# Leptos
+leptos = { version = "0.7", features = ["csr"] }
+leptos_router = { version = "0.7" }
+console_error_panic_hook = "0.1"
+
+# HTTP client (WASM)
+gloo-net = { version = "0.6", features = ["http"] }
+gloo-storage = "0.3"
+gloo-timers = { version = "0.3", features = ["futures"] }
+
+# Randomness for WASM
+uuid = { workspace = true, features = ["js"] }
+getrandom = { version = "0.2", features = ["js"] }
+
+# WASM
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = [
+    "Window", "Document", "Element", "HtmlElement",
+    "HtmlInputElement", "HtmlSelectElement", "HtmlTextAreaElement",
+    "Event", "InputEvent", "MouseEvent", "Location",
+    "Blob", "Url", "HtmlAnchorElement",
+    "console",
+] }
+js-sys = "0.3"
+wasm-bindgen-futures = "0.4"
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
