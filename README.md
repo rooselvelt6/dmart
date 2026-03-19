@@ -23,6 +23,8 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ 63+ tests de validación pasando
 - ✅ Documentación técnica completa
 - ✅ Arquitectura moderna y escalable
+- 🔜 SAPS III y SOFA (Q1 2026)
+- 🔜 Redes Neuronales con Burn (Q2 2026)
 
 ---
 
@@ -102,6 +104,9 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - Estimación de riesgo de mortalidad hospitalaria
 - Clasificación de severidad (Bajo/Moderado/Severo/Crítico)
 - Evolución temporal del paciente con gráficos
+- 🔜 SAPS III (Simplified Acute Physiology Score)
+- 🔜 SOFA (Sequential Organ Failure Assessment)
+- 🔜 Predicción con Redes Neuronales (Burn)
 
 ### Exportación
 - Reportes en formato CSV
@@ -346,6 +351,36 @@ dmart/
 
 ---
 
+## 📅 Roadmap 2026
+
+### Q1 2026 - Escalas de Severidad Avanzadas
+- [ ] **SAPS III** (Simplified Acute Physiology Score III)
+  - 20 variables fisiológicas
+  - Predicción de mortalidad mejorada
+  - Adaptación a poblaciones específicas
+- [ ] **SOFA** (Sequential Organ Failure Assessment)
+  - 6 sistemas de órganos
+  - Seguimiento de deterioro orgánico
+  - Integración con ventilación mecánica
+
+### Q2 2026 - Inteligencia Artificial
+- [ ] **Redes Neuronales con Burn**
+  - Implementación en Rust puro usando [Burn](https://burn.dev/)
+  - Predicción de deterioro clínico
+  - Detección temprana de sepsis
+- [ ] **Modelos de Mortalidad**
+  - Entrenamiento con datos históricos de UCI
+  - Comparativa APACHE II vs ML predictions
+  - Explicabilidad de predicciones
+
+### Q3-Q4 2026 - Expansión Clínica
+- [ ] Sistema de alertas en tiempo real
+- [ ] Dashboard de analytics avanzado
+- [ ] API para integración hospitalaria
+- [ ] Módulo de investigación clínica
+
+---
+
 ## 📚 Referencias Clínicas
 
 ### APACHE II
@@ -353,6 +388,15 @@ dmart/
 
 ### Glasgow Coma Scale
 - **Teasdale GM**, Jennett B (1974). Assessment of coma and impaired consciousness. Lancet. 2(7872):81-4.
+
+### SAPS III (Futuro)
+- **Metnitz PGH**, et al. (2005). SAPS 3—From evaluation of the patient to evaluation of the intensive care unit. Intensive Care Med.
+
+### SOFA (Futuro)
+- **Vincent JL**, et al. (1996). The SOFA (Sepsis-related Organ Failure Assessment) score to describe organ dysfunction/failure. Intensive Care Med.
+
+### Redes Neuronales (Futuro)
+- **Burn Deep Learning Framework**: https://burn.dev/
 
 ---
 
