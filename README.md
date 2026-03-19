@@ -23,8 +23,10 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ 63+ tests de validación pasando
 - ✅ Documentación técnica completa
 - ✅ Arquitectura moderna y escalable
-- 🔜 SAPS III y SOFA (Q1 2026)
-- 🔜 Redes Neuronales con Burn (Q2 2026)
+- 🔜 NEWS2, SAPS III, SOFA (Q1 2026)
+- 🔜 Seguridad empresarial: AES-256, Argon2, ChaCha20 (Q2 2026)
+- 🔜 SSO corporativo, MFA, RBAC (Q3 2026)
+- 🔜 Redes Neuronales con Burn (Q4 2026)
 
 ---
 
@@ -104,8 +106,9 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - Estimación de riesgo de mortalidad hospitalaria
 - Clasificación de severidad (Bajo/Moderado/Severo/Crítico)
 - Evolución temporal del paciente con gráficos
-- 🔜 SAPS III (Simplified Acute Physiology Score)
-- 🔜 SOFA (Sequential Organ Failure Assessment)
+- 🔜 NEWS2 - Detección temprana de deterioro
+- 🔜 SAPS III - Predicción de mortalidad avanzada
+- 🔜 SOFA - Evaluación de fallo orgánico secuencial
 - 🔜 Predicción con Redes Neuronales (Burn)
 
 ### Exportación
@@ -176,7 +179,7 @@ if !result.valid {
 
 ## 🔒 Seguridad
 
-### Medidas Implementadas
+### Seguridad Actual
 
 | Seguridad | Descripción |
 |-----------|-------------|
@@ -186,6 +189,19 @@ if !result.valid {
 | **WASM** | Frontend compilado, no código fuente expuesto |
 | **Base de Datos Embebida** | Datos locales, no expuestos a internet |
 | **Prepared Statements** | Consultas parametrizadas (SurrealDB) |
+
+### Seguridad Empresarial (Q2-Q3 2026)
+
+| Tecnología | Propósito |
+|------------|-----------|
+| **AES-256** | Cifrado de datos en reposo (HIPAA/GDPR compliant) |
+| **Argon2id** | Hashing de contraseñas resistente a GPU/ASIC |
+| **ChaCha20-Poly1305** | Cifrado autenticado para comunicaciones |
+| **ZeroIce/IceRPC** | RPC type-safe con QUIC/HTTP3 |
+| **OAuth2 + OIDC** | Autenticación empresarial moderna |
+| **MFA** | Multi-factor authentication (TOTP, Biometrics) |
+| **RBAC** | Control de acceso basado en roles |
+| **SSO** | Single Sign-On corporativo (SAML/LDAP) |
 
 ### Logging
 
@@ -353,47 +369,120 @@ dmart/
 
 ## 📅 Roadmap 2026
 
-### Q1 2026 - Escalas de Severidad Avanzadas
-- [ ] **SAPS III** (Simplified Acute Physiology Score III)
-  - 20 variables fisiológicas
-  - Predicción de mortalidad mejorada
-  - Adaptación a poblaciones específicas
-- [ ] **SOFA** (Sequential Organ Failure Assessment)
-  - 6 sistemas de órganos
-  - Seguimiento de deterioro orgánico
-  - Integración con ventilación mecánica
+### Q1 2026 - Escalas de Severidad Clínicas
 
-### Q2 2026 - Inteligencia Artificial
-- [ ] **Redes Neuronales con Burn**
-  - Implementación en Rust puro usando [Burn](https://burn.dev/)
+#### NEWS2 (National Early Warning Score 2)
+- [ ] 7 parámetros fisiológicos + oxígeno suplementario (máx. 20 puntos)
+- [ ] Detección temprana de deterioro (6-8 horas antes de eventos críticos)
+- [ ] Clasificación: Bajo (0-4), Moderado (5-6), Alto (≥7)
+- [ ] Escala SpO2 alternativa para pacientes con hipercapnia
+- [ ] Integración con sistemas de alerta hospitalaria
+
+#### SAPS III (Simplified Acute Physiology Score III)
+- [ ] 20 variables fisiológicas para predicción de mortalidad
+- [ ] Adaptación a poblaciones específicas de UCI
+- [ ] Comparativa con APACHE II existente
+
+#### SOFA (Sequential Organ Failure Assessment)
+- [ ] Evaluación de 6 sistemas de órganos
+- [ ] Seguimiento de deterioro orgánico secuencial
+- [ ] Integración con datos de ventilación mecánica
+
+---
+
+### Q2 2026 - Seguridad Empresarial
+
+#### Cifrado de Datos
+- [ ] **AES-256** - Cifrado de datos en reposo
+  - Base de datos cifrada (SurrealDB encryption layer)
+  - Backups cifrados automáticamente
+  - Archivos de configuración protegidos
+- [ ] **ChaCha20-Poly1305** - Cifrado autenticado (AEAD)
+  - Comunicaciones internas entre servicios
+  - Integración con dispositivos IoT médicos
+  - Protección de datos en tránsito
+
+#### Autenticación de Credenciales
+- [ ] **Argon2id** - Hashing de contraseñas
+  - Resistente a ataques GPU/ASIC
+  - Memoria-hard (previene side-channel attacks)
+  - Cumplimiento PHC 2015
+
+#### Comunicación entre Microservicios
+- [ ] **ZeroIce/IceRPC** - Framework RPC empresarial
+  - QUIC/HTTP3 nativo para baja latencia
+  - Type-safe entre servicios
+  - Integración con sistemas heredados hospitalarios
+
+---
+
+### Q3 2026 - Autenticación Empresarial
+
+#### Sistema de Identidad
+- [ ] **OAuth 2.0 + OpenID Connect**
+  - Autenticación moderna (reemplaza login básico)
+  - Tokens JWT con firma digital
+  - Refresh tokens seguros
+
+#### Integración Corporativa
+- [ ] **SSO (Single Sign-On)**
+  - SAML 2.0 para integración con directorios corporativos
+  - LDAP para autenticación institucional
+  - Soporte para hospitales multi-sitio
+
+#### Control de Acceso
+- [ ] **MFA (Multi-Factor Authentication)**
+  - TOTP (aplicaciones authenticator)
+  - Biometrics (huella, rostro)
+  - Hardware keys (WebAuthn/FIDO2)
+- [ ] **RBAC (Role-Based Access Control)**
+  - Roles: Administrador, Médico, Enfermera, Técnico
+  - Permisos granulares por acción
+  - Auditoría completa de accesos
+
+---
+
+### Q4 2026 - Inteligencia Artificial y Analytics
+
+#### Redes Neuronales
+- [ ] **Implementación con Burn** (Rust Deep Learning)
   - Predicción de deterioro clínico
   - Detección temprana de sepsis
-- [ ] **Modelos de Mortalidad**
-  - Entrenamiento con datos históricos de UCI
-  - Comparativa APACHE II vs ML predictions
-  - Explicabilidad de predicciones
+  - Modelos de mortalidad comparativos
+- [ ] **Explicabilidad de Modelos**
+  - SHAP values para interpretar predicciones
+  - Visualización de factores de riesgo
 
-### Q3-Q4 2026 - Expansión Clínica
-- [ ] Sistema de alertas en tiempo real
-- [ ] Dashboard de analytics avanzado
-- [ ] API para integración hospitalaria
+#### Analytics y Alertas
+- [ ] Dashboard de analytics en tiempo real
+- [ ] Sistema de alertas automáticas (NEWS2 triggers)
+- [ ] API para integración con sistemas hospitalarios
 - [ ] Módulo de investigación clínica
 
 ---
 
 ## 📚 Referencias Clínicas
 
-### APACHE II
+### APACHE II (Implementado)
 - **Knaus WA**, Draper EA, Wagner DP, Zimmerman JE (1985). APACHE II: a severity of disease classification system. Crit Care Med. 13(10):818-29.
 
-### Glasgow Coma Scale
+### Glasgow Coma Scale (Implementado)
 - **Teasdale GM**, Jennett B (1974). Assessment of coma and impaired consciousness. Lancet. 2(7872):81-4.
+
+### NEWS2 (Futuro)
+- **Royal College of Physicians** (2017). National Early Warning Score (NEWS) 2. Updated Report of a Working Party. London: RCP.
+- **Smith GB**, et al. (2012). Validation of NEWS. BMJ 2012;345:e5717.
 
 ### SAPS III (Futuro)
 - **Metnitz PGH**, et al. (2005). SAPS 3—From evaluation of the patient to evaluation of the intensive care unit. Intensive Care Med.
 
 ### SOFA (Futuro)
 - **Vincent JL**, et al. (1996). The SOFA (Sepsis-related Organ Failure Assessment) score to describe organ dysfunction/failure. Intensive Care Med.
+
+### Seguridad (Futuro)
+- **AES-256**: NIST FIPS 197 (Advanced Encryption Standard)
+- **Argon2**: Winternitz P, et al. (2015). Password Hashing Competition
+- **ChaCha20-Poly1305**: Bernstein D.J. (2008). ChaCha, a variant of Salsa20
 
 ### Redes Neuronales (Futuro)
 - **Burn Deep Learning Framework**: https://burn.dev/
