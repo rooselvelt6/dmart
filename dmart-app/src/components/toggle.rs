@@ -1,10 +1,7 @@
 use leptos::prelude::*;
 
 #[component]
-pub fn Toggle<F>(
-    value: Signal<bool>,
-    on_change: F,
-) -> impl IntoView
+pub fn Toggle<F>(value: Signal<bool>, on_change: F) -> impl IntoView
 where
     F: Fn(bool) + 'static,
 {

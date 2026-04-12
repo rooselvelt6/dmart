@@ -1,7 +1,8 @@
+use crate::components::theme_toggle::ThemeToggle;
 use crate::pages::{
     dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
     patient_detail::PatientDetailPage, patient_edit::PatientEditPage, patients::PatientsPage,
-    register::RegisterPage,
+    register::RegisterPage, uci_stats::UciStats,
 };
 use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
@@ -13,10 +14,11 @@ use leptos_router::path;
 #[component]
 pub fn App() -> impl IntoView {
     let is_auth = move || LocalStorage::get::<String>("dmart_auth").is_ok();
+    crate::stores::create_theme_store();
 
     view! {
         <Router>
-            <div class="flex min-h-screen" style="background:#0A0E1A">
+            <div class="flex min-h-screen" style="background:var(--uci-bg)">
                 <Show when=is_auth fallback=|| ()>
                     <NavSidebar />
                 </Show>
@@ -30,6 +32,14 @@ pub fn App() -> impl IntoView {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <DashboardPage /> })
+                            }
+                        } />
+
+                        <Route path=path!("/stats") view=move || {
+                            if !is_auth() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else {
+                                Either::Right(view! { <UciStats /> })
                             }
                         } />
 
@@ -94,8 +104,8 @@ fn NavSidebar() -> impl IntoView {
     };
 
     view! {
-        <nav class="nav-sidebar">
-            <div style="padding:24px 16px 16px; border-bottom: 1px solid #2A3547;">
+        <nav class="nav-sidebar" style="background:var(--uci-surface)">
+            <div style="padding:24px 16px 16px; border-bottom:1px solid var(--uci-border);">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
                     <div style="
                         width:36px; height:36px; border-radius:10px;
@@ -105,14 +115,14 @@ fn NavSidebar() -> impl IntoView {
                         font-size:18px; font-weight:900; color:white; flex-shrink:0;
                     ">"+"</div>
                     <div>
-                        <div style="font-weight:700; font-size:16px; color:#E2E8F0;">"UCI - DMART"</div>
-                        <div style="font-size:10px; color:#475569; text-transform:uppercase; letter-spacing:1px;">"Cuidados Intensivos"</div>
+                        <div style="font-weight:700; font-size:16px; color:var(--uci-text);">"UCI - DMART"</div>
+                        <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px;">"Cuidados Intensivos"</div>
                     </div>
                 </div>
             </div>
 
             <div style="padding:12px 8px; flex:1; overflow-y:auto;">
-                <div style="font-size:10px; color:#475569; text-transform:uppercase; letter-spacing:1px; padding:8px 8px 4px; font-weight:600;">"PRINCIPAL"</div>
+                <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px; padding:8px 8px 4px; font-weight:600;">"PRINCIPAL"</div>
 
                 <A href="/" attr:class=move || format!("nav-link {}", if is_active("/") && path() == "/" { "active" } else { "" })>
                     {svg_icon("M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6")}
@@ -124,7 +134,12 @@ fn NavSidebar() -> impl IntoView {
                     "Pacientes"
                 </A>
 
-                <div style="font-size:10px; color:#475569; text-transform:uppercase; letter-spacing:1px; padding:12px 8px 4px; font-weight:600;">"ACCIONES"</div>
+                <A href="/stats" attr:class=move || format!("nav-link {}", if is_active("/stats") { "active" } else { "" })>
+                    {svg_icon("M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0h9a2 2 0 012 2v9a2 2 0 01-2 2h-2a2 2 0 01-2-2v-9z")}
+                    "Estadísticas"
+                </A>
+
+                <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px; padding:12px 8px 4px; font-weight:600;">"ACCIONES"</div>
 
                 <A href="/patients/new" attr:class=move || format!("nav-link {}", if path() == "/patients/new" { "active" } else { "" })>
                     {svg_icon("M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z")}
@@ -132,7 +147,10 @@ fn NavSidebar() -> impl IntoView {
                 </A>
             </div>
 
-            <div style="padding:16px; border-top:1px solid #2A3547;">
+            <div style="padding:16px; border-top:1px solid var(--uci-border);">
+                <div style="margin-bottom:12px;">
+                    <ThemeToggle />
+                </div>
                 <button
                     on:click=move |_| {
                         let _ = LocalStorage::delete("dmart_auth");
@@ -141,7 +159,7 @@ fn NavSidebar() -> impl IntoView {
                     style="
                         width:100%; padding:10px 16px; 
                         background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);
-                        border-radius:10px; color:#EF4444; font-size:13px; font-weight:600;
+                        border-radius:10px; color:var(--uci-critical); font-size:13px; font-weight:600;
                         cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
                         transition:all 0.2s;
                     "
@@ -151,10 +169,10 @@ fn NavSidebar() -> impl IntoView {
                     </svg>
                     "Cerrar Sesión"
                 </button>
-                <div style="font-size:11px; color:#334155; text-align:center; margin-top:12px;">
-                    "UCI-DMART v1.0"
+                <div style="font-size:11px; color:var(--uci-muted); text-align:center; margin-top:12px;">
+                    "UCI-DMART v2.0"
                     <br />
-                    <span style="color:#1E2537;">"Rust + Leptos + WASM"</span>
+                    <span style="color:var(--uci-muted);">"Rust + Leptos + WASM"</span>
                 </div>
             </div>
         </nav>

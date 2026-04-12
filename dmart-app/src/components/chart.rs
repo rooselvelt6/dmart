@@ -1,6 +1,6 @@
+use dmart_shared::models::Measurement;
 use leptos::either::Either;
 use leptos::prelude::*;
-use dmart_shared::models::Measurement;
 
 #[component]
 pub fn EvolutionChart(
@@ -10,19 +10,21 @@ pub fn EvolutionChart(
 ) -> impl IntoView {
     let width = 600;
     let padding = if compact { 5 } else { 40 };
-    
+
     // Sort measurements by date
     let mut sorted = measurements.clone();
     sorted.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
-    
+
     let max_apache = 71.0;
-    
+
     let get_x = move |index: usize, total: usize| {
-        if total <= 1 { return (width / 2) as f32; }
+        if total <= 1 {
+            return (width / 2) as f32;
+        }
         let available_width = (width - padding * 2) as f32;
         padding as f32 + (index as f32 * (available_width / (total - 1) as f32))
     };
-    
+
     let get_y = move |value: u32| {
         let available_height = (height - padding * 2) as f32;
         (height as f32 - padding as f32) - ((value as f32 / max_apache) * available_height)
@@ -30,17 +32,23 @@ pub fn EvolutionChart(
 
     let points = {
         let total = sorted.len();
-        sorted.iter().enumerate().map(|(i, m)| {
-            (get_x(i, total), get_y(m.apache_score))
-        }).collect::<Vec<_>>()
+        sorted
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (get_x(i, total), get_y(m.apache_score)))
+            .collect::<Vec<_>>()
     };
 
-    let polyline_points = points.iter().map(|(x, y)| format!("{},{}", x, y)).collect::<Vec<_>>().join(" ");
+    let polyline_points = points
+        .iter()
+        .map(|(x, y)| format!("{},{}", x, y))
+        .collect::<Vec<_>>()
+        .join(" ");
 
     view! {
         <div class="chart-container">
-            <svg 
-                viewBox=format!("0 0 {} {}", width, height) 
+            <svg
+                viewBox=format!("0 0 {} {}", width, height)
                 class="chart-svg w-full h-auto"
                 preserveAspectRatio="xMidYMid meet"
             >
@@ -73,13 +81,13 @@ pub fn EvolutionChart(
                         20..=29 => "#F97316",
                         _ => "#EF4444",
                     };
-                    
+
                     view! {
-                        <circle 
-                            cx=x cy=y 
-                            r=if compact { "3" } else { "5" } 
-                            fill=color 
-                            stroke="#1E2537" 
+                        <circle
+                            cx=x cy=y
+                            r=if compact { "3" } else { "5" }
+                            fill=color
+                            stroke="#1E2537"
                             stroke-width="2"
                         >
                             <title>{format!("Score: {} ({})", m.apache_score, m.timestamp)}</title>

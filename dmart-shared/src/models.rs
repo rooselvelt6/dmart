@@ -603,3 +603,88 @@ impl<T> ApiResponse<T> {
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User / Authentication
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum UserRole {
+    #[default]
+    Admin,
+    Medico,
+    Enfermero,
+    Viewer,
+}
+
+impl UserRole {
+    pub fn can_edit(&self) -> bool {
+        matches!(self, UserRole::Admin | UserRole::Medico)
+    }
+    pub fn can_measure(&self) -> bool {
+        matches!(
+            self,
+            UserRole::Admin | UserRole::Medico | UserRole::Enfermero
+        )
+    }
+    pub fn can_view(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct User {
+    pub user_id: String,
+    pub username: String,
+    #[serde(skip_serializing)]
+    pub password_hash: String,
+    pub rol: UserRole,
+    pub nombre: String,
+    pub activo: bool,
+    pub created_at: String,
+}
+
+impl Default for User {
+    fn default() -> Self {
+        Self {
+            user_id: Uuid::new_v4().to_string(),
+            username: String::new(),
+            password_hash: String::new(),
+            rol: UserRole::Admin,
+            nombre: String::new(),
+            activo: true,
+            created_at: Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoginResponse {
+    pub token: String,
+    pub user: UserInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserInfo {
+    pub user_id: String,
+    pub username: String,
+    pub rol: UserRole,
+    pub nombre: String,
+}
+
+impl From<&User> for UserInfo {
+    fn from(u: &User) -> Self {
+        Self {
+            user_id: u.user_id.clone(),
+            username: u.username.clone(),
+            rol: u.rol.clone(),
+            nombre: u.nombre.clone(),
+        }
+    }
+}

@@ -65,6 +65,7 @@
 
     <style>
       :root {
+        /* Tema Oscuro (default) */
         --uci-bg:       #0A0E1A;
         --uci-surface:  #111827;
         --uci-card:     #1E2537;
@@ -74,6 +75,29 @@
         --uci-moderate: #F59E0B;
         --uci-severe:   #F97316;
         --uci-critical: #EF4444;
+        --uci-text:     #E2E8F0;
+        --uci-muted:    #64748B;
+      }
+
+      /* Tema Claro */
+      .light {
+        --uci-bg:       #F8FAFC;
+        --uci-surface:  #FFFFFF;
+        --uci-card:     #F1F5F9;
+        --uci-border:  #E2E8F0;
+        --uci-accent:  #2563EB;
+        --uci-low:     #059669;
+        --uci-moderate:#D97706;
+        --uci-severe:  #EA580C;
+        --uci-critical:#DC2626;
+        --uci-text:    #1E293B;
+        --uci-muted:   #64748B;
+      }
+
+      body {
+        background-color: var(--uci-bg);
+        color: var(--uci-text);
+        transition: background-color 0.3s, color 0.3s;
       }
 
       * { box-sizing: border-box; }

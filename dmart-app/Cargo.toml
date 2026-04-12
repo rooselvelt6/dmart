@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 dmart-shared = { path = "../dmart-shared" }
 
-# Leptos
+# Leptos (0.7 para CSR - migración a 0.8 pendiente para SSR)
 leptos = { version = "0.7", features = ["csr"] }
 leptos_router = { version = "0.7" }
 console_error_panic_hook = "0.1"

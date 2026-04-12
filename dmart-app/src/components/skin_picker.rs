@@ -1,11 +1,8 @@
-use leptos::prelude::*;
 use dmart_shared::models::ColorPiel;
+use leptos::prelude::*;
 
 #[component]
-pub fn SkinPicker<F>(
-    value: Signal<ColorPiel>,
-    on_change: F,
-) -> impl IntoView
+pub fn SkinPicker<F>(value: Signal<ColorPiel>, on_change: F) -> impl IntoView
 where
     F: Fn(ColorPiel) + Send + Sync + 'static,
 {
@@ -28,9 +25,9 @@ where
                 let is_selected = move || value.get() == opt_for_selected;
                 let bg_color = opt.hex_color();
                 let label = opt.label();
-                
+
                 view! {
-                    <div 
+                    <div
                         class=move || format!("skin-swatch {}", if is_selected() { "selected" } else { "" })
                         style=format!("background-color: {}", bg_color)
                         title=label
