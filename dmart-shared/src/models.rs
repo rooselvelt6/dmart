@@ -346,10 +346,17 @@ pub struct ApacheIIData {
 
     // Soporte vital
     pub ventilacion_mecanica: bool, // para SAPS III
-    pub o2_suplementario: bool,     // para NEWS2
     pub vasopresores: bool,         // para SAPS III y SOFA
     pub dosis_vasopresor: f32,      // µg/kg/min (dopamina o equivalente)
     pub diuresis_diaria: u32,       // mL/día para SOFA renal
+
+    // NEWS2 específicos
+    pub alerta: bool,             // estado de alerta del paciente
+    pub o2_suplementario: bool,   // está recibiendo O2 suplementario
+    pub nivel_conciencia: String, // para GCS/NEWS2
+
+    // SAPS III específicos
+    pub bicarbonate: f32, // mEq/L
 
     // Admisión (para SAPS III)
     pub tipo_admision: Option<String>, // "medical", "scheduled_surgical", "unscheduled_surgical"
@@ -389,10 +396,13 @@ impl Default for ApacheIIData {
             inmunocomprometido: false,
             cirugia_no_operado: false,
             ventilacion_mecanica: false,
-            o2_suplementario: false,
             vasopresores: false,
             dosis_vasopresor: 0.0,
             diuresis_diaria: 1500,
+            alerta: true,
+            o2_suplementario: false,
+            nivel_conciencia: String::new(),
+            bicarbonate: 24.0,
             tipo_admision: None,
             fuente_admision: None,
             dias_pre_uci: 0,

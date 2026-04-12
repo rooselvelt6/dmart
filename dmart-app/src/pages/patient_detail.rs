@@ -84,9 +84,23 @@ pub fn PatientDetailPage() -> impl IntoView {
                                         <button on:click=move |_| show_delete_modal.set(true) class="btn-danger flex items-center gap-2">
                                             "🗑️ Eliminar"
                                         </button>
-                                        <a href=format!("/patients/{}/measure", p.patient_id) class="btn-primary">
-                                            "+ Nueva Medición"
+                                        <div class="flex flex-wrap gap-2">
+                                        <a href=format!("/patients/{}/measure?escala=apache", p.patient_id) class="btn-primary text-xs py-2 px-3">
+                                            "🏥 APACHE II"
                                         </a>
+                                        <a href=format!("/patients/{}/measure?escala=gcs", p.patient_id) class="btn-outline text-xs py-2 px-3">
+                                            "🧠 GCS"
+                                        </a>
+                                        <a href=format!("/patients/{}/measure?escala=saps3", p.patient_id) class="btn-outline text-xs py-2 px-3">
+                                            "📊 SAPS III"
+                                        </a>
+                                        <a href=format!("/patients/{}/measure?escala=news2", p.patient_id) class="btn-outline text-xs py-2 px-3">
+                                            "🚨 NEWS2"
+                                        </a>
+                                        <a href=format!("/patients/{}/measure?escala=sofa", p.patient_id) class="btn-outline text-xs py-2 px-3">
+                                            "🫀 SOFA"
+                                        </a>
+                                    </div>
                                     </div>
                                 </div>
 
