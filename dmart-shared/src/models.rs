@@ -72,6 +72,44 @@ pub enum SeverityLevel {
     Critico,  // ≥30
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum News2Level {
+    #[default]
+    Bajo,
+    Medio,
+    Alto,
+    Emergent,
+}
+
+impl News2Level {
+    pub fn from_score(score: u32) -> Self {
+        match score {
+            0..=4 => News2Level::Bajo,
+            5..=6 => News2Level::Medio,
+            7..=19 => News2Level::Alto,
+            _ => News2Level::Emergent,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            News2Level::Bajo => "Bajo",
+            News2Level::Medio => "Medio",
+            News2Level::Alto => "Alto",
+            News2Level::Emergent => "Emergencia",
+        }
+    }
+
+    pub fn response(&self) -> &'static str {
+        match self {
+            News2Level::Bajo => "Monitoreo habitual",
+            News2Level::Medio => "Revisión clínica en 1 hora",
+            News2Level::Alto => "Revisión clínica inmediata",
+            News2Level::Emergent => "Activación de código emergencia",
+        }
+    }
+}
+
 impl SeverityLevel {
     pub fn from_score(score: u32) -> Self {
         match score {
@@ -268,6 +306,7 @@ pub struct ApacheIIData {
     // Signos vitales
     pub temperatura: f32,             // °C rectal/central (30.0-44.0)
     pub presion_arterial_media: f32,  // mmHg (0-200)
+    pub presion_sistolica: f32,       // mmHg (0-250) - para SAPS III y NEWS2
     pub frecuencia_cardiaca: f32,     // lpm (0-200)
     pub frecuencia_respiratoria: f32, // rpm (0-60)
 
@@ -275,6 +314,7 @@ pub struct ApacheIIData {
     pub fio2: f32,           // fracción inspirada O2 (0.21-1.0)
     pub pao2: Option<f32>,   // mmHg — usado si FiO2 < 0.5
     pub a_ado2: Option<f32>, // mmHg — usado si FiO2 >= 0.5
+    pub spo2: f32,           // % saturación O2 (0-100) - para NEWS2
 
     // Laboratorios
     pub ph_arterial: f32,        // 7.00-7.70
@@ -282,9 +322,11 @@ pub struct ApacheIIData {
     pub potasio_serico: f32,     // mEq/L (1.0-8.0)
     pub creatinina: f32,         // mg/dL (0.1-10.0)
     pub falla_renal_aguda: bool, // multiplica creatinina x2 si true
+    pub bilirrubina: f32,        // mg/dL (0.1-30.0) - para SAPS III y SOFA
 
     pub hematocrito: f32, // % (10-70)
     pub leucocitos: f32,  // x10^3/mm³ (0.5-60.0)
+    pub plaquetas: f32,   // x10^3/mm³ - para SAPS III y SOFA
 
     // Glasgow Coma Scale (para el APS)
     pub gcs_total: u8, // 3-15
@@ -301,6 +343,20 @@ pub struct ApacheIIData {
 
     // Tipo de hospitalización (afecta puntos por enfermedades crónicas)
     pub cirugia_no_operado: bool, // no quirúrgico o cirugía de emergencia
+
+    // Soporte vital
+    pub ventilacion_mecanica: bool, // para SAPS III
+    pub o2_suplementario: bool,     // para NEWS2
+    pub vasopresores: bool,         // para SAPS III y SOFA
+    pub dosis_vasopresor: f32,      // µg/kg/min (dopamina o equivalente)
+    pub diuresis_diaria: u32,       // mL/día para SOFA renal
+
+    // Admisión (para SAPS III)
+    pub tipo_admision: Option<String>, // "medical", "scheduled_surgical", "unscheduled_surgical"
+    pub fuente_admision: Option<String>, // "emergency_room", "ward", "other_icu"
+    pub dias_pre_uci: u8,              // días en hospital antes de UCI
+    pub infeccion_admision: Option<String>, // "none", "respiratory", "nosocomial"
+    pub sistema_anatomico: Option<String>, // razón de ingreso
 }
 
 impl Default for ApacheIIData {
@@ -308,18 +364,22 @@ impl Default for ApacheIIData {
         Self {
             temperatura: 37.0,
             presion_arterial_media: 93.0,
+            presion_sistolica: 120.0,
             frecuencia_cardiaca: 80.0,
             frecuencia_respiratoria: 16.0,
             fio2: 0.21,
             pao2: Some(80.0),
             a_ado2: None,
+            spo2: 98.0,
             ph_arterial: 7.40,
             sodio_serico: 140.0,
             potasio_serico: 4.0,
             creatinina: 1.0,
             falla_renal_aguda: false,
+            bilirrubina: 0.8,
             hematocrito: 42.0,
             leucocitos: 8.0,
+            plaquetas: 250.0,
             gcs_total: 15,
             edad: 50,
             insuficiencia_hepatica: false,
@@ -328,6 +388,16 @@ impl Default for ApacheIIData {
             insuficiencia_renal: false,
             inmunocomprometido: false,
             cirugia_no_operado: false,
+            ventilacion_mecanica: false,
+            o2_suplementario: false,
+            vasopresores: false,
+            dosis_vasopresor: 0.0,
+            diuresis_diaria: 1500,
+            tipo_admision: None,
+            fuente_admision: None,
+            dias_pre_uci: 0,
+            infeccion_admision: None,
+            sistema_anatomico: None,
         }
     }
 }
@@ -420,17 +490,45 @@ pub struct Measurement {
     pub severity: SeverityLevel, // calculado
     #[serde(default)]
     pub mortality_risk: f32, // % estimado
+
+    // Nuevos scores
+    #[serde(default)]
+    pub saps3_score: Option<u32>,
+    #[serde(default)]
+    pub saps3_mortality: Option<f32>,
+    #[serde(default)]
+    pub news2_score: Option<u32>,
+    #[serde(default)]
+    pub news2_level: News2Level,
+    #[serde(default)]
+    pub sofa_score: Option<u32>,
+    #[serde(default)]
+    pub sofa_mortality: Option<f32>,
+
     #[serde(default)]
     pub notas: String,
 }
 
 impl Measurement {
     pub fn new(patient_id: &str, apache: ApacheIIData, gcs: GcsData) -> Self {
-        use crate::scales::{calculate_apache_ii_score, mortality_risk};
+        use crate::scales::{
+            calculate_apache_ii_score, calculate_news2_score, calculate_saps_iii_score,
+            calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction,
+            sofa_mortality_estimate,
+        };
         let apache_score = calculate_apache_ii_score(&apache);
         let gcs_score = gcs.total();
         let severity = SeverityLevel::from_score(apache_score);
         let mort = mortality_risk(apache_score);
+
+        let saps3_score = calculate_saps_iii_score(&apache);
+        let saps3_mortality = saps_iii_mortality_prediction(saps3_score);
+
+        let news2_score = calculate_news2_score(&apache);
+        let news2_level = News2Level::from_score(news2_score);
+
+        let sofa_score = calculate_sofa_score(&apache);
+        let sofa_mortality = sofa_mortality_estimate(sofa_score);
 
         Self {
             id: None,
@@ -443,6 +541,12 @@ impl Measurement {
             gcs_score,
             severity,
             mortality_risk: mort,
+            saps3_score: Some(saps3_score),
+            saps3_mortality: Some(saps3_mortality),
+            news2_score: Some(news2_score),
+            news2_level,
+            sofa_score: Some(sofa_score),
+            sofa_mortality: Some(sofa_mortality),
             notas: String::new(),
         }
     }
