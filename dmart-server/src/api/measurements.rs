@@ -54,6 +54,12 @@ pub async fn create_measurement(
         severity: severity.clone(),
         mortality_risk,
         notas: body.notas,
+        news2_score: None,
+        news2_level: News2Level::Bajo,
+        saps3_score: None,
+        saps3_mortality: None,
+        sofa_score: None,
+        sofa_mortality: None,
     };
 
     match db_ops::create_measurement(&db, measurement).await {

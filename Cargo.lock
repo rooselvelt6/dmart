@@ -1308,9 +1308,9 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "anyhow",
- "argon2",
  "axum",
  "base64 0.22.1",
+ "bcrypt",
  "chacha20poly1305",
  "chrono",
  "csv",
