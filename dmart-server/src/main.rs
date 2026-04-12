@@ -108,6 +108,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/patients/{id}", get(spa_handler))
         .route("/patients/{id}/edit", get(spa_handler))
         .route("/patients/{id}/measure", get(spa_handler))
+        .route("/stats", get(spa_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
