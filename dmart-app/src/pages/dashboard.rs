@@ -1,6 +1,5 @@
 use leptos::prelude::*;
 use leptos::either::Either;
-use leptos_router::hooks::*;
 use dmart_shared::models::*;
 use crate::api;
 use crate::components::{severity_badge::SeverityBadge, chart::EvolutionChart};
@@ -11,56 +10,49 @@ pub fn DashboardPage() -> impl IntoView {
         api::list_patients(None).await.unwrap_or_default()
     });
 
-    let measurements_cache: Vec<(String, Vec<Measurement>)> = vec![];
-
     view! {
         <div class="page-enter">
-            // Header
-            <div style="margin-bottom:28px;">
-                <h1 style="font-size:26px; font-weight:800; color:#E2E8F0; margin:0 0 4px;">"Panel de Monitoreo"</h1>
-                <p style="color:#475569; font-size:14px; margin:0;">"Pacientes activos en UCI — visión general y evolución"</p>
+            <div class="mb-5 md:mb-7">
+                <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Panel de Monitoreo"</h1>
+                <p style="color:var(--uci-muted); font-size:13px; margin:0;">"Pacientes activos en UCI — visión general y evolución"</p>
             </div>
 
             <Suspense fallback=move || view! {
-                <div style="text-align:center; padding:60px; color:#475569;">
-                    <div style="font-size:32px; margin-bottom:8px;">"⌛"</div>
+                <div style="text-align:center; padding:60px; color:var(--uci-muted);">
+                    <div style="font-size:32px; margin-bottom:8px;"><i class="fa-solid fa-spinner fa-spin"></i></div>
                     "Cargando pacientes..."
                 </div>
             }>
                 {move || patients.get().map(|list_wrapper| {
                     let list = &*list_wrapper;
-                    // Stats row
                     let total = list.len();
-                    let criticos = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Critico)).count();
-                    let severos  = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Severo)).count();
-                    let moderados= list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Moderado)).count();
-                    let bajos    = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Bajo)).count();
+                    let criticos = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Critical)).count();
+                    let severos  = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Severe)).count();
+                    let moderados= list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Moderate)).count();
+                    let bajos    = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Low)).count();
 
                     view! {
                         <div>
-                            // Stats grid
-                            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px;">
-                                {stat_card("Total Pacientes", &total.to_string(), "#3B82F6", "👥")}
-                                {stat_card("Críticos", &criticos.to_string(), "#EF4444", "🚨")}
-                                {stat_card("Severos", &severos.to_string(), "#F97316", "⚠️")}
-                                {stat_card("Mod. / Bajos", &format!("{} / {}", moderados, bajos), "#10B981", "✅")}
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-7">
+                                {stat_card("Total Pacientes", &total.to_string(), "#3B82F6", "fa-users")}
+                                {stat_card("Criticos", &criticos.to_string(), "#EF4444", "fa-skull")}
+                                {stat_card("Severos", &severos.to_string(), "#F97316", "fa-triangle-exclamation")}
+                                {stat_card("Estables", &format!("{}", moderados + bajos), "#10B981", "fa-check-circle")}
                             </div>
 
-                            // Patient monitoring cards
-                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:20px;">
+                            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {list.into_iter().map(|patient| view! {
-                                    <PatientMonitorCard patient=patient.clone() />
+                                    <PatientPokemonCard patient=patient.clone() />
                                 }).collect_view()}
                             </div>
 
-                            // Empty state
                             {if total == 0 {
                                 Either::Left(view! {
-                                    <div style="text-align:center; padding:80px 40px; color:#475569;">
-                                        <div style="font-size:64px; margin-bottom:16px; opacity:0.5;">"🏥"</div>
-                                        <div style="font-size:20px; font-weight:600; color:#94A3B8; margin-bottom:8px;">"No hay pacientes registrados"</div>
+                                    <div style="text-align:center; padding:80px 40px; color:var(--uci-muted);">
+                                        <div style="font-size:48px; margin-bottom:16px; opacity:0.3;"><i class="fa-solid fa-hospital"></i></div>
+                                        <div style="font-size:20px; font-weight:600; margin-bottom:8px;" class="text-uci-text">"No hay pacientes registrados"</div>
                                         <p style="font-size:14px; margin:0 0 20px;">"Comience registrando el primer paciente"</p>
-                                        <a href="/patients/new" class="btn-primary" style="display:inline-block; text-decoration:none;">"+ Nuevo Paciente"</a>
+                                        <a href="/patients/new" class="btn-primary" style="display:inline-block; text-decoration:none;"><i class="fa-solid fa-plus mr-2"></i>"Nuevo Paciente"</a>
                                     </div>
                                 })
                             } else {
@@ -75,11 +67,10 @@ pub fn DashboardPage() -> impl IntoView {
 }
 
 #[component]
-fn PatientMonitorCard(patient: PatientListItem) -> impl IntoView {
+fn PatientPokemonCard(patient: PatientListItem) -> impl IntoView {
     let id = patient.id.clone();
     let id_for_chart = patient.id.clone();
 
-    // Load measurements for the chart
     let measurements = LocalResource::new(move || {
         let pid = id_for_chart.clone();
         async move {
@@ -87,83 +78,135 @@ fn PatientMonitorCard(patient: PatientListItem) -> impl IntoView {
         }
     });
 
-    let severity_color = severity_color_hex(&patient.estado_gravedad);
-    let severity_glow  = severity_glow(&patient.estado_gravedad);
+    let severity_config = match &patient.estado_gravedad {
+        SeverityLevel::Critical => ("#EF4444", "rgba(239,68,68,0.1)"),
+        SeverityLevel::Severe => ("#F97316", "rgba(249,115,22,0.1)"),
+        SeverityLevel::Moderate => ("#F59E0B", "rgba(245,158,11,0.1)"),
+        SeverityLevel::Low => ("#10B981", "rgba(16,185,129,0.1)"),
+    };
+
+    let sex_icon = match patient.sexo {
+        Sexo::Masculino => ("fa-mars", "#3B82F6"),
+        Sexo::Femenino => ("fa-venus", "#EC4899"),
+    };
 
     view! {
-        <div class="glass-card"
-             style=format!("padding:20px; border-left:3px solid {}; transition:all 0.3s;", severity_color)
-             onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 32px rgba(0,0,0,0.3)'"
+        <div class="glass-card p-0 overflow-hidden"
+             style=format!("border-top:4px solid {}; border-radius:16px;", severity_config.0)
+             onmouseenter="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 12px 40px rgba(0,0,0,0.2)'"
              onmouseleave="this.style.transform=''; this.style.boxShadow=''">
 
-            // Header row: name + severity
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
-                <div>
-                    <div style="font-weight:700; font-size:16px; color:#E2E8F0; margin-bottom:2px;">
-                        {patient.nombre_completo.clone()}
+            // Header
+            <div class="p-4 flex items-center justify-between" style="background:linear-gradient(135deg,rgba(30,41,59,0.05),transparent); border-bottom:1px solid var(--uci-border);">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold" style="background:{}; color:white;">
+                        {patient.nombre_completo.chars().next().unwrap_or('P')}
                     </div>
-                    <div style="font-size:12px; color:#64748B;">
-                        "HC: " {patient.historia_clinica.clone()} " · CI: " {patient.cedula.clone()}
+                    <div>
+                        <div class="font-bold text-base" style="color:var(--uci-text);">{patient.nombre_completo.clone()}</div>
+                        <div class="flex items-center gap-2 text-xs" style="color:var(--uci-muted);">
+                            <span><i class="fa-solid fa-id-card mr-1"></i>{patient.cedula.clone()}</span>
+                            <span><i class="fa-solid fa-folder mr-1"></i>{patient.historia_clinica.clone()}</span>
+                        </div>
                     </div>
                 </div>
                 <SeverityBadge level=patient.estado_gravedad.clone() />
             </div>
 
-            // Scores row
-            <div style="display:flex; gap:12px; margin-bottom:14px;">
-                <div style=format!("flex:1; background:rgba(10,14,26,0.6); border-radius:10px; padding:10px 12px; border:1px solid {};", severity_color)>
-                    <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">"Apache II"</div>
-                    <div style=format!("font-size:28px; font-weight:800; color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", severity_color)>
-                        {patient.ultimo_apache_score.map(|s| s.to_string()).unwrap_or_else(|| "—".into())}
-                    </div>
-                </div>
-                <div style="flex:1; background:rgba(10,14,26,0.6); border-radius:10px; padding:10px 12px; border:1px solid #2A3547;">
-                    <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">"Glasgow (GCS)"</div>
-                    <div style="font-size:28px; font-weight:800; color:#3B82F6; font-family:'JetBrains Mono',monospace; line-height:1;">
-                        {patient.ultimo_gcs_score.map(|s| s.to_string()).unwrap_or_else(|| "—".into())}
-                        <span style="font-size:14px; color:#475569; font-weight:400;">"/15"</span>
-                    </div>
-                </div>
-                <div style="flex:1; background:rgba(10,14,26,0.6); border-radius:10px; padding:10px 12px; border:1px solid #2A3547;">
-                    <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">"Edad / Sexo"</div>
-                    <div style="font-size:18px; font-weight:700; color:#94A3B8; line-height:1; margin-bottom:2px;">
-                        {patient.edad} " años"
-                    </div>
-                    <div style="font-size:12px; color:#475569;">{format!("{:?}", patient.sexo)}</div>
-                </div>
+            // Scores circles
+            <div class="p-4 grid grid-cols-4 gap-2">
+                <ScoreCircle 
+                    value=patient.ultimo_apache_score.map(|s| s.to_string()).unwrap_or_else(|| "-".into())
+                    icon="fa-heart-pulse"
+                    color="#EF4444".to_string()
+                    label="APACHE"
+                />
+                <ScoreCircle 
+                    value={format!("{}/15", patient.ultimo_gcs_score.map(|s| s.to_string()).unwrap_or_else(|| "-".into()))}
+                    icon="fa-brain"
+                    color="#8B5CF6".to_string()
+                    label="GCS"
+                />
+                <ScoreCircle 
+                    value=patient.ultimo_sofa_score.map(|s| s.to_string()).unwrap_or_else(|| "-".into())
+                    icon="fa-lungs"
+                    color="#10B981".to_string()
+                    label="SOFA"
+                />
+                <ScoreCircle 
+                    value=patient.ultimo_news2_score.map(|s| s.to_string()).unwrap_or_else(|| "-".into())
+                    icon="fa-chart-line"
+                    color="#F59E0B".to_string()
+                    label="NEWS2"
+                />
             </div>
 
-            // Evolution chart (mini)
+            // Info row
+            <div class="px-4 pb-3 flex flex-wrap gap-2">
+                <InfoBadge icon="fa-syringe" value=patient.ultimo_saps3_score.map(|s| s.to_string()).unwrap_or_else(|| "-".into()) color="#3B82F6".to_string() />
+                <InfoBadge icon="fa-skull" value={patient.mortality_risk.map(|m| format!("{:.0}%", m)).unwrap_or_else(|| "-".into())} color="#EF4444".to_string() />
+                <InfoBadge icon="fa-user" value={format!("{} anios", patient.edad)} color="#64748B".to_string() />
+                <InfoBadge icon=sex_icon.0 value="".to_string() color=sex_icon.1.to_string() />
+            </div>
+
+            // Chart
             <Suspense fallback=move || view! {
-                <div style="height:60px; background:rgba(10,14,26,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#334155; font-size:12px;">"Cargando gráfica..."</div>
+                <div style="height:50px; background:var(--uci-surface); display:flex; align-items:center; justify-content:center; color:var(--uci-muted); font-size:11px;">
+                    <i class="fa-solid fa-spinner fa-spin mr-2"></i>"Cargando..."
+                </div>
             }>
-                {move || measurements.get().map(|ms_wrapper| {
-                    let ms = &*ms_wrapper;
+                {move || measurements.get().map(|ms| {
+                    let ms = &*ms;
                     if ms.is_empty() {
                         Either::Left(view! {
-                            <div style="height:64px; background:rgba(10,14,26,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; gap:6px; color:#334155; font-size:12px;">
-                                "Sin mediciones registradas"
+                            <div style="height:50px; background:var(--uci-surface); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--uci-muted);">
+                                <i class="fa-solid fa-chart-line mr-2 opacity-50"></i>"Sin datos de evolucion"
                             </div>
                         })
                     } else {
                         Either::Right(view! {
-                            <EvolutionChart measurements=ms.clone() height=64 compact=true />
+                            <EvolutionChart measurements=ms.clone() height=50 compact=true />
                         })
                     }
                 })}
             </Suspense>
 
             // Actions
-            <div style="display:flex; gap:8px; margin-top:14px;">
+            <div class="flex gap-2 p-3" style="border-top:1px solid var(--uci-border);">
                 <a href=format!("/patients/{}", id.clone())
-                   style="flex:1; display:block; text-align:center; padding:8px; border-radius:8px; font-size:13px; font-weight:600; background:rgba(59,130,246,0.1); color:#3B82F6; border:1px solid rgba(59,130,246,0.2); text-decoration:none; transition:all 0.2s;"
-                   onmouseenter="this.style.background='rgba(59,130,246,0.2)'"
-                   onmouseleave="this.style.background='rgba(59,130,246,0.1)'">"Ver Detalle"</a>
+                   class="flex-1 text-center py-2 rounded-lg font-semibold text-sm"
+                   style="background:var(--uci-accent); color:white; text-decoration:none;">
+                    <i class="fa-solid fa-address-card mr-1"></i>"Perfil"
+                </a>
                 <a href=format!("/patients/{}/measure", id.clone())
-                   style="flex:1; display:block; text-align:center; padding:8px; border-radius:8px; font-size:13px; font-weight:600; background:rgba(16,185,129,0.1); color:#10B981; border:1px solid rgba(16,185,129,0.2); text-decoration:none; transition:all 0.2s;"
-                   onmouseenter="this.style.background='rgba(16,185,129,0.2)'"
-                   onmouseleave="this.style.background='rgba(16,185,129,0.1)'">"Nueva Medición"</a>
+                   class="flex-1 text-center py-2 rounded-lg font-semibold text-sm"
+                   style="background:var(--uci-low); color:white; text-decoration:none;">
+                    <i class="fa-solid fa-plus mr-1"></i>"Medir"
+                </a>
             </div>
+        </div>
+    }
+}
+
+#[component]
+fn ScoreCircle(value: String, icon: &'static str, color: String, label: &'static str) -> impl IntoView {
+    view! {
+        <div class="flex flex-col items-center">
+            <div class="w-14 h-14 rounded-full flex items-center justify-center" style={format!("background:{}; color:white; border:2px solid {};", color, color)}>
+                <i class={format!("fa-solid {}", icon)}></i>
+            </div>
+            <div class="text-lg font-bold mt-1" style={format!("color:{}", color)}>{value}</div>
+            <div class="text-[10px] uppercase font-semibold" style="color:var(--uci-muted);">{label}</div>
+        </div>
+    }
+}
+
+#[component]
+fn InfoBadge(icon: &'static str, value: String, color: String) -> impl IntoView {
+    view! {
+        <div class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold" style={format!("background:{}; color:white;", color)}>
+            <i class={format!("fa-solid {}", icon)}></i>
+            {value}
         </div>
     }
 }
@@ -172,32 +215,13 @@ fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView
     let title = title.to_string();
     let value = value.to_string();
     let color = color.to_string();
-    let icon = icon.to_string();
     view! {
-        <div class="glass-card" style=format!("padding:20px; border-top:3px solid {};", color)>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1px; font-weight:600;">{title}</span>
-                <span style="font-size:20px;">{icon}</span>
+        <div class="glass-card p-3 md:p-4 lg:p-5" style=format!("border-top:3px solid {};", color)>
+            <div class="flex justify-between items-center mb-2 md:mb-3">
+                <span class="text-[10px] md:text-xs uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
+                <i class=format!("fa-solid {} text-base md:text-lg", icon) style="color:{};"></i>
             </div>
-            <div style=format!("font-size:36px; font-weight:800; color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
+            <div class="text-2xl md:text-3xl lg:text-4xl font-extrabold" style="color:{color}; font-family:'JetBrains Mono',monospace; line-height:1;">{value}</div>
         </div>
-    }
-}
-
-pub fn severity_color_hex(level: &SeverityLevel) -> String {
-    match level {
-        SeverityLevel::Bajo     => "#10B981".to_string(),
-        SeverityLevel::Moderado => "#F59E0B".to_string(),
-        SeverityLevel::Severo   => "#F97316".to_string(),
-        SeverityLevel::Critico  => "#EF4444".to_string(),
-    }
-}
-
-fn severity_glow(level: &SeverityLevel) -> String {
-    match level {
-        SeverityLevel::Bajo     => "0 0 12px rgba(16,185,129,0.4)".to_string(),
-        SeverityLevel::Moderado => "0 0 12px rgba(245,158,11,0.4)".to_string(),
-        SeverityLevel::Severo   => "0 0 12px rgba(249,115,22,0.4)".to_string(),
-        SeverityLevel::Critico  => "0 0 12px rgba(239,68,68,0.4)".to_string(),
     }
 }

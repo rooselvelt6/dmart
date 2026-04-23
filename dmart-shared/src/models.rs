@@ -66,45 +66,72 @@ pub enum TipoAdmision {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum SeverityLevel {
     #[default]
-    Bajo, // 0-9
-    Moderado, // 10-19
-    Severo,   // 20-29
-    Critico,  // ≥30
+    Low, // 0-9
+    Moderate, // 10-19
+    Severe,   // 20-29
+    Critical,  // ≥30
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum News2Level {
     #[default]
-    Bajo,
-    Medio,
-    Alto,
+    Low,
+    Medium,
+    High,
     Emergent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum SofaLevel {
+    #[default]
+    Normal,     // 0-1
+    Disfuncion, // 2-6
+    Falla,      // 7-9
+    FallaMultiorganica, // >=10
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum Saps3Level {
+    #[default]
+    Estable,
+    RiesgoModerado,
+    RiesgoAlto,
+    RiesgoCritico,
 }
 
 impl News2Level {
     pub fn from_score(score: u32) -> Self {
         match score {
-            0..=4 => News2Level::Bajo,
-            5..=6 => News2Level::Medio,
-            7..=19 => News2Level::Alto,
+            0..=4 => News2Level::Low,
+            5..=6 => News2Level::Medium,
+            7..=19 => News2Level::High,
             _ => News2Level::Emergent,
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
-            News2Level::Bajo => "Bajo",
-            News2Level::Medio => "Medio",
-            News2Level::Alto => "Alto",
+            News2Level::Low => "Bajo",
+            News2Level::Medium => "Medio",
+            News2Level::High => "Alto",
             News2Level::Emergent => "Emergencia",
+        }
+    }
+
+    pub fn color_class(&self) -> &'static str {
+        match self {
+            News2Level::Low => "text-emerald-500",
+            News2Level::Medium => "text-amber-500",
+            News2Level::High => "text-orange-500",
+            News2Level::Emergent => "text-rose-600",
         }
     }
 
     pub fn response(&self) -> &'static str {
         match self {
-            News2Level::Bajo => "Monitoreo habitual",
-            News2Level::Medio => "Revisión clínica en 1 hora",
-            News2Level::Alto => "Revisión clínica inmediata",
+            News2Level::Low => "Monitoreo habitual",
+            News2Level::Medium => "Revisión clínica en 1 hora",
+            News2Level::High => "Revisión clínica inmediata",
             News2Level::Emergent => "Activación de código emergencia",
         }
     }
@@ -113,37 +140,95 @@ impl News2Level {
 impl SeverityLevel {
     pub fn from_score(score: u32) -> Self {
         match score {
-            0..=9 => SeverityLevel::Bajo,
-            10..=19 => SeverityLevel::Moderado,
-            20..=29 => SeverityLevel::Severo,
-            _ => SeverityLevel::Critico,
+            0..=9 => SeverityLevel::Low,
+            10..=19 => SeverityLevel::Moderate,
+            20..=29 => SeverityLevel::Severe,
+            _ => SeverityLevel::Critical,
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
-            SeverityLevel::Bajo => "Bajo",
-            SeverityLevel::Moderado => "Moderado",
-            SeverityLevel::Severo => "Severo",
-            SeverityLevel::Critico => "Crítico",
+            SeverityLevel::Low => "Bajo",
+            SeverityLevel::Moderate => "Moderado",
+            SeverityLevel::Severe => "Severo",
+            SeverityLevel::Critical => "Crítico",
         }
     }
 
     pub fn color_class(&self) -> &'static str {
         match self {
-            SeverityLevel::Bajo => "severity-low",
-            SeverityLevel::Moderado => "severity-moderate",
-            SeverityLevel::Severo => "severity-severe",
-            SeverityLevel::Critico => "severity-critical",
+            SeverityLevel::Low => "text-emerald-500",
+            SeverityLevel::Moderate => "text-blue-500",
+            SeverityLevel::Severe => "text-amber-500",
+            SeverityLevel::Critical => "text-rose-600",
         }
     }
 
     pub fn mortality_estimate(&self) -> &'static str {
         match self {
-            SeverityLevel::Bajo => "< 10%",
-            SeverityLevel::Moderado => "10–25%",
-            SeverityLevel::Severo => "25–50%",
-            SeverityLevel::Critico => "> 50%",
+            SeverityLevel::Low => "< 10%",
+            SeverityLevel::Moderate => "10–25%",
+            SeverityLevel::Severe => "25–50%",
+            SeverityLevel::Critical => "> 50%",
+        }
+    }
+}
+
+impl SofaLevel {
+    pub fn from_score(score: u32) -> Self {
+        match score {
+            0..=1 => SofaLevel::Normal,
+            2..=6 => SofaLevel::Disfuncion,
+            7..=9 => SofaLevel::Falla,
+            _ => SofaLevel::FallaMultiorganica,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            SofaLevel::Normal => "Normal",
+            SofaLevel::Disfuncion => "Disfunción Leve/Mod",
+            SofaLevel::Falla => "Falla Orgánica",
+            SofaLevel::FallaMultiorganica => "Falla Multiorgánica",
+        }
+    }
+
+    pub fn color_class(&self) -> &'static str {
+        match self {
+            SofaLevel::Normal => "text-emerald-500",
+            SofaLevel::Disfuncion => "text-amber-500",
+            SofaLevel::Falla => "text-orange-500",
+            SofaLevel::FallaMultiorganica => "text-rose-600",
+        }
+    }
+}
+
+impl Saps3Level {
+    pub fn from_score(score: u32) -> Self {
+        match score {
+            0..=30 => Saps3Level::Estable,
+            31..=50 => Saps3Level::RiesgoModerado,
+            51..=70 => Saps3Level::RiesgoAlto,
+            _ => Saps3Level::RiesgoCritico,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Saps3Level::Estable => "Estable",
+            Saps3Level::RiesgoModerado => "Riesgo Moderado",
+            Saps3Level::RiesgoAlto => "Riesgo Alto",
+            Saps3Level::RiesgoCritico => "Crítico / Muy Alto",
+        }
+    }
+
+    pub fn color_class(&self) -> &'static str {
+        match self {
+            Saps3Level::Estable => "text-emerald-500",
+            Saps3Level::RiesgoModerado => "text-amber-500",
+            Saps3Level::RiesgoAlto => "text-orange-500",
+            Saps3Level::RiesgoCritico => "text-rose-600",
         }
     }
 }
@@ -234,6 +319,14 @@ pub struct Patient {
     pub ultimo_apache_score: Option<u32>,
     #[serde(default)]
     pub ultimo_gcs_score: Option<u8>,
+    #[serde(default)]
+    pub ultimo_sofa_score: Option<u32>,
+    #[serde(default)]
+    pub ultimo_saps3_score: Option<u32>,
+    #[serde(default)]
+    pub ultimo_news2_score: Option<u32>,
+    #[serde(default)]
+    pub mortality_risk: Option<f32>,
 
     #[serde(default)]
     pub created_at: String, // ISO datetime
@@ -275,9 +368,13 @@ impl Patient {
             centro_origen: None,
             ventilacion_mecanica: false,
             procesos_invasivos: Vec::new(),
-            estado_gravedad: SeverityLevel::Bajo,
+            estado_gravedad: SeverityLevel::Low,
             ultimo_apache_score: None,
             ultimo_gcs_score: None,
+            ultimo_sofa_score: None,
+            ultimo_saps3_score: None,
+            ultimo_news2_score: None,
+            mortality_risk: None,
             created_at: now.clone(),
             updated_at: now,
         }
@@ -329,6 +426,9 @@ pub struct ApacheIIData {
     pub plaquetas: f32,   // x10^3/mm³ - para SAPS III y SOFA
 
     // Glasgow Coma Scale (para el APS)
+    pub gcs_ojos: u8,
+    pub gcs_verbal: u8,
+    pub gcs_motor: u8,
     pub gcs_total: u8, // 3-15
 
     // Parámetros de edad y enfermedades crónicas
@@ -387,6 +487,9 @@ impl Default for ApacheIIData {
             hematocrito: 42.0,
             leucocitos: 8.0,
             plaquetas: 250.0,
+            gcs_ojos: 4,
+            gcs_verbal: 5,
+            gcs_motor: 6,
             gcs_total: 15,
             edad: 50,
             insuficiencia_hepatica: false,
@@ -576,8 +679,14 @@ pub struct PatientListItem {
     pub sexo: Sexo,
     pub fecha_ingreso_uci: String,
     pub estado_gravedad: SeverityLevel,
+    
+    // Todas las escalas clínicas
     pub ultimo_apache_score: Option<u32>,
     pub ultimo_gcs_score: Option<u8>,
+    pub ultimo_sofa_score: Option<u32>,
+    pub ultimo_saps3_score: Option<u32>,
+    pub ultimo_news2_score: Option<u32>,
+    pub mortality_risk: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
