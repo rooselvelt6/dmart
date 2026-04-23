@@ -1,0 +1,13 @@
+[term]
+verbose = false
+color = 'auto'
+quiet = false
+
+[net]
+retry = 2
+
+[build]
+jobs = 4
+
+[alias]
+b = "build"
