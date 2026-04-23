@@ -7,15 +7,24 @@ use crate::pages::{
 use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use leptos_router::components::{Redirect, Route, Router, Routes, A};
 use leptos_router::hooks::*;
 use leptos_router::path;
+
+use crate::stores::{fetch_patients_cached, load_patients_cached};
 
 #[component]
 pub fn App() -> impl IntoView {
     let is_auth = move || LocalStorage::get::<String>("dmart_auth").is_ok();
     let sidebar_open = RwSignal::new(false);
     let _ = crate::stores::create_theme_store();
+
+    let preloaded = RwSignal::new(load_patients_cached().unwrap_or_default());
+    spawn_local(async move {
+        let fresh = fetch_patients_cached().await;
+        preloaded.set(fresh);
+    });
 
     view! {
         <Router>
