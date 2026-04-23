@@ -2,7 +2,6 @@ use leptos::prelude::*;
 use leptos::either::Either;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
-use dmart_shared::models::*;
 use crate::api;
 use crate::components::severity_badge::SeverityBadge;
 use crate::components::chart::EvolutionChart;

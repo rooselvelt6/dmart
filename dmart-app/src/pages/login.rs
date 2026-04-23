@@ -1,5 +1,4 @@
 use leptos::prelude::*;
-use leptos::either::Either;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
 use gloo_storage::{LocalStorage, Storage};

@@ -8,22 +8,34 @@ use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_router::components::{Redirect, Route, Router, Routes, A};
-use leptos_router::hooks::use_location;
+use leptos_router::hooks::*;
 use leptos_router::path;
 
 #[component]
 pub fn App() -> impl IntoView {
     let is_auth = move || LocalStorage::get::<String>("dmart_auth").is_ok();
-    crate::stores::create_theme_store();
+    let sidebar_open = RwSignal::new(false);
+    let _ = crate::stores::create_theme_store();
 
     view! {
         <Router>
-            <div class="flex min-h-screen" style="background:var(--uci-bg)">
+            <div class="flex flex-col md:flex-row min-h-screen" style="background:var(--uci-bg)">
                 <Show when=is_auth fallback=|| ()>
-                    <NavSidebar />
+                    <NavSidebar sidebar_open />
                 </Show>
 
-                <main class="main-content" style=move || if is_auth() { "" } else { "margin-left: 0; width: 100%" }>
+                <main class="w-full md:ml-[260px] p-4 md:p-8" style=move || if is_auth() { "" } else { "margin-left: 0; width: 100%" }>
+                    <Show when=is_auth>
+                        <button
+                            on:click=move |_| sidebar_open.update(|o| *o = !*o)
+                            class="md:hidden fixed top-4 left-4 z-30 p-2 rounded-lg shadow-lg"
+                            style="background:var(--uci-surface); border:1px solid var(--uci-border);"
+                        >
+                            <svg style="width:24px;height:24px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+                    </Show>
                     <Routes fallback=|| view! { "Pagina no encontrada" }>
                         <Route path=path!("/login") view=LoginPage />
 
@@ -90,7 +102,7 @@ pub fn App() -> impl IntoView {
 }
 
 #[component]
-fn NavSidebar() -> impl IntoView {
+fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
     let location = use_location();
     let path = move || location.pathname.get();
 
@@ -103,8 +115,35 @@ fn NavSidebar() -> impl IntoView {
         }
     };
 
+    let is_active_exact = move |target: &str| {
+        path() == target
+    };
+
+    let _is_active_query = move |target: &str, query_str: &str| {
+        path().starts_with(target) && location.search.get().contains(query_str)
+    };
+
+    let active_patient_id = move || {
+        let p = path();
+        if p.starts_with("/patients/") && !p.starts_with("/patients/new") {
+            let parts: Vec<&str> = p.split('/').collect();
+            if parts.len() >= 3 {
+                return Some(parts[2].to_string());
+            }
+        }
+        None
+    };
+
+    let close_sidebar = move |_: web_sys::MouseEvent| {
+        sidebar_open.set(false);
+    };
+
     view! {
-        <nav class="nav-sidebar" style="background:var(--uci-surface)">
+        <nav class=move || format!(
+            "nav-sidebar {} {}",
+            if sidebar_open.get() { "open" } else { "" },
+            if sidebar_open.get() { "fixed inset-0 z-50" } else { "hidden md:block fixed left-0 top-0 z-50 h-screen" }
+        ) style="background:var(--uci-surface);">
             <div style="padding:24px 16px 16px; border-bottom:1px solid var(--uci-border);">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
                     <div style="
@@ -114,22 +153,30 @@ fn NavSidebar() -> impl IntoView {
                         box-shadow: 0 4px 12px rgba(59,130,246,0.4);
                         font-size:18px; font-weight:900; color:white; flex-shrink:0;
                     ">"+"</div>
-                    <div>
+                    <div class="hidden md:block">
                         <div style="font-weight:700; font-size:16px; color:var(--uci-text);">"UCI - DMART"</div>
                         <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px;">"Cuidados Intensivos"</div>
                     </div>
+                    <button
+                        on:click=close_sidebar
+                        class="md:hidden ml-auto p-2 hover:bg-uci-border/30 rounded-lg"
+                    >
+                        <svg style="width:20px;height:20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
             <div style="padding:12px 8px; flex:1; overflow-y:auto;">
                 <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px; padding:8px 8px 4px; font-weight:600;">"PRINCIPAL"</div>
 
-                <A href="/" attr:class=move || format!("nav-link {}", if is_active("/") && path() == "/" { "active" } else { "" })>
+                <A href="/" attr:class=move || format!("nav-link {}", if is_active_exact("/") { "active" } else { "" })>
                     {svg_icon("M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6")}
                     "Dashboard"
                 </A>
 
-                <A href="/patients" attr:class=move || format!("nav-link {}", if is_active("/patients") { "active" } else { "" })>
+                <A href="/patients" attr:class=move || format!("nav-link {}", if is_active_exact("/patients") { "active" } else { "" })>
                     {svg_icon("M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z")}
                     "Pacientes"
                 </A>
@@ -141,10 +188,47 @@ fn NavSidebar() -> impl IntoView {
 
                 <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px; padding:12px 8px 4px; font-weight:600;">"ACCIONES"</div>
 
-                <A href="/patients/new" attr:class=move || format!("nav-link {}", if path() == "/patients/new" { "active" } else { "" })>
+                <A href="/patients/new" attr:class=move || format!("nav-link {}", if is_active_exact("/patients/new") { "active" } else { "" })>
                     {svg_icon("M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z")}
                     "Nuevo Paciente"
                 </A>
+
+                {move || active_patient_id().map(|pid| {
+                    let base = format!("/patients/{}", pid);
+                    view! {
+                        <div class="mt-4 pt-4 border-t border-uci-border animate-fade-in">
+                            <div style="font-size:10px; color:var(--uci-accent); text-transform:uppercase; letter-spacing:1px; padding:4px 8px 8px; font-weight:900;">"PACIENTE ACTIVO"</div>
+                            
+                            <A href=base.clone() attr:class="nav-link">
+                                <i class="fa-solid fa-address-card w-5 text-center"></i>
+                                "Expediente / Perfil"
+                            </A>
+
+                            <div style="font-size:9px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px; padding:12px 8px 4px; font-weight:700;">"Escalas Clínicas"</div>
+                            
+                            <A href=format!("{}/measure?escala=apache", base) attr:class="nav-link">
+                                <i class="fa-solid fa-heart-pulse w-5 text-center text-rose-500"></i>
+                                "APACHE II"
+                            </A>
+                            <A href=format!("{}/measure?escala=gcs", base) attr:class="nav-link">
+                                <i class="fa-solid fa-brain w-5 text-center text-purple-500"></i>
+                                "Glasgow (GCS)"
+                            </A>
+                            <A href=format!("{}/measure?escala=sofa", base) attr:class="nav-link">
+                                <i class="fa-solid fa-lungs w-5 text-center text-emerald-500"></i>
+                                "SOFA"
+                            </A>
+                            <A href=format!("{}/measure?escala=saps3", base) attr:class="nav-link">
+                                <i class="fa-solid fa-chart-line w-5 text-center text-blue-500"></i>
+                                "SAPS III"
+                            </A>
+                            <A href=format!("{}/measure?escala=news2", base) attr:class="nav-link">
+                                <i class="fa-solid fa-bell w-5 text-center text-amber-500"></i>
+                                "NEWS2"
+                            </A>
+                        </div>
+                    }
+                })}
             </div>
 
             <div style="padding:16px; border-top:1px solid var(--uci-border);">
