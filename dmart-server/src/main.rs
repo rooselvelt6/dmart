@@ -86,9 +86,16 @@ async fn main() -> anyhow::Result<()> {
         // Patients
         .route("/patients", get(api::patients::list_patients).post(api::patients::create_patient))
         .route("/patients/{id}", get(api::patients::get_patient).put(api::patients::update_patient).delete(api::patients::delete_patient))
-        // Measurements
+        // Measurements (registro completo)
         .route("/patients/{id}/measurements", get(api::measurements::get_measurements).post(api::measurements::create_measurement))
         .route("/patients/{id}/measurements/last", get(api::measurements::get_last_measurement))
+        // Escalas individuales
+        .route("/patients/{id}/scales/apache", axum::routing::post(api::scales::calc_apache))
+        .route("/patients/{id}/scales/gcs", axum::routing::post(api::scales::calc_gcs))
+        .route("/patients/{id}/scales/news2", axum::routing::post(api::scales::calc_news2))
+        .route("/patients/{id}/scales/sofa", axum::routing::post(api::scales::calc_sofa))
+        .route("/patients/{id}/scales/saps3", axum::routing::post(api::scales::calc_saps3))
+        .route("/patients/{id}/scales/history", get(api::scales::scale_history))
         // Export
         .route("/patients/{id}/export/csv", get(api::export::export_csv))
         .route("/patients/{id}/export/pdf", get(api::export::export_pdf))
@@ -108,6 +115,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/patients/{id}", get(spa_handler))
         .route("/patients/{id}/edit", get(spa_handler))
         .route("/patients/{id}/measure", get(spa_handler))
+        .route("/patients/{id}/scales/apache", get(spa_handler))
+        .route("/patients/{id}/scales/gcs", get(spa_handler))
+        .route("/patients/{id}/scales/news2", get(spa_handler))
+        .route("/patients/{id}/scales/sofa", get(spa_handler))
+        .route("/patients/{id}/scales/saps3", get(spa_handler))
+        .route("/scales", get(spa_handler))
         .route("/stats", get(spa_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http());

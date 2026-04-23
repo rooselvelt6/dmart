@@ -1,8 +1,7 @@
 use leptos::prelude::*;
-use leptos_router::hooks::*;
-use dmart_shared::models::*;
 use crate::api;
 use crate::components::severity_badge::SeverityBadge;
+use dmart_shared::models::Sexo;
 
 #[component]
 pub fn PatientsPage() -> impl IntoView {
@@ -19,66 +18,66 @@ pub fn PatientsPage() -> impl IntoView {
 
     view! {
         <div class="page-enter">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+            <div class="flex flex-col md:flex-row justify-between items-start gap-4 mb-5 md:mb-6">
                 <div>
-                    <h1 style="font-size:26px; font-weight:800; color:#E2E8F0; margin:0 0 4px;">"Registro de Pacientes"</h1>
-                    <p style="color:#475569; font-size:14px; margin:0;">"Busque, revise y gestione los pacientes de la UCI"</p>
+                    <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Registro de Pacientes"</h1>
+                    <p style="color:var(--uci-muted); font-size:13px; md:text-14px; margin:0;">"Busque, revise y gestione los pacientes de la UCI"</p>
                 </div>
-                <a href="/patients/new" class="btn-primary" style="text-decoration:none;">"+ Nuevo Paciente"</a>
+                <a href="/patients/new" class="btn-primary text-center no-underline whitespace-nowrap">"+ Nuevo Paciente"</a>
             </div>
 
-            <div style="margin-bottom:20px;">
-                <input type="text" class="form-input" placeholder="Buscar por nombre, cedula o historia clinica..." on:input=on_search style="width:100%;" />
+            <div class="mb-4 md:mb-5">
+                <input type="text" class="form-input w-full" placeholder="Buscar por nombre, cedula o historia clinica..." on:input=on_search />
             </div>
 
-            <Suspense fallback=move || view! { <div style="text-align:center; padding:60px;">"Cargando..."</div> }>
+            <Suspense fallback=move || view! { <div class="text-center p-10" style="color:var(--uci-muted);">"Cargando..."</div> }>
                 {move || patients.get().map(|list| {
                     view! {
-                        <div class="glass-card" style="overflow-x:auto;">
-                            <table style="width:100%; text-align:left; border-collapse:collapse;">
+                        <div class="glass-card overflow-x-auto">
+                            <table class="w-full text-left border-collapse min-w-[600px]">
                                 <thead>
-                                    <tr style="border-bottom:1px solid #2A3547;">
-                                        <th style="padding:16px; color:#64748B; font-size:11px; font-weight:700; text-transform:uppercase;">"Paciente"</th>
-                                        <th style="padding:16px; color:#64748B; font-size:11px; font-weight:700; text-transform:uppercase;">"ID / HC"</th>
-                                        <th style="padding:16px; color:#64748B; font-size:11px; font-weight:700; text-transform:uppercase;">"Edad"</th>
-                                        <th style="padding:16px; color:#64748B; font-size:11px; font-weight:700; text-transform:uppercase;">"Sexo"</th>
-                                        <th style="padding:16px; color:#64748B; font-size:11px; font-weight:700; text-transform:uppercase; text-align:center;">"Score"</th>
-                                        <th style="padding:16px; color:#64748B; font-size:11px; font-weight:700; text-transform:uppercase; text-align:center;">"Estado"</th>
-                                        <th style="padding:16px; color:#64748B; font-size:11px; font-weight:700; text-transform:uppercase; text-align:right;">"Acciones"</th>
+                                    <tr style="border-bottom:1px solid var(--uci-border);">
+                                        <th class="p-3 md:p-4 text-xs font-bold uppercase" style="color:var(--uci-muted);">"Paciente"</th>
+                                        <th class="p-3 md:p-4 text-xs font-bold uppercase hidden md:table-cell" style="color:var(--uci-muted);">"ID / HC"</th>
+                                        <th class="p-3 md:p-4 text-xs font-bold uppercase hidden sm:table-cell" style="color:var(--uci-muted);">"Edad"</th>
+                                        <th class="p-3 md:p-4 text-xs font-bold uppercase" style="color:var(--uci-muted);">"Sexo"</th>
+                                        <th class="p-3 md:p-4 text-xs font-bold uppercase text-center" style="color:var(--uci-muted);">"Score"</th>
+                                        <th class="p-3 md:p-4 text-xs font-bold uppercase text-center" style="color:var(--uci-muted);">"Estado"</th>
+                                        <th class="p-3 md:p-4 text-xs font-bold uppercase text-right" style="color:var(--uci-muted);">"Acciones"</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {list.iter().map(|p| {
                                         let pid = p.id.clone();
                                         view! {
-                                            <tr style="border-bottom:1px solid #2A3547;">
-                                                <td style="padding:16px;">
-                                                    <div style="display:flex; align-items:center; gap:12px;">
-                                                        <div style="width:40px; height:40px; border-radius:50%; background:#3B82F6/10; display:flex; align-items:center; justify-content:center; color:#3B82F6;">
-                                                            <svg style="width:20px;height:20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                            <tr style="border-bottom:1px solid var(--uci-border);">
+                                                <td class="p-3 md:p-4">
+                                                    <div class="flex items-center gap-2 md:gap-3">
+                                                        <div class="w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0" style="background:rgba(59,130,246,0.1);">
+                                                            <svg class="w-4 h-4 md:w-5 md:h-5" style="color:var(--uci-accent);" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                                         </div>
-                                                        <span style="font-weight:600; color:#E2E8F0;">{p.nombre_completo.clone()}</span>
+                                                        <span class="font-semibold text-sm" style="color:var(--uci-text);">{p.nombre_completo.clone()}</span>
                                                     </div>
                                                 </td>
-                                                <td style="padding:16px; color:#94A3B8;">
-                                                    <div>{p.cedula.clone()}</div>
-                                                    <div style="font-size:12px;">HC: {p.historia_clinica.clone()}</div>
+                                                <td class="p-3 md:p-4 hidden md:table-cell" style="color:var(--uci-muted);">
+                                                    <div class="text-sm">{p.cedula.clone()}</div>
+                                                    <div class="text-xs">HC: {p.historia_clinica.clone()}</div>
                                                 </td>
-                                                <td style="padding:16px; color:#E2E8F0; font-weight:600;">{p.edad}" anos"</td>
-                                                <td style="padding:16px;">
+                                                <td class="p-3 md:p-4 hidden sm:table-cell font-semibold" style="color:var(--uci-text);">{p.edad}" años"</td>
+                                                <td class="p-3 md:p-4">
                                                     {match p.sexo.clone() { 
                                                         Sexo::Masculino => view!{ <span style="color:#60A5FA;">M</span> }, 
                                                         Sexo::Femenino => view!{ <span style="color:#F472B6;">F</span> } 
                                                     }}
                                                 </td>
-                                                <td style="padding:16px; text-align:center; font-size:20px; font-weight:800; color:#E2E8F0;">
+                                                <td class="p-3 md:p-4 text-center font-extrabold text-lg" style="color:var(--uci-text);">
                                                     {p.ultimo_apache_score.map(|s|s.to_string()).unwrap_or_else(|| "-".into())}
                                                 </td>
-                                                <td style="padding:16px; text-align:center;"><SeverityBadge level=p.estado_gravedad.clone() /></td>
-                                                <td style="padding:16px; text-align:right;">
-                                                    <div style="display:flex; justify-content:flex-end; gap:8px;">
-                                                        <a href=format!("/patients/{}", pid) style="padding:8px 12px; border-radius:6px; background:#3B82F6/10; color:#3B82F6; font-size:12px; font-weight:600; text-decoration:none;">"Ver"</a>
-                                                        <a href=format!("/patients/{}/edit", pid) style="padding:8px 12px; border-radius:6px; background:#10B981/10; color:#10B981; font-size:12px; font-weight:600; text-decoration:none;">"Editar"</a>
+                                                <td class="p-3 md:p-4 text-center"><SeverityBadge level=p.estado_gravedad.clone() /></td>
+                                                <td class="p-3 md:p-4 text-right">
+                                                    <div class="flex flex-col sm:flex-row justify-end gap-2">
+                                                        <a href=format!("/patients/{}", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(59,130,246,0.1); color:var(--uci-accent);">"Ver"</a>
+                                                        <a href=format!("/patients/{}/edit", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(16,185,129,0.1); color:var(--uci-low);">"Editar"</a>
                                                     </div>
                                                 </td>
                                             </tr>

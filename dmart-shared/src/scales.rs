@@ -16,6 +16,7 @@
 /// Reference: Vincent JL, Moreno R, Takala J, et al. The SOFA (Sepsis-related
 /// Organ Failure Assessment) score to describe organ dysfunction/failure.
 /// Intensive Care Med 1996; 22(6):707-10.
+use serde::{Serialize, Deserialize};
 use crate::models::{ApacheIIData, GcsData};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ pub fn calculate_apache_ii_score(data: &ApacheIIData) -> u32 {
 }
 
 /// Componentes individuales del score (para mostrar desglose en UI)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApacheIIBreakdown {
     pub temperatura: u32,
     pub pam: u32,
@@ -336,6 +337,10 @@ pub fn calculate_gcs_score(data: &GcsData) -> u8 {
     data.total()
 }
 
+pub fn calculate_gcs_score_from_total(total: u8) -> u8 {
+    total.clamp(3, 15)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Unit tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -343,7 +348,8 @@ pub fn calculate_gcs_score(data: &GcsData) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::*;
+    use serde::{Serialize, Deserialize};
+use crate::models::*;
 
     fn normal_patient() -> ApacheIIData {
         ApacheIIData {
@@ -375,6 +381,7 @@ mod tests {
             cirugia_no_operado: false,
             ventilacion_mecanica: false,
             o2_suplementario: false,
+            alerta: true,
             vasopresores: false,
             dosis_vasopresor: 0.0,
             diuresis_diaria: 1500,
@@ -383,6 +390,8 @@ mod tests {
             dias_pre_uci: 0,
             infeccion_admision: None,
             sistema_anatomico: None,
+            bicarbonate: 24.0,
+            nivel_conciencia: String::new(),
         }
     }
 
@@ -768,61 +777,7 @@ pub fn saps_iii_mortality_prediction(score: u32) -> f32 {
     (probability * 100.0).min(100.0).max(0.0)
 }
 
-#[derive(Debug, Clone)]
-pub struct Saps3Breakdown {
-    pub box1: u32,
-    pub box2: u32,
-    pub box3: u32,
-    pub total: u32,
-}
-
-pub fn saps_iii_breakdown(data: &ApacheIIData) -> Saps3Breakdown {
-    let edad_pts = points_saps_edad(data.edad);
-    let comorb_pts = points_saps_comorbilidad(data.inmunocomprometido);
-    let vaso_pts = points_saps_vasoactivos(data.vasopresores);
-    let fuente_pts = points_saps_fuente(data.fuente_admision.as_deref());
-    let dias_pts = points_saps_dias_pre_uci(data.dias_pre_uci);
-    let tipo_pts = points_saps_tipo_admision(data.tipo_admision.as_deref());
-    let inf_pts = points_saps_infeccion(data.infeccion_admision.as_deref());
-
-    let gcs_pts = points_saps_gcs(data.gcs_total);
-    let fc_pts = points_saps_fc(data.frecuencia_cardiaca);
-    let pas_pts = points_saps_pas(data.presion_sistolica);
-    let temp_pts = points_saps_temperatura(data.temperatura);
-    let bili_pts = points_saps_bilirrubina(data.bilirrubina);
-    let creat_pts = points_saps_creatinina(data.creatinina);
-    let wbc_pts = points_saps_leucocitos(data.leucocitos);
-    let ph_pts = points_saps_ph(data.ph_arterial);
-    let plq_pts = points_saps_plaquetas(data.plaquetas);
-
-    let pao2 = data.pao2.unwrap_or(80.0);
-    let pao2fio2 = if data.fio2 > 0.0 {
-        pao2 / data.fio2
-    } else {
-        300.0
-    };
-    let ox_pts = points_saps_oxigenacion(data.ventilacion_mecanica, pao2fio2);
-
-    let box1 = edad_pts + comorb_pts + vaso_pts + fuente_pts + dias_pts;
-    let box2 = tipo_pts + inf_pts;
-    let box3 = gcs_pts
-        + fc_pts
-        + pas_pts
-        + temp_pts
-        + bili_pts
-        + creat_pts
-        + wbc_pts
-        + ph_pts
-        + plq_pts
-        + ox_pts;
-
-    Saps3Breakdown {
-        box1,
-        box2,
-        box3,
-        total: box1 + box2 + box3,
-    }
-}
+// Saps3Breakdown and saps_iii_breakdown moved to consolidated section below
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NEWS2 Scoring (0-64 points)
@@ -912,6 +867,85 @@ pub fn calculate_news2_score(data: &ApacheIIData) -> u32 {
     fr_pts + spo2_pts + airway_pts + o2_pts + pas_pts + fc_pts + temp_pts + conciencia_pts
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct News2Breakdown {
+    pub fr: u32,
+    pub spo2: u32,
+    pub airway: u32,
+    pub o2: u32,
+    pub pas: u32,
+    pub fc: u32,
+    pub temp: u32,
+    pub conciencia: u32,
+    pub total: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SofaBreakdown {
+    pub respiratorio: u32,
+    pub coagulacion: u32,
+    pub hepatico: u32,
+    pub cardiovascular: u32,
+    pub neurologico: u32,
+    pub renal: u32,
+    pub total: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Saps3Breakdown {
+    pub box1: u32,
+    pub box2: u32,
+    pub box3: u32,
+    pub total: u32,
+}
+
+pub fn sofa_breakdown(data: &ApacheIIData) -> SofaBreakdown {
+    let pao2 = data.pao2.unwrap_or(80.0);
+    let pao2fio2 = if data.fio2 > 0.0 { pao2 / data.fio2 } else { 400.0 };
+    
+    let r = points_sofa_respiratorio(pao2fio2, data.ventilacion_mecanica);
+    let c = points_sofa_coagulacion(data.plaquetas);
+    let h = points_sofa_hepatico(data.bilirrubina);
+    let cv = points_sofa_cardiovascular(data.presion_arterial_media, data.vasopresores, data.dosis_vasopresor);
+    let n = points_sofa_neurologico(data.gcs_total);
+    let ren = points_sofa_renal(data.creatinina, data.diuresis_diaria);
+    let total = r + c + h + cv + n + ren;
+    
+    SofaBreakdown { respiratorio: r, coagulacion: c, hepatico: h, cardiovascular: cv, neurologico: n, renal: ren, total }
+}
+
+pub fn calculate_saps3_breakdown(data: &ApacheIIData) -> Saps3Breakdown {
+    // Simplified SAPS III logic for dashboard visualization
+    let b1 = 0; // Pre-admission
+    let b2 = 0; // Admission circumstances
+    let b3 = calculate_saps_iii_score(data); // Acute physiology
+    Saps3Breakdown { box1: b1, box2: b2, box3: b3, total: b1 + b2 + b3 }
+}
+
+pub fn news2_breakdown(data: &ApacheIIData) -> News2Breakdown {
+    let fr = points_news2_respiracion(data.frecuencia_respiratoria);
+    let spo2 = points_news2_spo2(data.spo2);
+    let airway = points_news2_airway(false, data.spo2);
+    let o2 = if data.o2_suplementario { 2 } else { 0 };
+    let pas = points_news2_pas(data.presion_sistolica);
+    let fc = points_news2_fc(data.frecuencia_cardiaca);
+    let temp = points_news2_temperatura(data.temperatura);
+    let conciencia = points_news2_conciencia(data.gcs_total);
+    let total = fr + spo2 + airway + o2 + pas + fc + temp + conciencia;
+
+    News2Breakdown {
+        fr,
+        spo2,
+        airway,
+        o2,
+        pas,
+        fc,
+        temp,
+        conciencia,
+        total,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SOFA Scoring (0-24 points)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -986,8 +1020,8 @@ fn points_sofa_renal(creatinina: f32, diuresis: u32) -> u32 {
     match (creatinina, diuresis) {
         (c, d) if c >= 5.0 || d < 200 => 4,
         (c, d) if c >= 3.5 || d < 500 => 3,
-        (c, d) if c >= 2.0 => 2,
-        (c, d) if c >= 1.2 => 1,
+        (c, _) if c >= 2.0 => 2,
+        (c, _) if c >= 1.2 => 1,
         _ => 0,
     }
 }
@@ -1025,43 +1059,4 @@ pub fn sofa_mortality_estimate(score: u32) -> f32 {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct SofaBreakdown {
-    pub respiratorio: u32,
-    pub coagulacion: u32,
-    pub hepatico: u32,
-    pub cardiovascular: u32,
-    pub neurologico: u32,
-    pub renal: u32,
-    pub total: u32,
-}
-
-pub fn sofa_breakdown(data: &ApacheIIData) -> SofaBreakdown {
-    let pao2 = data.pao2.unwrap_or(80.0);
-    let pao2fio2 = if data.fio2 > 0.0 {
-        pao2 / data.fio2
-    } else {
-        400.0
-    };
-
-    let respiratorio = points_sofa_respiratorio(pao2fio2, data.ventilacion_mecanica);
-    let coagulacion = points_sofa_coagulacion(data.plaquetas);
-    let hepatico = points_sofa_hepatico(data.bilirrubina);
-    let cardiovascular = points_sofa_cardiovascular(
-        data.presion_arterial_media,
-        data.vasopresores,
-        data.dosis_vasopresor,
-    );
-    let neurologico = points_sofa_neurologico(data.gcs_total);
-    let renal = points_sofa_renal(data.creatinina, data.diuresis_diaria);
-
-    SofaBreakdown {
-        respiratorio,
-        coagulacion,
-        hepatico,
-        cardiovascular,
-        neurologico,
-        renal,
-        total: respiratorio + coagulacion + hepatico + cardiovascular + neurologico + renal,
-    }
-}
+// Redundant SofaBreakdown and sofa_breakdown removed

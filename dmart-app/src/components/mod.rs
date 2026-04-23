@@ -7,3 +7,4 @@ pub mod slider;
 pub mod theme_toggle;
 pub mod toggle;
 pub mod ui_kit;
+pub mod scales;

@@ -13,6 +13,7 @@ dmart-shared = { path = "../dmart-shared" }
 leptos = { version = "0.7", features = ["csr"] }
 leptos_router = { version = "0.7" }
 console_error_panic_hook = "0.1"
+regex = "1.10"
 
 # HTTP client (WASM)
 gloo-net = { version = "0.6", features = ["http"] }
@@ -42,3 +43,10 @@ chrono = { workspace = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = true

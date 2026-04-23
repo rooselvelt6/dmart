@@ -330,7 +330,7 @@ pub fn validate_apache_measurement(data: &ApacheIIData) -> ValidationResult {
 
 /// Valida una medición de GCS
 pub fn validate_gcs_measurement(gcs: &GcsData) -> ValidationResult {
-    let mut warnings = Vec::new();
+    let warnings = Vec::new();
     let mut errors = Vec::new();
 
     // Validar componentes del GCS

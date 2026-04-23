@@ -4,7 +4,10 @@
 //! Crit Care Med. 13(10):818-29
 
 use dmart_shared::models::{ApacheIIData, GcsData};
-use dmart_shared::scales::{apache_ii_breakdown, calculate_apache_ii_score, mortality_risk};
+use dmart_shared::scales::{
+    apache_ii_breakdown, calculate_apache_ii_score, calculate_news2_score, calculate_saps_iii_score,
+    calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction, sofa_mortality_estimate,
+};
 
 // Función helper para crear un paciente con todos los valores en rango normal (0 puntos)
 fn paciente_base() -> ApacheIIData {
@@ -12,20 +15,24 @@ fn paciente_base() -> ApacheIIData {
         // Vitales normales
         temperatura: 37.0,
         presion_arterial_media: 80.0,
+        presion_sistolica: 120.0,
         frecuencia_cardiaca: 75.0,
         frecuencia_respiratoria: 14.0,
         // Oxigenación normal
         fio2: 0.21,
         pao2: Some(85.0),
         a_ado2: None,
+        spo2: 98.0,
         // Laboratorios normales
         ph_arterial: 7.40,
         sodio_serico: 140.0,
         potasio_serico: 4.0,
         creatinina: 1.0,
         falla_renal_aguda: false,
+        bilirrubina: 0.8,
         hematocrito: 42.0,
         leucocitos: 7.0,
+        plaquetas: 250.0,
         // GCS normal
         gcs_total: 15,
         // Edad media (sin puntos)
@@ -37,6 +44,22 @@ fn paciente_base() -> ApacheIIData {
         insuficiencia_renal: false,
         inmunocomprometido: false,
         cirugia_no_operado: false,
+        // Soporte vital
+        ventilacion_mecanica: false,
+        vasopresores: false,
+        dosis_vasopresor: 0.0,
+        diuresis_diaria: 1500,
+        // NEWS2
+        alerta: true,
+        o2_suplementario: false,
+        nivel_conciencia: String::new(),
+        // SAPS III
+        bicarbonate: 24.0,
+        tipo_admision: None,
+        fuente_admision: None,
+        dias_pre_uci: 0,
+        infeccion_admision: None,
+        sistema_anatomico: None,
     }
 }
 
@@ -437,18 +460,22 @@ mod apache_ii {
         let data = ApacheIIData {
             temperatura: 42.0,
             presion_arterial_media: 180.0,
+            presion_sistolica: 220.0,
             frecuencia_cardiaca: 200.0,
             frecuencia_respiratoria: 55.0,
             fio2: 0.21,
             pao2: Some(30.0),
             a_ado2: None,
+            spo2: 85.0,
             ph_arterial: 7.10,
             sodio_serico: 185.0,
             potasio_serico: 7.5,
             creatinina: 4.0,
             falla_renal_aguda: false,
+            bilirrubina: 12.0,
             hematocrito: 65.0,
             leucocitos: 45.0,
+            plaquetas: 20.0,
             gcs_total: 3,
             edad: 80,
             insuficiencia_hepatica: true,
@@ -457,6 +484,19 @@ mod apache_ii {
             insuficiencia_renal: true,
             inmunocomprometido: true,
             cirugia_no_operado: false,
+            ventilacion_mecanica: false,
+            vasopresores: false,
+            dosis_vasopresor: 0.0,
+            diuresis_diaria: 200,
+            alerta: false,
+            o2_suplementario: false,
+            nivel_conciencia: String::new(),
+            bicarbonate: 12.0,
+            tipo_admision: None,
+            fuente_admision: None,
+            dias_pre_uci: 0,
+            infeccion_admision: None,
+            sistema_anatomico: None,
         };
 
         let breakdown = apache_ii_breakdown(&data);
@@ -600,18 +640,22 @@ mod integracion {
         let data = ApacheIIData {
             temperatura: 39.5,
             presion_arterial_media: 55.0,
+            presion_sistolica: 80.0,
             frecuencia_cardiaca: 120.0,
             frecuencia_respiratoria: 32.0,
             fio2: 0.6,
             pao2: Some(60.0),
             a_ado2: Some(180.0),
+            spo2: 88.0,
             ph_arterial: 7.35,
             sodio_serico: 135.0,
             potasio_serico: 4.2,
             creatinina: 1.8,
             falla_renal_aguda: false,
+            bilirrubina: 2.5,
             hematocrito: 35.0,
             leucocitos: 18.0,
+            plaquetas: 150.0,
             gcs_total: 12,
             edad: 65,
             insuficiencia_hepatica: false,
@@ -620,6 +664,19 @@ mod integracion {
             insuficiencia_renal: false,
             inmunocomprometido: false,
             cirugia_no_operado: true,
+            ventilacion_mecanica: false,
+            vasopresores: false,
+            dosis_vasopresor: 0.0,
+            diuresis_diaria: 800,
+            alerta: true,
+            o2_suplementario: true,
+            nivel_conciencia: String::new(),
+            bicarbonate: 20.0,
+            tipo_admision: Some("medical".to_string()),
+            fuente_admision: None,
+            dias_pre_uci: 2,
+            infeccion_admision: None,
+            sistema_anatomico: None,
         };
 
         let score = calculate_apache_ii_score(&data);
@@ -639,5 +696,156 @@ mod integracion {
 
         assert!(score < 10, "Paciente estable debe tener score <10");
         assert!(riesgo < 15.0, "Paciente estable debe tener riesgo bajo");
+    }
+}
+
+mod news2_tests {
+    use super::*;
+
+    #[test]
+    fn test_news2_paciente_estable() {
+        let mut data = paciente_base();
+        data.spo2 = 98.0;
+        data.frecuencia_respiratoria = 14.0;
+        data.frecuencia_cardiaca = 70.0;
+        data.presion_sistolica = 120.0;
+        data.temperatura = 37.0;
+        data.alerta = true;
+
+        let score = calculate_news2_score(&data);
+        assert!(score < 5, "NEWS2 estable debe ser < 5, got: {}", score);
+    }
+
+    #[test]
+    fn test_news2_paciente_alto() {
+        let mut data = paciente_base();
+        data.spo2 = 88.0;
+        data.frecuencia_respiratoria = 28.0;
+        data.frecuencia_cardiaca = 130.0;
+        data.presion_sistolica = 90.0;
+        data.temperatura = 39.0;
+        data.alerta = false;
+
+        let score = calculate_news2_score(&data);
+        assert!(score >= 7, "NEWS2 crítico debe ser >= 7, got: {}", score);
+    }
+
+    #[test]
+    fn test_news2_con_hipoxemia() {
+        let mut data = paciente_base();
+        data.spo2 = 85.0;
+        data.o2_suplementario = true;
+
+        let score = calculate_news2_score(&data);
+        assert!(score >= 3, "NEWS2 con hipoxemia debe dar puntos");
+    }
+}
+
+mod saps3_tests {
+    use super::*;
+
+    #[test]
+    fn test_saps3_paciente_estable() {
+        let mut data = paciente_base();
+        data.edad = 35;
+        data.inmunocomprometido = false;
+        data.vasopresores = false;
+        data.tipo_admision = Some("scheduled_surgical".to_string());
+        data.fuente_admision = None;
+        data.dias_pre_uci = 0;
+        data.infeccion_admision = None;
+        data.gcs_total = 15;
+
+        let score = calculate_saps_iii_score(&data);
+        let mort = saps_iii_mortality_prediction(score);
+        assert!(score < 30, "SAPS3 estable debe ser < 30, got: {}", score);
+        assert!(mort < 10.0, "Mortalidad estable debe ser < 10%, got: {}%", mort);
+    }
+
+    #[test]
+    fn test_saps3_paciente_critico() {
+        let mut data = paciente_base();
+        data.edad = 75;
+        data.inmunocomprometido = true;
+        data.vasopresores = true;
+        data.dosis_vasopresor = 10.0;
+        data.tipo_admision = Some("medical".to_string());
+        data.fuente_admision = Some("emergency_room".to_string());
+        data.dias_pre_uci = 5;
+        data.infeccion_admision = Some("nosocomial".to_string());
+        data.gcs_total = 8;
+
+        let score = calculate_saps_iii_score(&data);
+        let mort = saps_iii_mortality_prediction(score);
+        assert!(score >= 50, "SAPS3 crítico debe ser >= 50, got: {}", score);
+        assert!(mort >= 15.0, "Mortalidad crítica debe ser >= 15%, got: {}%", mort);
+    }
+
+    #[test]
+    fn test_saps3_edad_puntos() {
+        let mut data = paciente_base();
+        data.edad = 30;
+        let score_joven = calculate_saps_iii_score(&data);
+        data.edad = 80;
+        let score_anciano = calculate_saps_iii_score(&data);
+        assert!(score_anciano > score_joven, " mayor edad debe dar más puntos");
+    }
+}
+
+mod sofa_tests {
+    use super::*;
+
+    #[test]
+    fn test_sofa_paciente_estable() {
+        let mut data = paciente_base();
+        data.bilirrubina = 0.8;
+        data.plaquetas = 250.0;
+        data.gcs_total = 15;
+        data.creatinina = 1.0;
+        data.diuresis_diaria = 1500;
+        data.vasopresores = false;
+        data.fio2 = 0.21;
+        data.pao2 = Some(85.0);
+
+        let score = calculate_sofa_score(&data);
+        let mort = sofa_mortality_estimate(score);
+        assert!(score < 5, "SOFA estable debe ser < 5, got: {}", score);
+        assert!(mort < 10.0, "Mortalidad estable debe ser < 10%, got: {}%", mort);
+    }
+
+    #[test]
+    fn test_sofa_fallo_multiple() {
+        let mut data = paciente_base();
+        data.bilirrubina = 8.0;
+        data.plaquetas = 40.0;
+        data.gcs_total = 6;
+        data.creatinina = 3.5;
+        data.diuresis_diaria = 200;
+        data.vasopresores = true;
+        data.dosis_vasopresor = 15.0;
+        data.fio2 = 0.8;
+        data.pao2 = Some(60.0);
+
+        let score = calculate_sofa_score(&data);
+        let mort = sofa_mortality_estimate(score);
+        assert!(score >= 10, "SOFA fallo múltiple debe ser >= 10, got: {}", score);
+        assert!(mort >= 30.0, "Mortalidad alta debe ser >= 30%, got: {}%", mort);
+    }
+
+    #[test]
+    fn test_sofa_renal() {
+        let mut data = paciente_base();
+        data.diuresis_diaria = 300;
+        data.creatinina = 4.0;
+        let score = calculate_sofa_score(&data);
+        assert!(score >= 2, "SOFA con falla renal debe dar puntos");
+    }
+
+    #[test]
+    fn test_sofa_coagulacion() {
+        let mut data = paciente_base();
+        data.plaquetas = 50.0;
+        let score = calculate_sofa_score(&data);
+        assert!(score >= 1, "SOFA con plaquetas bajas debe dar puntos");
     }
 }

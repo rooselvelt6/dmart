@@ -1,13 +1,7 @@
 [build]
 target = "index.html"
 dist = "../dist"
+wasm_opt = false
 
-[watch]
-ignore = ["../dist", "../target", "../data"]
-
-[serve]
-address = "127.0.0.1"
-port = 8080
-open = false
-proxy_backend = "http://127.0.0.1:3000/api"
-proxy_rewrite = "^/api/(.*)"
+[[proxy]]
+backend = "http://127.0.0.1:3000/api"

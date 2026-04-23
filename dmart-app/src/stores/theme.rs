@@ -63,8 +63,10 @@ fn apply_theme(theme: &Theme) {
             if let Some(html) = doc.document_element() {
                 let class_list = html.class_list();
                 if theme.is_dark() {
+                    let _ = class_list.add_1("dark");
                     let _ = class_list.remove_1("light");
                 } else {
+                    let _ = class_list.remove_1("dark");
                     let _ = class_list.add_1("light");
                 }
             }

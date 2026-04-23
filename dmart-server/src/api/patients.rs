@@ -25,10 +25,9 @@ pub async fn list_patients(
         db_ops::list_patients(&db).await
     };
 
-    match result {
+match result {
         Ok(patients) => {
             let items: Vec<PatientListItem> = patients.iter().map(|p| {
-                // Calcular edad desde fecha_nacimiento
                 let edad = calculate_age(&p.fecha_nacimiento);
                 PatientListItem {
                     id: p.patient_id.clone(),
@@ -41,6 +40,10 @@ pub async fn list_patients(
                     estado_gravedad: p.estado_gravedad.clone(),
                     ultimo_apache_score: p.ultimo_apache_score,
                     ultimo_gcs_score: p.ultimo_gcs_score,
+                    ultimo_sofa_score: p.ultimo_sofa_score,
+                    ultimo_saps3_score: p.ultimo_saps3_score,
+                    ultimo_news2_score: p.ultimo_news2_score,
+                    mortality_risk: p.mortality_risk,
                 }
             }).collect();
             (StatusCode::OK, Json(ApiResponse::ok(items))).into_response()
