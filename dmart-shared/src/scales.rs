@@ -224,6 +224,11 @@ fn points_cronicas(data: &ApacheIIData) -> u32 {
 // Score total Apache II (0-71)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Calculates total APACHE II score (max 71 points).
+/// - Acute Physiology Score (APS): 0-60 points from vital signs + lab values
+/// - Age: 0-6 points
+/// - Chronic health points: 0-5 points
+/// Follows Knaus 1985 standard.
 pub fn calculate_apache_ii_score(data: &ApacheIIData) -> u32 {
     let aps = points_temperatura(data.temperatura)
         + points_pam(data.presion_arterial_media)
@@ -333,6 +338,8 @@ pub fn mortality_risk(score: u32) -> f32 {
 // GCS helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Calculates total GCS score (3-15).
+/// Eyes (1-4) + Verbal (1-5) + Motor (1-6) = 3-15.
 pub fn calculate_gcs_score(data: &GcsData) -> u8 {
     data.total()
 }
@@ -730,6 +737,8 @@ fn points_saps_oxigenacion(vm: bool, pao2fio2: f32) -> u32 {
     }
 }
 
+/// Calculates SAPS III score (0-100).
+/// Includes: age, comorbidities, surgical status, VS, lab values.
 pub fn calculate_saps_iii_score(data: &ApacheIIData) -> u32 {
     let edad_pts = points_saps_edad(data.edad);
     let comorb_pts = points_saps_comorbilidad(data.inmunocomprometido);
@@ -856,6 +865,8 @@ fn points_news2_conciencia(gcs: u8) -> u32 {
     }
 }
 
+/// Calculates NEWS2 score (0-100+).
+/// UK early warning score for acute illness severity.
 pub fn calculate_news2_score(data: &ApacheIIData) -> u32 {
     let fr_pts = points_news2_respiracion(data.frecuencia_respiratoria);
     let spo2_pts = points_news2_spo2(data.spo2);
@@ -1028,6 +1039,8 @@ fn points_sofa_renal(creatinina: f32, diuresis: u32) -> u32 {
     }
 }
 
+/// Calculates SOFA score (0-24).
+/// Sequential Organ Failure Assessment: respiratory, coag, liver, CV, neuro, renal.
 pub fn calculate_sofa_score(data: &ApacheIIData) -> u32 {
     let pao2 = data.pao2.unwrap_or(80.0);
     let pao2fio2 = if data.fio2 > 0.0 {
