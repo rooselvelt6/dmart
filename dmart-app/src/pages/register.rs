@@ -157,7 +157,7 @@ pub fn RegisterPage() -> impl IntoView {
                         </FormField>
                     </div>
 
-                    <div class="mt-6 md:mt-8 p-4 md:p-6 rounded-2xl border" style="background:rgba(30,41,59,0.3); border-color:var(--uci-border);">
+                    <div class="mt-6 md:mt-8 p-4 md:p-6 rounded-2xl border" style="background:var(--uci-surface); border-color:var(--uci-border);">
                         <label class="form-label mb-3 md:mb-5 flex items-center gap-2 text-sm">
                             <i class="fa-solid fa-palette" style="color:var(--uci-accent);"></i>
                             "Color de Piel (Escala Fitzpatrick)"
@@ -255,7 +255,7 @@ pub fn RegisterPage() -> impl IntoView {
                             </select>
                         </FormField>
                         <FormField label="Referido / Traslado" icon=move || view! { <i class="fa-solid fa-right-left"></i> }>
-                            <div class="flex items-center gap-3 md:gap-4 h-10 md:h-11 lg:h-12 px-3 md:px-4 rounded-2xl border" style="background:rgba(30,41,59,0.2); border-color:var(--uci-border);">
+                            <div class="flex items-center gap-3 md:gap-4 h-10 md:h-11 lg:h-12 px-3 md:px-4 rounded-2xl border" style="background:var(--uci-surface); border-color:var(--uci-border);">
                                 <Toggle
                                     value=Signal::derive(move || patient.get().migracion_otro_centro)
                                     on_change=move |v| patient.update(|p| p.migracion_otro_centro = v)

@@ -120,7 +120,7 @@ pub async fn delete_patient(
     }
 }
 
-fn calculate_age(fecha_nacimiento: &str) -> u8 {
+pub fn calculate_age(fecha_nacimiento: &str) -> u8 {
     use chrono::{NaiveDate, Utc};
     if fecha_nacimiento.is_empty() {
         return 0;

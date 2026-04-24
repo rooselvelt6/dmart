@@ -23,10 +23,9 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ 63+ tests de validación pasando
 - ✅ Documentación técnica completa
 - ✅ Arquitectura moderna y escalable
-- 🔜 NEWS2, SAPS III, SOFA (Q1 2026)
-- 🔜 Seguridad empresarial: AES-256, Argon2, ChaCha20 (Q2 2026)
-- 🔜 SSO corporativo, MFA, RBAC (Q3 2026)
-- 🔜 Redes Neuronales con Burn (Q4 2026)
+- ✅ NEWS2, SAPS III, SOFA (clínicas)
+- ✅ Seguridad: Argon2id, RBAC, ChaCha20, Auditoría
+- ✅ Frontend WASM de alto rendimiento
 
 ---
 
@@ -179,29 +178,59 @@ if !result.valid {
 
 ## 🔒 Seguridad
 
-### Seguridad Actual
+### Seguridad Implementada
 
-| Seguridad | Descripción |
-|-----------|-------------|
-| **CORS** | Configuración de Cross-Origin Resource Sharing |
-| **Validación de Entrada** | Sanitización de datos en backend |
-| **Typesafe** | Rust previene bugs en tiempo de compilación |
-| **WASM** | Frontend compilado, no código fuente expuesto |
-| **Base de Datos Embebida** | Datos locales, no expuestos a internet |
-| **Prepared Statements** | Consultas parametrizadas (SurrealDB) |
+| Seguridad | Estado | Descripción |
+|-----------|--------|-------------|
+| **Argon2id** | ✅ Implementado | Hashing de contraseñas (HIPAA compliant) |
+| **RBAC** | ✅ Implementado | Roles: Admin, Médico, Enfermero, Viewer |
+| **ChaCha20-Poly1305** | ✅ Implementado | Cifrado de datos |
+| **JWT Tokens** | ✅ Implementado | Autenticación stateless |
+| **Auditoría PHI** | ✅ Implementado | Logging con retención 6 años |
+| **CORS** | ✅ Configurado | Cross-Origin Resource Sharing |
+| **Validación de Entrada** | ✅ Implementado | Sanitización de datos |
+| **Typesafe** | ✅ Implementado | Rust previene bugs en compilación |
+| **WASM** | ✅ Implementado | Frontend compilado |
+| **Base de Datos Embebida** | ✅ Implementado | Datos locales (RocksDB) |
 
-### Seguridad Empresarial (Q2-Q3 2026)
+### Módulos de Seguridad
 
-| Tecnología | Propósito |
-|------------|-----------|
-| **AES-256** | Cifrado de datos en reposo (HIPAA/GDPR compliant) |
-| **Argon2id** | Hashing de contraseñas resistente a GPU/ASIC |
-| **ChaCha20-Poly1305** | Cifrado autenticado para comunicaciones |
-| **ZeroIce/IceRPC** | RPC type-safe con QUIC/HTTP3 |
-| **OAuth2 + OIDC** | Autenticación empresarial moderna |
-| **MFA** | Multi-factor authentication (TOTP, Biometrics) |
-| **RBAC** | Control de acceso basado en roles |
-| **SSO** | Single Sign-On corporativo (SAML/LDAP) |
+```rust
+// Autenticación con Argon2id
+use crate::auth::{AuthService, RegisterRequest, LoginRequest};
+
+let auth_service = AuthService::new(db);
+auth_service.register(RegisterRequest {
+    username: "admin".to_string(),
+    password: "password123".to_string(),
+    nombre: "Administrador".to_string(),
+    rol: "admin".to_string(),
+}).await;
+
+// Login
+let response = auth_service.authenticate("admin", "password123").await;
+
+// RBAC - Verificar permisos
+let role = Role::Admin;
+role.can("patients:create");  // true para Admin
+role.can("users:delete");   // true solo para Admin
+```
+
+### Endpoints de Seguridad
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | Login con Argon2id |
+| `/api/auth/register` | POST |Registrar usuario |
+| `/api/auth/users` | GET | Listar usuarios |
+| `/api/auth/logout` | POST | Cerrar sesión |
+
+### Auditoría PHI
+
+El sistema incluye logging de auditoría para cumplimiento HIPAA:
+- Retención de logs: 6 años
+- Eventos registrados: login, logout, acceso a datos, exportaciones
+- Almacenamiento en SurrealDB
 
 ### Logging
 

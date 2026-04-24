@@ -53,3 +53,20 @@ hmac = "0.12"
 
 # JWT Authentication
 jsonwebtoken = "9"
+
+# Argon2 password hashing (HIPAA compliant)
+argon2 = "0.5"
+
+# TOTP for MFA
+totp-lite = "2"
+base32 = "0.5"
+
+# AES modes for encryption
+cbc = "0.1"
+cipher = "0.4"
+
+# Async traits
+async-trait = "0.1"
+
+# Time handling
+time = "0.3"

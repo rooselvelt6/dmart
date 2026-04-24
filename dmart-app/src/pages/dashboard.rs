@@ -26,10 +26,10 @@ pub fn DashboardPage() -> impl IntoView {
                 {move || patients.get().map(|list_wrapper| {
                     let list = &*list_wrapper;
                     let total = list.len();
-                    let criticos = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Critical)).count();
-                    let severos  = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Severe)).count();
-                    let moderados= list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Moderate)).count();
-                    let bajos    = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Low)).count();
+                    let criticos = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Critico)).count();
+                    let severos  = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Severo)).count();
+                    let moderados= list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Moderado)).count();
+                    let bajos    = list.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Bajo)).count();
 
                     view! {
                         <div>
@@ -79,10 +79,10 @@ fn PatientPokemonCard(patient: PatientListItem) -> impl IntoView {
     });
 
     let severity_config = match &patient.estado_gravedad {
-        SeverityLevel::Critical => ("#EF4444", "rgba(239,68,68,0.1)"),
-        SeverityLevel::Severe => ("#F97316", "rgba(249,115,22,0.1)"),
-        SeverityLevel::Moderate => ("#F59E0B", "rgba(245,158,11,0.1)"),
-        SeverityLevel::Low => ("#10B981", "rgba(16,185,129,0.1)"),
+        SeverityLevel::Critico => ("#EF4444", "rgba(239,68,68,0.1)"),
+        SeverityLevel::Severo => ("#F97316", "rgba(249,115,22,0.1)"),
+        SeverityLevel::Moderado => ("#F59E0B", "rgba(245,158,11,0.1)"),
+        SeverityLevel::Bajo => ("#10B981", "rgba(16,185,129,0.1)"),
     };
 
     let sex_icon = match patient.sexo {

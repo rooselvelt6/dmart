@@ -10,58 +10,78 @@ pub fn News2Scale(
     let score = Memo::new(move |_| breakdown.get().total);
     let level = Memo::new(move |_| News2Level::from_score(score.get()));
 
+    let level_color = move || {
+        match level.get() {
+            News2Level::Bajo => "#10B981",
+            News2Level::Medio => "#F59E0B",
+            News2Level::Alto => "#EF4444",
+            News2Level::Emergent => "#DC2626",
+        }
+    };
+
     view! {
-        <div class="glass-card p-6 sm:p-10 border-amber-500/20 bg-white shadow-xl animate-fade-in">
+        <div class="glass-card p-6 sm:p-10 border-amber-500/20 shadow-xl animate-fade-in" style="background:var(--uci-card);">
             <div class="flex flex-col lg:flex-row gap-10">
                 <div class="flex-1 space-y-8">
-                    <div class="flex items-center gap-4 mb-6">
-                        <div class="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-600 text-2xl">
+                    <div class="flex items-center gap-5 mb-8">
+                        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-lg" 
+                             style="background:linear-gradient(135deg,#F59E0B,#D97706); color:white;">
                             <i class="fa-solid fa-bell"></i>
                         </div>
                         <div>
-                            <h3 class="text-2xl font-black text-uci-text tracking-tight uppercase">"NEWS2"</h3>
-                            <p class="text-xs font-bold text-uci-muted tracking-widest uppercase">"National Early Warning Score 2"</p>
+                            <h3 class="text-4xl font-black text-[var(--uci-text)] tracking-tight uppercase">"NEWS2"</h3>
+                            <p class="text-lg font-semibold" style="color:var(--uci-muted); letter-spacing:0.1em;">"National Early Warning Score"</p>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <NewsMetric label="Frecuencia Respiratoria" icon="fa-wind" pts=Signal::derive(move || breakdown.get().fr)
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <NewsMetric label="Frecuencia Respiratoria" icon="fa-wind" color="#06B6D4" pts=Signal::derive(move || breakdown.get().fr)
                             value=Signal::derive(move || data.get().frecuencia_respiratoria)
                             min=5.0 max=40.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.frecuencia_respiratoria = v)) />
 
-                        <NewsMetric label="Saturación de Oxígeno (SpO2)" icon="fa-droplet" pts=Signal::derive(move || breakdown.get().spo2)
+                        <NewsMetric label="Saturación de Oxígeno (SpO2)" icon="fa-droplet" color="#3B82F6" pts=Signal::derive(move || breakdown.get().spo2)
                             value=Signal::derive(move || data.get().spo2)
                             min=70.0 max=100.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.spo2 = v)) />
 
-                        <NewsMetric label="Presión Sistólica" icon="fa-gauge-high" pts=Signal::derive(move || breakdown.get().pas)
+                        <NewsMetric label="Presión Sistólica" icon="fa-gauge-high" color="#F97316" pts=Signal::derive(move || breakdown.get().pas)
                             value=Signal::derive(move || data.get().presion_sistolica)
                             min=70.0 max=250.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.presion_sistolica = v)) />
 
-                        <NewsMetric label="Frecuencia Cardíaca" icon="fa-heartbeat" pts=Signal::derive(move || breakdown.get().fc)
+                        <NewsMetric label="Frecuencia Cardíaca" icon="fa-heartbeat" color="#EC4899" pts=Signal::derive(move || breakdown.get().fc)
                             value=Signal::derive(move || data.get().frecuencia_cardiaca)
                             min=30.0 max=160.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.frecuencia_cardiaca = v)) />
 
-                        <NewsMetric label="Temperatura" icon="fa-thermometer" pts=Signal::derive(move || breakdown.get().temp)
+                        <NewsMetric label="Temperatura" icon="fa-temperature-half" color="#EF4444" pts=Signal::derive(move || breakdown.get().temp)
                             value=Signal::derive(move || data.get().temperatura)
                             min=33.0 max=42.0 step=0.1
                             on_change=Callback::new(move |v| data.update(|d| d.temperatura = v)) />
-                            
-                        <div class="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/50">
-                            <label class="text-[10px] font-black text-uci-muted uppercase tracking-widest mb-3 block">"Oxígeno Suplementario"</label>
-                            <div class="flex items-center gap-4">
+                        
+                        <div class="p-4 rounded-xl border" style="background:var(--uci-surface); border-color:rgba(245,158,11,0.2);">
+                            <label class="text-lg font-bold mb-4 block" style="color:var(--uci-muted);">"Oxígeno Suplementario"</label>
+                            <div class="flex items-center gap-3">
                                 <button 
                                     type="button"
-                                    class=move || format!("px-4 py-2 rounded-xl font-bold transition-all {}", if data.get().o2_suplementario { "bg-amber-500 text-white shadow-md shadow-amber-500/30" } else { "bg-white border border-uci-border text-uci-muted" })
+                                    class="flex-1 py-3 px-4 rounded-xl font-bold transition-all"
+                                    style=move || if data.get().o2_suplementario { 
+                                        "background:#F59E0B; color:white; box-shadow:0 4px 12px rgba(245,158,11,0.3);" 
+                                    } else { 
+                                        "background:var(--uci-surface); border:1px solid var(--uci-border); color:var(--uci-text);" 
+                                    }
                                     on:click=move |_| data.update(|d| d.o2_suplementario = true)>
-                                    "Sí (+2)"
+                                    <i class="fa-solid fa-check-circle mr-2"></i>"Sí (+2)"
                                 </button>
                                 <button 
                                     type="button"
-                                    class=move || format!("px-4 py-2 rounded-xl font-bold transition-all {}", if !data.get().o2_suplementario { "bg-uci-muted text-white shadow-md shadow-slate-500/30" } else { "bg-white border border-uci-border text-uci-muted" })
+                                    class="flex-1 py-3 px-4 rounded-xl font-bold transition-all"
+                                    style=move || if !data.get().o2_suplementario { 
+                                        "background:var(--uci-muted); color:white; box-shadow:0 4px 12px rgba(100,116,139,0.3);" 
+                                    } else { 
+                                        "background:var(--uci-surface); border:1px solid var(--uci-border); color:var(--uci-text);" 
+                                    }
                                     on:click=move |_| data.update(|d| d.o2_suplementario = false)>
                                     "Aire Ambiente"
                                 </button>
@@ -70,25 +90,39 @@ pub fn News2Scale(
                     </div>
                 </div>
 
-                <div class="lg:w-80 flex flex-col gap-6">
-                    <div class="bg-uci-bg rounded-3xl p-8 border-2 border-amber-500/30 shadow-inner text-center space-y-4">
-                        <div class="text-xs font-black text-amber-500 uppercase tracking-[0.2em]">"NEWS2 Score"</div>
-                        <div class="text-7xl font-black text-uci-text font-mono leading-none tracking-tighter">
+                <div class="lg:w-96 flex flex-col gap-6">
+                    <div class="rounded-3xl p-8 border-2 shadow-inner text-center"
+                         style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(217,119,6,0.05)); border-color:rgba(245,158,11,0.3);">
+                        <div class="text-lg font-black uppercase tracking-[0.2em]" style="color:var(--uci-muted);">"NEWS2 Score"</div>
+                        <div class="text-8xl font-black font-mono leading-none tracking-tighter" style="color:#F59E0B;">
                             {move || score.get()}
                         </div>
-                        <div class=move || format!("text-lg font-black uppercase tracking-widest {}", level.get().color_class())>
+                        <div class="text-xl font-black uppercase tracking-widest mt-3" style=move || format!("color:{};", level_color())>
                             {move || level.get().label()}
                         </div>
                     </div>
 
-                    <div class="bg-amber-600 text-white rounded-2xl p-6 shadow-lg shadow-amber-600/20 space-y-3">
-                        <div class="flex items-center gap-2">
-                            <i class="fa-solid fa-hand-holding-medical"></i>
-                            <span class="text-xs font-black uppercase tracking-widest">"Respuesta Clínica"</span>
+                    <div class="rounded-2xl p-6 shadow-lg"
+                         style="background:linear-gradient(135deg,#F59E0B,#D97706);">
+                        <div class="flex items-center gap-3 mb-3">
+                            <i class="fa-solid fa-hand-holding-medical text-xl"></i>
+                            <div class="text-base font-black uppercase tracking-widest text-white/80">"Respuesta Clínica"</div>
                         </div>
-                        <p class="text-sm font-bold leading-relaxed">
+                        <p class="text-xl font-bold leading-relaxed text-white">
                             {move || level.get().response()}
                         </p>
+                    </div>
+
+                    <div class="p-5 rounded-2xl border flex items-center gap-4"
+                         style="background:color-mix(in srgb, #F59E0B 8%, transparent); border-color:color-mix(in srgb, #F59E0B 20%, transparent);">
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
+                             style="background:linear-gradient(135deg,#F59E0B,#D97706); color:white;">
+                            <i class="fa-solid fa-calculator"></i>
+                        </div>
+                        <div>
+                            <div class="text-base font-black uppercase tracking-widest" style="color:var(--uci-muted);">"Cálculo"</div>
+                            <div class="text-lg font-semibold" style="color:var(--uci-text);">"Automático en tiempo real"</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -100,6 +134,7 @@ pub fn News2Scale(
 fn NewsMetric(
     label: &'static str,
     icon: &'static str,
+    color: &'static str,
     pts: Signal<u32>,
     value: Signal<f32>,
     min: f32,
@@ -113,35 +148,32 @@ fn NewsMetric(
     };
 
     view! {
-        <div class="space-y-3 group">
+        <div class="space-y-3 p-4 rounded-xl border" style="background:var(--uci-surface); border-color:color-mix(in srgb, {} 20%, transparent);">
             <div class="flex justify-between items-center">
-                <label class="text-[10px] font-black text-uci-muted uppercase tracking-widest flex items-center gap-2">
-                    <i class=format!("fa-solid {}", icon)></i>
+                <label class="text-lg font-bold flex items-center gap-3" style="color:var(--uci-muted);">
+                    <i class=format!("fa-solid {}", icon) style=move || format!("color:{};", color)></i>
                     {label}
                 </label>
                 <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-uci-muted">
-                        {move || format!("{:.1}", value.get())}
+                    <span class="text-2xl font-bold font-mono"
+                          style=move || format!("color:{};", color)>
+                        {move || if step < 1.0 { format!("{:.1}", value.get()) } else { format!("{:.0}", value.get()) }}
                     </span>
-                    <span class="text-xs font-black bg-amber-500 text-white px-2 py-0.5 rounded-lg shadow-sm">
-                        {move || format!("+{}", pts.get())}
-                    </span>
+                    <span class="text-xs font-bold px-2 py-1 rounded" style="background:color-mix(in srgb, {} 15%, transparent); color:{};">"pts:" {pts}</span>
                 </div>
             </div>
-            <div class="relative py-2">
-                <input 
-                    type="range" class="w-full"
-                    min=min max=max step=step
-                    prop:value=move || value.get()
-                    on:input=move |ev| {
-                        if let Ok(v) = event_target_value(&ev).parse::<f32>() {
-                            on_change.run(v);
-                        }
+            <input 
+                type="range" class="w-full"
+                min=min max=max step=step
+                prop:value=move || value.get()
+                on:input=move |ev| {
+                    if let Ok(v) = event_target_value(&ev).parse::<f32>() {
+                        on_change.run(v);
                     }
-                    style=move || format!("--val: {}%", val_pct())
-                    data-sev="normal"
-                />
-            </div>
+                }
+                style=move || format!("--val: {}%; --slider-color: {};", val_pct(), color)
+                data-sev="normal"
+            />
         </div>
     }
 }

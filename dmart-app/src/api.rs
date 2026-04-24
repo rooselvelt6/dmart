@@ -2,6 +2,7 @@
 use dmart_shared::models::*;
 use gloo_net::http::Request;
 use serde_json::Value;
+use serde::Deserialize;
 
 const API_BASE: &str = "/api";
 
@@ -16,6 +17,41 @@ pub async fn list_patients(query: Option<&str>) -> ApiResult<Vec<PatientListItem
     };
     let resp: ApiResponse<Vec<PatientListItem>> =
         Request::get(&url).send().await
+            .map_err(|e| e.to_string())?
+            .json().await
+            .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UciStatsResponse {
+    pub total_pacientes: usize,
+    pub pacientes_activos: usize,
+    pub por_gravedad: GravedadStats,
+    pub promedios: PromedioScores,
+    pub reciente: Vec<PatientListItem>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GravedadStats {
+    pub criticos: usize,
+    pub severos: usize,
+    pub moderados: usize,
+    pub bajos: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PromedioScores {
+    pub apache_promedio: f32,
+    pub gcs_promedio: f32,
+    pub sofa_promedio: f32,
+    pub saps3_promedio: f32,
+    pub news2_promedio: f32,
+}
+
+pub async fn get_stats() -> ApiResult<UciStatsResponse> {
+    let resp: ApiResponse<UciStatsResponse> =
+        Request::get(&format!("{}/stats", API_BASE)).send().await
             .map_err(|e| e.to_string())?
             .json().await
             .map_err(|e| e.to_string())?;

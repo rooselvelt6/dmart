@@ -2,18 +2,27 @@ use leptos::prelude::*;
 use crate::api;
 use crate::components::severity_badge::SeverityBadge;
 use dmart_shared::models::Sexo;
+use leptos::task::spawn_local;
 
 #[component]
 pub fn PatientsPage() -> impl IntoView {
     let search_debounced = RwSignal::new(String::new());
-
-    let patients = LocalResource::new(move || {
+    let patients_resource = LocalResource::new(move || {
         let q = search_debounced.get();
         async move { api::list_patients(Some(&q)).await.unwrap_or_default() }
     });
 
     let on_search = move |ev: web_sys::Event| {
         search_debounced.set(event_target_value(&ev));
+    };
+
+    let delete_patient = move |id: String| {
+        let patient_id = id.clone();
+        spawn_local(async move {
+            if let Ok(()) = api::delete_patient(&patient_id).await {
+                window().location().reload().unwrap_or_default();
+            }
+        });
     };
 
     view! {
@@ -31,7 +40,7 @@ pub fn PatientsPage() -> impl IntoView {
             </div>
 
             <Suspense fallback=move || view! { <div class="text-center p-10" style="color:var(--uci-muted);">"Cargando..."</div> }>
-                {move || patients.get().map(|list| {
+                {move || patients_resource.get().map(|list| {
                     view! {
                         <div class="glass-card overflow-x-auto">
                             <table class="w-full text-left border-collapse min-w-[600px]">
@@ -49,6 +58,7 @@ pub fn PatientsPage() -> impl IntoView {
                                 <tbody>
                                     {list.iter().map(|p| {
                                         let pid = p.id.clone();
+                                        let delete_id = p.id.clone();
                                         view! {
                                             <tr style="border-bottom:1px solid var(--uci-border);">
                                                 <td class="p-3 md:p-4">
@@ -75,9 +85,20 @@ pub fn PatientsPage() -> impl IntoView {
                                                 </td>
                                                 <td class="p-3 md:p-4 text-center"><SeverityBadge level=p.estado_gravedad.clone() /></td>
                                                 <td class="p-3 md:p-4 text-right">
-                                                    <div class="flex flex-col sm:flex-row justify-end gap-2">
+                                                    <div class="flex flex-wrap justify-end gap-1 sm:gap-2">
                                                         <a href=format!("/patients/{}", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(59,130,246,0.1); color:var(--uci-accent);">"Ver"</a>
                                                         <a href=format!("/patients/{}/edit", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(16,185,129,0.1); color:var(--uci-low);">"Editar"</a>
+                                                        <button 
+                                                            on:click=move |_| {
+                                                                if let Some(w) = web_sys::window() {
+                                                                    if let Ok(true) = w.confirm_with_message("¿Está seguro de eliminar este paciente? Esta acción no se puede deshacer.") {
+                                                                        delete_patient(delete_id.clone());
+                                                                    }
+                                                                }
+                                                            }
+                                                            class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline"
+                                                            style="background:rgba(239,68,68,0.1); color:#EF4444;"
+                                                        >"Eliminar"</button>
                                                     </div>
                                                 </td>
                                             </tr>

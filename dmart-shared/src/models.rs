@@ -66,18 +66,18 @@ pub enum TipoAdmision {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum SeverityLevel {
     #[default]
-    Low, // 0-9
-    Moderate, // 10-19
-    Severe,   // 20-29
-    Critical,  // ≥30
+    Bajo, // 0-9
+    Moderado, // 10-19
+    Severo,   // 20-29
+    Critico,  // ≥30
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum News2Level {
     #[default]
-    Low,
-    Medium,
-    High,
+    Bajo,
+    Medio,
+    Alto,
     Emergent,
 }
 
@@ -102,36 +102,36 @@ pub enum Saps3Level {
 impl News2Level {
     pub fn from_score(score: u32) -> Self {
         match score {
-            0..=4 => News2Level::Low,
-            5..=6 => News2Level::Medium,
-            7..=19 => News2Level::High,
+            0..=4 => News2Level::Bajo,
+            5..=6 => News2Level::Medio,
+            7..=19 => News2Level::Alto,
             _ => News2Level::Emergent,
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
-            News2Level::Low => "Bajo",
-            News2Level::Medium => "Medio",
-            News2Level::High => "Alto",
+            News2Level::Bajo => "Bajo",
+            News2Level::Medio => "Medio",
+            News2Level::Alto => "Alto",
             News2Level::Emergent => "Emergencia",
         }
     }
 
     pub fn color_class(&self) -> &'static str {
         match self {
-            News2Level::Low => "text-emerald-500",
-            News2Level::Medium => "text-amber-500",
-            News2Level::High => "text-orange-500",
+            News2Level::Bajo => "text-emerald-500",
+            News2Level::Medio => "text-amber-500",
+            News2Level::Alto => "text-orange-500",
             News2Level::Emergent => "text-rose-600",
         }
     }
 
     pub fn response(&self) -> &'static str {
         match self {
-            News2Level::Low => "Monitoreo habitual",
-            News2Level::Medium => "Revisión clínica en 1 hora",
-            News2Level::High => "Revisión clínica inmediata",
+            News2Level::Bajo => "Monitoreo habitual",
+            News2Level::Medio => "Revisión clínica en 1 hora",
+            News2Level::Alto => "Revisión clínica inmediata",
             News2Level::Emergent => "Activación de código emergencia",
         }
     }
@@ -140,37 +140,37 @@ impl News2Level {
 impl SeverityLevel {
     pub fn from_score(score: u32) -> Self {
         match score {
-            0..=9 => SeverityLevel::Low,
-            10..=19 => SeverityLevel::Moderate,
-            20..=29 => SeverityLevel::Severe,
-            _ => SeverityLevel::Critical,
+            0..=9 => SeverityLevel::Bajo,
+            10..=19 => SeverityLevel::Moderado,
+            20..=29 => SeverityLevel::Severo,
+            _ => SeverityLevel::Critico,
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
-            SeverityLevel::Low => "Bajo",
-            SeverityLevel::Moderate => "Moderado",
-            SeverityLevel::Severe => "Severo",
-            SeverityLevel::Critical => "Crítico",
+            SeverityLevel::Bajo => "Bajo",
+            SeverityLevel::Moderado => "Moderado",
+            SeverityLevel::Severo => "Severo",
+            SeverityLevel::Critico => "Crítico",
         }
     }
 
     pub fn color_class(&self) -> &'static str {
         match self {
-            SeverityLevel::Low => "text-emerald-500",
-            SeverityLevel::Moderate => "text-blue-500",
-            SeverityLevel::Severe => "text-amber-500",
-            SeverityLevel::Critical => "text-rose-600",
+            SeverityLevel::Bajo => "text-emerald-500",
+            SeverityLevel::Moderado => "text-blue-500",
+            SeverityLevel::Severo => "text-amber-500",
+            SeverityLevel::Critico => "text-rose-600",
         }
     }
 
     pub fn mortality_estimate(&self) -> &'static str {
         match self {
-            SeverityLevel::Low => "< 10%",
-            SeverityLevel::Moderate => "10–25%",
-            SeverityLevel::Severe => "25–50%",
-            SeverityLevel::Critical => "> 50%",
+            SeverityLevel::Bajo => "< 10%",
+            SeverityLevel::Moderado => "10–25%",
+            SeverityLevel::Severo => "25–50%",
+            SeverityLevel::Critico => "> 50%",
         }
     }
 }
@@ -368,7 +368,7 @@ impl Patient {
             centro_origen: None,
             ventilacion_mecanica: false,
             procesos_invasivos: Vec::new(),
-            estado_gravedad: SeverityLevel::Low,
+            estado_gravedad: SeverityLevel::Bajo,
             ultimo_apache_score: None,
             ultimo_gcs_score: None,
             ultimo_sofa_score: None,
@@ -724,6 +724,17 @@ pub enum UserRole {
     Medico,
     Enfermero,
     Viewer,
+}
+
+impl std::fmt::Display for UserRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserRole::Admin => write!(f, "Admin"),
+            UserRole::Medico => write!(f, "Medico"),
+            UserRole::Enfermero => write!(f, "Enfermero"),
+            UserRole::Viewer => write!(f, "Viewer"),
+        }
+    }
 }
 
 impl UserRole {

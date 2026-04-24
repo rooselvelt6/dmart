@@ -12,73 +12,95 @@ pub fn ApacheIIScale(
 
     let breakdown = Memo::new(move |_| apache_ii_breakdown(&data.get()));
 
+    let severity_color = move || {
+        match severity.get() {
+            SeverityLevel::Bajo => "var(--uci-low)",
+            SeverityLevel::Moderado => "var(--uci-moderate)",
+            SeverityLevel::Severo => "var(--uci-severe)",
+            SeverityLevel::Critico => "var(--uci-critical)",
+        }
+    };
+
     view! {
-        <div class="glass-card p-6 sm:p-10 border-uci-accent/20 bg-white shadow-xl animate-fade-in">
+        <div class="glass-card p-6 sm:p-10 border-[var(--uci-border)] bg-[var(--uci-card)] shadow-xl animate-fade-in">
             <div class="flex flex-col lg:flex-row gap-10">
                 <div class="flex-1 space-y-8">
-                    <div class="flex items-center gap-4 mb-6">
-                        <div class="w-12 h-12 rounded-2xl bg-uci-accent/10 flex items-center justify-center text-uci-accent text-2xl">
+                    <div class="flex items-center gap-5 mb-8">
+                        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-lg" 
+                             style="background:linear-gradient(135deg, var(--uci-accent), var(--uci-accent2)); color:white;">
                             <i class="fa-solid fa-heart-pulse"></i>
                         </div>
                         <div>
-                            <h3 class="text-2xl font-black text-uci-text tracking-tight uppercase">"APACHE II"</h3>
-                            <p class="text-xs font-bold text-uci-muted tracking-widest uppercase">"Fisiología Aguda y Salud Crónica"</p>
+                            <h3 class="text-4xl font-black text-[var(--uci-text)] tracking-tight uppercase">"APACHE II"</h3>
+                            <p class="text-lg font-semibold" style="color:var(--uci-muted); letter-spacing:0.1em;">"Fisiología Aguda y Salud Crítica"</p>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <ScaleSlider label="Temperatura (°C)" icon="fa-thermometer-half" min=30.0 max=45.0 step=0.1 
+                        <ScaleSlider label="Temperatura (°C)" icon="fa-temperature-half" min=30.0 max=45.0 step=0.1 
+                            color="#EF4444"
                             value=Signal::derive(move || data.get().temperatura)
                             on_change=Callback::new(move |v| data.update(|d| d.temperatura = v)) />
-                    
+                
                         <ScaleSlider label="PAM (mmHg)" icon="fa-gauge-high" min=20.0 max=200.0 step=1.0 
+                            color="#F97316"
                             value=Signal::derive(move || data.get().presion_arterial_media)
                             on_change=Callback::new(move |v| data.update(|d| d.presion_arterial_media = v)) />
 
                         <ScaleSlider label="Frecuencia Cardíaca" icon="fa-heartbeat" min=20.0 max=220.0 step=1.0 
+                            color="#EC4899"
                             value=Signal::derive(move || data.get().frecuencia_cardiaca)
                             on_change=Callback::new(move |v| data.update(|d| d.frecuencia_cardiaca = v)) />
 
                         <ScaleSlider label="Frec. Respiratoria" icon="fa-wind" min=5.0 max=60.0 step=1.0 
+                            color="#8B5CF6"
                             value=Signal::derive(move || data.get().frecuencia_respiratoria)
                             on_change=Callback::new(move |v| data.update(|d| d.frecuencia_respiratoria = v)) />
 
                         <ScaleSlider label="FiO2" icon="fa-wind" min=0.21 max=1.0 step=0.01 
+                            color="#06B6D4"
                             value=Signal::derive(move || data.get().fio2)
                             on_change=Callback::new(move |v| data.update(|d| d.fio2 = v)) />
 
                         <ScaleSlider label="PaO2 (mmHg)" icon="fa-lungs" min=40.0 max=500.0 step=1.0 
+                            color="#10B981"
                             value=Signal::derive(move || data.get().pao2.unwrap_or(80.0))
                             on_change=Callback::new(move |v| data.update(|d| d.pao2 = Some(v))) />
 
                         <ScaleSlider label="pH Arterial" icon="fa-vial-circle-check" min=6.8 max=7.8 step=0.01 
+                            color="#14B8A6"
                             value=Signal::derive(move || data.get().ph_arterial)
                             on_change=Callback::new(move |v| data.update(|d| d.ph_arterial = v)) />
 
                         <ScaleSlider label="Sodio (mEq/L)" icon="fa-flask-vial" min=110.0 max=180.0 step=1.0 
+                            color="#F59E0B"
                             value=Signal::derive(move || data.get().sodio_serico)
                             on_change=Callback::new(move |v| data.update(|d| d.sodio_serico = v)) />
 
                         <ScaleSlider label="Potasio (mEq/L)" icon="fa-flask" min=1.0 max=10.0 step=0.1 
+                            color="#8B5CF6"
                             value=Signal::derive(move || data.get().potasio_serico)
                             on_change=Callback::new(move |v| data.update(|d| d.potasio_serico = v)) />
 
                         <ScaleSlider label="Creatinina (mg/dL)" icon="fa-kidneys" min=0.1 max=15.0 step=0.1 
+                            color="#DC2626"
                             value=Signal::derive(move || data.get().creatinina)
                             on_change=Callback::new(move |v| data.update(|d| d.creatinina = v)) />
 
                         <ScaleSlider label="Hematocrito (%)" icon="fa-droplet" min=10.0 max=65.0 step=1.0 
+                            color="#DC2626"
                             value=Signal::derive(move || data.get().hematocrito)
                             on_change=Callback::new(move |v| data.update(|d| d.hematocrito = v)) />
 
                         <ScaleSlider label="Leucocitos (10³/µL)" icon="fa-microscope" min=0.1 max=50.0 step=0.1 
+                            color="#6366F1"
                             value=Signal::derive(move || data.get().leucocitos)
                             on_change=Callback::new(move |v| data.update(|d| d.leucocitos = v)) />
                     </div>
 
-                    <div class="pt-4 border-t border-uci-border">
-                        <h4 class="text-xs font-bold text-uci-muted uppercase tracking-widest mb-4">"Enfermedades Crónicas"</h4>
-                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div class="pt-6 border-t border-[var(--uci-border)]">
+                        <h4 class="text-lg font-bold uppercase tracking-widest mb-5" style="color:var(--uci-muted);">"Enfermedades Crónicas"</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                             <CheckBox label="Insuficiencia Hepática" 
                                 checked=Signal::derive(move || data.get().insuficiencia_hepatica)
                                 on_change=Callback::new(move |v| data.update(|d| d.insuficiencia_hepatica = v)) />
@@ -100,93 +122,111 @@ pub fn ApacheIIScale(
                         </div>
                     </div>
 
-                    <div class="pt-4 border-t border-uci-border">
-                        <h4 class="text-xs font-bold text-uci-muted uppercase tracking-widest mb-4">"Falla Renal Aguda"</h4>
-                        <div class="flex items-center gap-3">
-                            <CheckBox label="Falla Renal Aguda (dobla puntuación creatinina)" 
-                                checked=Signal::derive(move || data.get().falla_renal_aguda)
-                                on_change=Callback::new(move |v| data.update(|d| d.falla_renal_aguda = v)) />
+                    <div class="pt-6 border-t border-[var(--uci-border)]">
+                        <h4 class="text-lg font-bold uppercase tracking-widest mb-5 flex items-center gap-3" style="color:var(--uci-muted);">
+                            <i class="fa-solid fa-brain text-xl" style="color:var(--uci-accent);"></i> " Glasgow (GCS) 3-15"
+                        </h4>
+                        <div class="grid grid-cols-3 gap-5">
+                            <div class="bg-[var(--uci-surface)] p-5 rounded-2xl border-2 border-[var(--uci-border)] text-center">
+                                <label class="text-base font-bold block mb-3" style="color:var(--uci-muted);">"Ojos (E)"</label>
+                                <input type="range" min="1" max="4" step="1" 
+                                    value={Signal::derive(move || data.get().gcs_ojos)}
+                                    on:input=move |ev| {
+                                        if let Ok(v) = event_target_value(&ev).parse::<u8>() {
+                                            data.update(|d| { d.gcs_ojos = v; d.gcs_total = d.gcs_ojos + d.gcs_verbal + d.gcs_motor; });
+                                        }
+                                    }
+                                    class="w-full mb-3"
+                                    style="--slider-color:#10B981;"
+                                />
+                                <div class="text-4xl font-black" style="color:#10B981;">{move || data.get().gcs_ojos}</div>
+                            </div>
+                            <div class="bg-[var(--uci-surface)] p-5 rounded-2xl border-2 border-[var(--uci-border)] text-center">
+                                <label class="text-base font-bold block mb-3" style="color:var(--uci-muted);">"Verbal (V)"</label>
+                                <input type="range" min="1" max="5" step="1" 
+                                    value={Signal::derive(move || data.get().gcs_verbal)}
+                                    on:input=move |ev| {
+                                        if let Ok(v) = event_target_value(&ev).parse::<u8>() {
+                                            data.update(|d| { d.gcs_verbal = v; d.gcs_total = d.gcs_ojos + d.gcs_verbal + d.gcs_motor; });
+                                        }
+                                    }
+                                    class="w-full mb-3"
+                                    style="--slider-color:#F59E0B;"
+                                />
+                                <div class="text-4xl font-black" style="color:#F59E0B;">{move || data.get().gcs_verbal}</div>
+                            </div>
+                            <div class="bg-[var(--uci-surface)] p-5 rounded-2xl border-2 border-[var(--uci-border)] text-center">
+                                <label class="text-base font-bold block mb-3" style="color:var(--uci-muted);">"Motor (M)"</label>
+                                <input type="range" min="1" max="6" step="1" 
+                                    value={Signal::derive(move || data.get().gcs_motor)}
+                                    on:input=move |ev| {
+                                        if let Ok(v) = event_target_value(&ev).parse::<u8>() {
+                                            data.update(|d| { d.gcs_motor = v; d.gcs_total = d.gcs_ojos + d.gcs_verbal + d.gcs_motor; });
+                                        }
+                                    }
+                                    class="w-full mb-3"
+                                    style="--slider-color:#8B5CF6;"
+                                />
+                                <div class="text-4xl font-black" style="color:#8B5CF6;">{move || data.get().gcs_motor}</div>
+                            </div>
+                        </div>
+                        <div class="mt-6 text-center p-6 rounded-2xl" style="background:linear-gradient(135deg, var(--uci-accent), var(--uci-accent2));">
+                            <span class="text-xl font-bold text-white">GCS Total: </span>
+                            <span class="text-5xl font-black text-white">{move || data.get().gcs_total}</span>
+                            <span class="text-2xl text-white/70">/15</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="lg:w-80 flex flex-col gap-5">
-                    <div class=move || format!("bg-uci-bg rounded-3xl p-6 border-2 shadow-inner text-center transition-all duration-300 {}", 
-                        match severity.get() {
-                            SeverityLevel::Low => "border-green-400 bg-green-50",
-                            SeverityLevel::Moderate => "border-yellow-400 bg-yellow-50",
-                            SeverityLevel::Severe => "border-orange-500 bg-orange-50",
-                            SeverityLevel::Critical => "border-red-500 bg-red-50",
-                        }
-                    )>
-                        <div class="text-xs font-black text-uci-accent uppercase tracking-[0.2em]">"Puntaje Total"</div>
-                        <div class=move || format!("text-6xl font-black font-mono leading-none tracking-tighter transition-all duration-300 {}",
-                            match severity.get() {
-                                SeverityLevel::Low => "text-green-600",
-                                SeverityLevel::Moderate => "text-yellow-600",
-                                SeverityLevel::Severe => "text-orange-600",
-                                SeverityLevel::Critical => "text-red-600",
-                            }
-                        )>
+                <div class="lg:w-96 flex flex-col gap-6">
+                    <div class="rounded-3xl p-8 border-2 shadow-inner text-center transition-all duration-300"
+                         style=move || format!("border-color:{}; background:color-mix(in srgb, {} 10%, var(--uci-surface));", severity_color(), severity_color())>
+                        <div class="text-lg font-black uppercase tracking-[0.2em]" style="color:var(--uci-muted);">"Puntaje Total"</div>
+                        <div class="text-8xl font-black font-mono leading-none tracking-tighter transition-all duration-300"
+                             style=move || format!("color:{};", severity_color())>
                             {move || score.get()}
                         </div>
-                        <div class=move || format!("text-sm font-black uppercase tracking-widest transition-all duration-300 {}",
-                            match severity.get() {
-                                SeverityLevel::Low => "text-green-600",
-                                SeverityLevel::Moderate => "text-yellow-600",
-                                SeverityLevel::Severe => "text-orange-600",
-                                SeverityLevel::Critical => "text-red-600",
-                            }
-                        )>
+                        <div class="text-xl font-black uppercase tracking-widest mt-3 transition-all duration-300"
+                             style=move || format!("color:{};", severity_color())>
                             {move || severity.get().label()}
                         </div>
                     </div>
 
-                    <div class=move || format!("rounded-2xl p-5 border transition-all duration-300 {}",
-                        match severity.get() {
-                            SeverityLevel::Low => "border-green-400/30 bg-green-50/50",
-                            SeverityLevel::Moderate => "border-yellow-400/30 bg-yellow-50/50",
-                            SeverityLevel::Severe => "border-orange-500/30 bg-orange-50/50",
-                            SeverityLevel::Critical => "border-red-500/30 bg-red-50/50",
-                        }
-                    )>
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-xs font-bold text-uci-muted uppercase tracking-wider">"Mortalidad Est."</span>
-                            <div class=move || format!("text-2xl font-black transition-all duration-300 {}",
-                                match severity.get() {
-                                    SeverityLevel::Low => "text-green-600",
-                                    SeverityLevel::Moderate => "text-yellow-600",
-                                    SeverityLevel::Severe => "text-orange-600",
-                                    SeverityLevel::Critical => "text-red-600",
-                                }
-                            )>
+                    <div class="rounded-2xl p-6 border transition-all duration-300"
+                         style=move || format!("border-color:color-mix(in srgb, {} 30%, transparent); background:color-mix(in srgb, {} 8%, var(--uci-surface));", severity_color(), severity_color())>
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="text-lg font-bold" style="color:var(--uci-muted);">"Mortalidad Est."</span>
+                            <div class="text-4xl font-black transition-all duration-300"
+                                 style=move || format!("color:{};", severity_color())>
                                 {move || format!("{:.1}%", mortality.get())}
                             </div>
                         </div>
-                        <p class="text-[10px] text-uci-muted font-medium italic leading-relaxed">
-                            "Curva original Knaus et al. (1985). Predice mortalidad hospitalaria en UCI."
+                        <p class="text-base font-medium italic" style="color:var(--uci-muted);">
+                            "Curva original Knaus et al. (1985)."
                         </p>
                     </div>
 
-                    <div class="bg-white rounded-2xl p-5 border border-uci-border shadow-sm">
-                        <h4 class="text-xs font-bold text-uci-muted uppercase tracking-widest mb-3">"Desglose"</h4>
-                        <div class="grid grid-cols-2 gap-2 text-xs">
-                            <div class="flex justify-between"><span class="text-uci-muted">APS:</span><span class="font-bold">{move || breakdown.get().aps_total}</span></div>
-                            <div class="flex justify-between"><span class="text-uci-muted">Edad:</span><span class="font-bold">{move || breakdown.get().edad_pts}</span></div>
-                            <div class="flex justify-between"><span class="text-uci-muted">Crónicas:</span><span class="font-bold">{move || breakdown.get().cronicas_pts}</span></div>
-                            <div class="flex justify-between col-span-2 border-t border-uci-border pt-2 mt-1">
-                                <span class="font-bold">Total:</span><span class="font-bold text-uci-accent">{move || breakdown.get().total}</span>
+                    <div class="bg-[var(--uci-surface)] rounded-2xl p-6 border border-[var(--uci-border)] shadow-sm">
+                        <h4 class="text-lg font-bold uppercase tracking-widest mb-5" style="color:var(--uci-muted);">"Desglose"</h4>
+                        <div class="grid grid-cols-2 gap-4 text-lg">
+                            <div class="flex justify-between"><span style="color:var(--uci-muted);">"APS:"</span><span class="font-bold">{move || breakdown.get().aps_total}</span></div>
+                            <div class="flex justify-between"><span style="color:var(--uci-muted);">"Edad:"</span><span class="font-bold">{move || breakdown.get().edad_pts}</span></div>
+                            <div class="flex justify-between"><span style="color:var(--uci-muted);">"Crónicas:"</span><span class="font-bold">{move || breakdown.get().cronicas_pts}</span></div>
+                            <div class="flex justify-between col-span-2 border-t border-[var(--uci-border)] pt-4 mt-2">
+                                <span class="font-bold">"Total:"</span><span class="font-bold text-2xl" style="color:var(--uci-accent);">{move || breakdown.get().total}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div class="p-5 bg-uci-accent/5 rounded-2xl border border-uci-accent/10 flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-full bg-uci-accent/10 flex items-center justify-center text-uci-accent">
+                    <div class="p-6 rounded-2xl border flex items-center gap-5"
+                         style="background:color-mix(in srgb, var(--uci-accent) 8%, transparent); border-color:color-mix(in srgb, var(--uci-accent) 20%, transparent);">
+                        <div class="w-14 h-14 rounded-full flex items-center justify-center text-2xl"
+                             style="background:linear-gradient(135deg, var(--uci-accent), var(--uci-accent2)); color:white;">
                             <i class="fa-solid fa-calculator"></i>
                         </div>
                         <div>
-                            <div class="text-[10px] font-black text-uci-muted uppercase tracking-widest">"Cálculo"</div>
-                            <div class="text-xs font-bold text-uci-text">"Actualización en tiempo real"</div>
+                            <div class="text-base font-black uppercase tracking-widest" style="color:var(--uci-muted);">"Cálculo"</div>
+                            <div class="text-lg font-semibold" style="color:var(--uci-text);">"Actualización en tiempo real"</div>
                         </div>
                     </div>
                 </div>
@@ -202,6 +242,7 @@ fn ScaleSlider(
     min: f32,
     max: f32,
     step: f32,
+    color: &'static str,
     value: Signal<f32>,
     on_change: Callback<f32>,
 ) -> impl IntoView {
@@ -211,13 +252,14 @@ fn ScaleSlider(
     };
 
     view! {
-        <div class="space-y-2 group">
+        <div class="space-y-3">
             <div class="flex justify-between items-center">
-                <label class="text-[10px] font-bold text-uci-muted uppercase tracking-widest flex items-center gap-1">
-                    <i class=icon></i>
+                <label class="text-lg font-bold flex items-center gap-3" style="color:var(--uci-muted);">
+                    <i class=format!("fa-solid {}", icon) style=move || format!("color:{};", color)></i>
                     {label}
                 </label>
-                <span class="text-sm font-bold text-uci-accent font-mono bg-uci-accent/5 px-2 py-0.5 rounded">
+                <span class="text-2xl font-bold font-mono px-4 py-2 rounded-xl"
+                      style=move || format!("background:color-mix(in srgb, {} 15%, transparent); color:{};", color, color)>
                     {move || if step < 1.0 { format!("{:.2}", value.get()) } else { format!("{:.0}", value.get()) }}
                 </span>
             </div>
@@ -230,7 +272,7 @@ fn ScaleSlider(
                         on_change.run(v);
                     }
                 }
-                style=move || format!("--val: {}%", val_pct())
+                style=move || format!("--val: {}%; --slider-color: {};", val_pct(), color)
                 data-sev="normal"
             />
         </div>
@@ -244,17 +286,18 @@ fn CheckBox(
     on_change: Callback<bool>,
 ) -> impl IntoView {
     view! {
-        <label class="flex items-center gap-2 cursor-pointer group">
+        <label class="flex items-center gap-4 cursor-pointer group p-3 rounded-xl hover:bg-[var(--uci-surface)] transition-all">
             <input 
                 type="checkbox" 
-                class="w-4 h-4 rounded border-uci-border text-uci-accent focus:ring-uci-accent"
+                class="w-6 h-6 rounded border-2"
+                style="border-color:var(--uci-muted); color:var(--uci-accent);"
                 prop:checked=checked.get()
                 on:change=move |ev| {
                     let target = event_target::<web_sys::HtmlInputElement>(&ev);
                     on_change.run(target.checked());
                 }
             />
-            <span class="text-xs font-medium text-uci-text group-hover:text-uci-accent transition-colors">{label}</span>
+            <span class="text-lg font-semibold" style="color:var(--uci-text);">{label}</span>
         </label>
     }
 }

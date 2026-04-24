@@ -20,7 +20,7 @@ pub fn Badge(label: &'static str) -> impl IntoView {
 pub fn Card(title: &'static str, content: impl IntoView) -> impl IntoView {
     view! {
         <div class="glass-card" style="padding:20px;">
-            <h3 style="font-size:14px; font-weight:700; color:#E2E8F0; margin:0 0 12px;">{title}</h3>
+            <h3 style="font-size:14px; font-weight:700; color:var(--uci-text); margin:0 0 12px;">{title}</h3>
             {content}
         </div>
     }

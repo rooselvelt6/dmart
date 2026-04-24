@@ -1,8 +1,10 @@
 mod db;
 mod cache;
-mod api;
+pub mod api;
 mod crypto;
-mod auth;
+pub mod auth;
+pub mod rbac;
+mod audit;
 
 use std::net::SocketAddr;
 use axum::{
@@ -81,6 +83,8 @@ async fn main() -> anyhow::Result<()> {
     let api_router = Router::new()
         // Health check
         .route("/health", get(health_check))
+        // Stats
+        .route("/stats", get(api::stats::get_stats))
         // Auth
         .nest("/auth", api::auth::router())
         // Patients
