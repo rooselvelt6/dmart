@@ -3,8 +3,10 @@ use leptos::either::Either;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
 use dmart_shared::models::*;
+use dmart_shared::scales::{calculate_apache_ii_score, calculate_sofa_score, mortality_risk};
 use crate::api;
 use crate::components::scales::*;
+use crate::components::radar_chart::{RadarChart, RadarData};
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 enum EscalaMedir {
@@ -44,6 +46,73 @@ pub fn MeasurementPage() -> impl IntoView {
 
     let apache_data = RwSignal::new(ApacheIIData::default());
     let gcs_data = RwSignal::new(GcsData::default());
+
+    // Signals para scores calculados en tiempo real (para el radar)
+    let apache_score = Memo::new(move |_| calculate_apache_ii_score(&apache_data.get()));
+    let gcs_score = Memo::new(move |_| gcs_data.get().total() as u8);
+    let apache_mortality = Memo::new(move |_| mortality_risk(apache_score.get()));
+    
+    // SOFA requiere datos adicionales - por ahora calculamos con datos disponibles
+    let sofa_score = Memo::new(move |_| {
+        let d = apache_data.get();
+        calculate_sofa_score(&d) as u8
+    });
+
+    // Datos del radar basados en la escala actual
+    let radar_data = Memo::new(move |_| -> Vec<RadarData> {
+        let esc = escala.get();
+        match esc {
+            EscalaMedir::ApacheII => {
+                let score = apache_score.get();
+                vec![
+                    RadarData {
+                        label: "APACHE II",
+                        value: score as f32,
+                        max: 71.0,
+                        warning: 20.0,
+                        critical: 30.0,
+                    },
+                ]
+            }
+            EscalaMedir::GCS => {
+                vec![
+                    RadarData {
+                        label: "GCS",
+                        value: gcs_score.get() as f32,
+                        max: 15.0,
+                        warning: 12.0,
+                        critical: 8.0,
+                    },
+                ]
+            }
+            _ => {
+                // Para otras escalas, mostrar preview de todas
+                vec![
+                    RadarData {
+                        label: "APACHE II",
+                        value: apache_score.get() as f32,
+                        max: 71.0,
+                        warning: 20.0,
+                        critical: 30.0,
+                    },
+                    RadarData {
+                        label: "GCS",
+                        value: gcs_score.get() as f32,
+                        max: 15.0,
+                        warning: 12.0,
+                        critical: 8.0,
+                    },
+                    RadarData {
+                        label: "SOFA",
+                        value: sofa_score.get() as f32,
+                        max: 24.0,
+                        warning: 12.0,
+                        critical: 18.0,
+                    },
+                ]
+            }
+        }
+    });
 
     let notas = RwSignal::new(String::new());
     let guardando = RwSignal::new(false);
@@ -134,15 +203,71 @@ pub fn MeasurementPage() -> impl IntoView {
                                 </div>
                             </div>
 
-                            // Independent Scale Content
-                            <div class="animate-fade-in">
-                                {move || match escala.get() {
-                                    EscalaMedir::ApacheII => view! { <ApacheIIScale data=apache_data /> }.into_any(),
-                                    EscalaMedir::GCS      => view! { <GcsScale data=gcs_data /> }.into_any(),
-                                    EscalaMedir::SOFA     => view! { <SofaScale data=apache_data /> }.into_any(),
-                                    EscalaMedir::SAPS3    => view! { <Saps3Scale data=apache_data /> }.into_any(),
-                                    EscalaMedir::News2    => view! { <News2Scale data=apache_data /> }.into_any(),
-                                }}
+                            // Content with integrated radar chart
+                            <div class="flex flex-col lg:flex-row gap-5 md:gap-6">
+                                // Scale Content
+                                <div class="flex-1 animate-fade-in">
+                                    {move || match escala.get() {
+                                        EscalaMedir::ApacheII => view! { <ApacheIIScale data=apache_data /> }.into_any(),
+                                        EscalaMedir::GCS      => view! { <GcsScale data=gcs_data /> }.into_any(),
+                                        EscalaMedir::SOFA     => view! { <SofaScale data=apache_data /> }.into_any(),
+                                        EscalaMedir::SAPS3    => view! { <Saps3Scale data=apache_data /> }.into_any(),
+                                        EscalaMedir::News2    => view! { <News2Scale data=apache_data /> }.into_any(),
+                                    }}
+                                </div>
+
+                                // Sidebar con Radar Chart y Stats
+                                <div class="lg:w-80 xl:w-96 flex flex-col gap-4">
+                                    // Radar Chart Card
+                                    <div class="glass-card p-5 flex flex-col items-center" style="background:var(--uci-surface);">
+                                        <h3 class="text-xs font-black uppercase tracking-[0.2em] mb-4" style="color:var(--uci-muted);">
+                                            <i class="fa-solid fa-chart-polar fa-lg mr-2" style="color:var(--uci-accent);"></i>
+                                            "Vista Rápida de Scores"
+                                        </h3>
+                                        <div class="flex justify-center">
+                                            <RadarChart data={radar_data.get()} size=280 />
+                                        </div>
+                                        <div class="mt-4 grid grid-cols-3 gap-2 w-full text-center">
+                                            <div class="p-2 rounded-lg" style="background:var(--uci-card);">
+                                                <div class="text-lg font-black" style="color:#10B981;">{move || format!("{:.0}", apache_score.get())}</div>
+                                                <div class="text-[10px] font-bold uppercase" style="color:var(--uci-muted);">"APACHE"</div>
+                                            </div>
+                                            <div class="p-2 rounded-lg" style="background:var(--uci-card);">
+                                                <div class="text-lg font-black" style="color:#3B82F6;">{move || gcs_score.get()}</div>
+                                                <div class="text-[10px] font-bold uppercase" style="color:var(--uci-muted);">"GCS"</div>
+                                            </div>
+                                            <div class="p-2 rounded-lg" style="background:var(--uci-card);">
+                                                <div class="text-lg font-black" style="color:#8B5CF6;">{move || sofa_score.get()}</div>
+                                                <div class="text-[10px] font-bold uppercase" style="color:var(--uci-muted);">"SOFA"</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    // Mortality Risk Card
+                                    <div class="glass-card p-5" style="background:linear-gradient(135deg, var(--uci-surface), var(--uci-card));">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <span class="text-sm font-bold uppercase tracking-wider" style="color:var(--uci-muted);">"Riesgo de Mortalidad"</span>
+                                            <i class="fa-solid fa-skull-crossbones" style="color:var(--uci-muted);"></i>
+                                        </div>
+                                        <div class="text-5xl font-black text-center mb-3" style="color:var(--uci-critical);">
+                                            {move || format!("{:.1}%", apache_mortality.get())}
+                                        </div>
+                                        <div class="h-3 rounded-full overflow-hidden" style="background:var(--uci-border);">
+                                            <div class="h-full rounded-full transition-all duration-500" 
+                                                 style=move || format!("width:{}%; background:linear-gradient(90deg, #10B981, #F59E0B, #EF4444);", apache_mortality.get().min(100.0))>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-center mt-3 italic" style="color:var(--uci-muted);">"Basado en ecuación de Knaus et al. (1985)"</p>
+                                    </div>
+
+                                    // Severity Badge
+                                    <div class="glass-card p-5 text-center" style="background:var(--uci-surface);">
+                                        <div class="text-xs font-bold uppercase tracking-widest mb-3" style="color:var(--uci-muted);">"Severidad APACHE II"</div>
+                                        <div class="text-3xl font-black uppercase tracking-wider" style="color:var(--uci-accent);">
+                                            {move || SeverityLevel::from_score(apache_score.get()).label()}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             // Shared Actions & Notes

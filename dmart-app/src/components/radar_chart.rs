@@ -1,7 +1,8 @@
 use dmart_shared::models::*;
+use dmart_shared::scales::*;
 use leptos::prelude::*;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct RadarData {
     pub label: &'static str,
     pub value: f32,
@@ -69,35 +70,96 @@ impl RadarData {
 #[component]
 pub fn RadarChart(data: Vec<RadarData>, size: i32) -> impl IntoView {
     let center = size as f32 / 2.0;
-    let radius = (size - 40) as f32 / 2.0;
+    let radius = (size - 60) as f32 / 2.0;
+    let n = data.len();
+    
+    let angle_offset = -90.0_f32;
+
+    let get_point = |i: usize, value: f32| -> (f32, f32) {
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let x = center + (angle.cos() * radius * value / 100.0);
+        let y = center + (angle.sin() * radius * value / 100.0);
+        (x, y)
+    };
+
+    let get_label_point = |i: usize| -> (f32, f32) {
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let x = center + (angle.cos() * radius) * 1.18;
+        let y = center + (angle.sin() * radius) * 1.18;
+        (x, y)
+    };
+
+    let polygon_points = data.iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let (x, y) = get_point(i, d.normalized());
+            format!("{},{}", x, y)
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
 
     view! {
-        <svg width={size} height={size} viewBox={format!("0 0 {} {}", size, size)}>
-            <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
-            <circle cx={center} cy={center} r={radius * 0.66} fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
-            <circle cx={center} cy={center} r={radius * 0.33} fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
+        <svg width={size} height={size} viewBox={format!("0 0 {} {}", size, size)} class="overflow-visible">
+            <defs>
+                <linearGradient id="radarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:0.6" />
+                    <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:0.3" />
+                </linearGradient>
+            </defs>
 
-            {data.iter().enumerate().map(|(i, d)| {
-                let angle = (i as f32 * 72.0 - 90.0) * 3.14159 / 180.0;
-                let x = center + (angle.cos() * radius);
-                let y = center + (angle.sin() * radius);
-                let vx = center + (angle.cos() * radius * d.normalized() / 100.0);
-                let vy = center + (angle.sin() * radius * d.normalized() / 100.0);
-
+            // Círculos concéntricos de referencia
+            {[0.0_f32, 0.33, 0.66, 1.0].iter().map(|pct| {
+                let r = radius * pct;
                 view! {
-                    // Línea del eje
-                    <line x1={center} y1={center} x2={x} y2={y} stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
-                    // Línea de datos
-                    <line x1={vx} y1={vy} x2={vx} y2={vy} stroke={d.color()} stroke-width="3" stroke-linecap="round" />
-                    // Punto
-                    <circle cx={vx} cy={vy} r="4" fill={d.color()} />
-                    // Label
-                    <text x={x} y={y + 15.0} text-anchor="middle" fill="var(--uci-muted)" font-size="10">{d.label}</text>
+                    <circle cx={center} cy={center} r={r} 
+                        fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.4" 
+                        stroke-dasharray={if *pct == 0.0 { "none" } else { "4 4" }} />
                 }
             }).collect_view()}
 
-            // Título central
-            <text x={center} y={center + 4.0} text-anchor="middle" fill="var(--uci-text)" font-size="14" font-weight="700">"Scores"</text>
+            // Líneas de eje desde el centro
+            {data.iter().enumerate().map(|(i, _)| {
+                let (lx, ly) = get_label_point(i);
+                view! {
+                    <line x1={center} y1={center} x2={lx} y2={ly} 
+                        stroke="var(--uci-border)" stroke-width="1" opacity="0.4" />
+                }
+            }).collect_view()}
+
+            // Polígono de datos (área cerrada)
+            <polygon points={polygon_points} 
+                fill="url(#radarGradient)" 
+                stroke="#3B82F6" 
+                stroke-width="2.5"
+                stroke-linejoin="round" />
+
+            // Puntos de datos en los vértices
+            {data.iter().enumerate().map(|(i, d)| {
+                let (x, y) = get_point(i, d.normalized());
+                view! {
+                    <circle cx={x} cy={y} r="6" fill={d.color()} stroke="white" stroke-width="2" />
+                    <circle cx={x} cy={y} r="10" fill={d.color()} opacity="0.2" />
+                }
+            }).collect_view()}
+
+            // Labels
+            {data.iter().enumerate().map(|(i, d)| {
+                let (x, y) = get_label_point(i);
+                let dy = if y > center { 18.0_f32 } else { -8.0_f32 };
+                view! {
+                    <text x={x} y={y + dy} text-anchor="middle" 
+                        fill="var(--uci-text)" font-size="11" font-weight="600">
+                        {d.label}
+                    </text>
+                    <text x={x} y={y + dy + 14.0} text-anchor="middle" 
+                        fill={d.color()} font-size="10" font-weight="700">
+                        {format!("{:.0}", d.value)}
+                    </text>
+                }
+            }).collect_view()}
+
+            // Centro
+            <circle cx={center} cy={center} r="3" fill="var(--uci-accent)" />
         </svg>
     }
 }
@@ -105,30 +167,119 @@ pub fn RadarChart(data: Vec<RadarData>, size: i32) -> impl IntoView {
 #[component]
 pub fn OrganRadar(data: Vec<RadarData>, size: i32) -> impl IntoView {
     let center = size as f32 / 2.0;
-    let radius = (size - 40) as f32 / 2.0;
+    let radius = (size - 60) as f32 / 2.0;
+    let n = data.len();
+    let angle_offset = -90.0_f32;
+
+    let get_point = |i: usize, value: f32| -> (f32, f32) {
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let x = center + (angle.cos() * radius * value / 100.0);
+        let y = center + (angle.sin() * radius * value / 100.0);
+        (x, y)
+    };
+
+    let polygon_points = data.iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let (x, y) = get_point(i, d.normalized());
+            format!("{},{}", x, y)
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
 
     view! {
-        <svg width={size} height={size} viewBox={format!("0 0 {} {}", size, size)}>
-            <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
-            <circle cx={center} cy={center} r={radius * 0.66} fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
-            <circle cx={center} cy={center} r={radius * 0.33} fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
+        <svg width={size} height={size} viewBox={format!("0 0 {} {}", size, size)} class="overflow-visible">
+            <defs>
+                <linearGradient id="organGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#EF4444;stop-opacity:0.5" />
+                    <stop offset="100%" style="stop-color:#F97316;stop-opacity:0.3" />
+                </linearGradient>
+            </defs>
 
-            {data.iter().enumerate().map(|(i, d)| {
-                let angle = (i as f32 * 72.0 - 90.0) * 3.14159 / 180.0;
-                let x = center + (angle.cos() * radius);
-                let y = center + (angle.sin() * radius);
-                let vx = center + (angle.cos() * radius * d.normalized() / 100.0);
-                let vy = center + (angle.sin() * radius * d.normalized() / 100.0);
-
+            {[0.33_f32, 0.66, 1.0].iter().map(|pct| {
+                let r = radius * pct;
                 view! {
-                    <line x1={center} y1={center} x2={x} y2={y} stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
-                    <line x1={vx} y1={vy} x2={vx} y2={vy} stroke={d.color()} stroke-width="3" />
-                    <circle cx={vx} cy={vy} r="4" fill={d.color()} />
-                    <text x={x} y={y + 15.0} text-anchor="middle" fill="var(--uci-muted)" font-size="9">{d.label}</text>
+                    <circle cx={center} cy={center} r={r} 
+                        fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
                 }
             }).collect_view()}
 
-            <text x={center} y={center + 4.0} text-anchor="middle" fill="var(--uci-text)" font-size="12" font-weight="700">"Órganos"</text>
+            {data.iter().enumerate().map(|(i, _)| {
+                let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+                let lx = center + (angle.cos() * radius * 1.2);
+                let ly = center + (angle.sin() * radius * 1.2);
+                view! {
+                    <line x1={center} y1={center} x2={lx} y2={ly} 
+                        stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
+                }
+            }).collect_view()}
+
+            <polygon points={polygon_points} 
+                fill="url(#organGradient)" 
+                stroke="#EF4444" 
+                stroke-width="2"
+                stroke-linejoin="round" />
+
+            {data.iter().enumerate().map(|(i, d)| {
+                let (x, y) = get_point(i, d.normalized());
+                view! {
+                    <circle cx={x} cy={y} r="5" fill={d.color()} stroke="white" stroke-width="2" />
+                }
+            }).collect_view()}
+
+            <circle cx={center} cy={center} r="3" fill="var(--uci-accent)" />
+        </svg>
+    }
+}
+
+#[component]
+pub fn MiniRadarChart(
+    data: Vec<RadarData>,
+    size: i32,
+) -> impl IntoView {
+    let center = size as f32 / 2.0;
+    let radius = (size - 30) as f32 / 2.0;
+    let n = data.len().max(1);
+    let angle_offset = -90.0_f32;
+
+    let get_point = |i: usize, value: f32| -> (f32, f32) {
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let x = center + (angle.cos() * radius * value / 100.0);
+        let y = center + (angle.sin() * radius * value / 100.0);
+        (x, y)
+    };
+
+    let polygon_points = data.iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let (x, y) = get_point(i, d.normalized());
+            format!("{},{}", x, y)
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    view! {
+        <svg width={size} height={size} viewBox={format!("0 0 {} {}", size, size)}>
+            {[0.5_f32, 1.0].iter().map(|pct| {
+                view! {
+                    <circle cx={center} cy={center} r={radius * pct} 
+                        fill="none" stroke="var(--uci-border)" stroke-width="0.5" opacity="0.5" />
+                }
+            }).collect_view()}
+
+            <polygon points={polygon_points} 
+                fill="var(--uci-accent)" 
+                fill-opacity="0.3"
+                stroke="var(--uci-accent)" 
+                stroke-width="1.5"
+                stroke-linejoin="round" />
+
+            {data.iter().enumerate().map(|(i, d)| {
+                let (x, y) = get_point(i, d.normalized());
+                view! {
+                    <circle cx={x} cy={y} r="2.5" fill={d.color()} />
+                }
+            }).collect_view()}
         </svg>
     }
 }
