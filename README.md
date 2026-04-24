@@ -22,11 +22,13 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ Estimación de **mortalidad hospitalaria**
 - ✅ Puntuación por **edad** (estándar Knaus)
 - ✅ **Enfermedades crónicas** (6 toggles)
-- ✅ **66+ tests** de validación pasando
+- ✅ **66+ tests** de validación passando
 - ✅ **NEWS2**, SAPS III, SOFA
 - ✅ Seguridad: Argon2id, RBAC, Zeroize
 - ✅ Frontend **WASM responsivo** (Leptos 0.8)
 - ✅ **Responsive design** para móvil/escritorio
+- ✅ **Dark Mode** integrado
+- ✅ **WASM optimizado** (5.5MB vs 20MB)
 
 ---
 
@@ -800,6 +802,7 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 | Obtener paciente | ~2ms |
 | Export CSV | ~50ms |
 | Export PDF | ~100ms |
+| **WASM** | **5.5MB (optimizado)** |
 
 ---
 
@@ -833,6 +836,9 @@ cargo build --release
 # Frontend WASM
 cd dmart-app && trunk build
 
+# Optimizar WASM (-73%)
+./scripts/optimize-wasm.sh
+
 # Ejecutar servidor
 DMART_PORT=3000 ./target/release/dmart-server
 ```
@@ -847,6 +853,8 @@ DMART_PORT=3000 ./target/release/dmart-server
 - ✅ Historial de pacientes
 - ✅ Gráficos de evolución
 - ✅ Exportación CSV/PDF
+- ✅ Dark Mode
+- ✅ WASM optimizado (5.5MB)
 
 ---
 
