@@ -34,7 +34,10 @@ fn paciente_base() -> ApacheIIData {
         leucocitos: 7.0,
         plaquetas: 250.0,
         // GCS normal
-        gcs_total: 15,
+        gcs_ojos: 4,
+            gcs_verbal: 5,
+            gcs_motor: 6,
+            gcs_total: 15,
         // Edad media (sin puntos)
         edad: 40,
         // Sin enfermedades crónicas
@@ -476,6 +479,9 @@ mod apache_ii {
             hematocrito: 65.0,
             leucocitos: 45.0,
             plaquetas: 20.0,
+            gcs_ojos: 1,
+            gcs_verbal: 1,
+            gcs_motor: 1,
             gcs_total: 3,
             edad: 80,
             insuficiencia_hepatica: true,
@@ -656,6 +662,9 @@ mod integracion {
             hematocrito: 35.0,
             leucocitos: 18.0,
             plaquetas: 150.0,
+            gcs_ojos: 2,
+            gcs_verbal: 2,
+            gcs_motor: 2,
             gcs_total: 12,
             edad: 65,
             insuficiencia_hepatica: false,

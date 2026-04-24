@@ -121,18 +121,18 @@ pub fn ApacheIIScale(
             </div>
 
             <div class="mt-4 p-3 rounded-lg" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
-                <h4 class="text-xs font-bold uppercase mb-2" style="color:var(--uci-muted);">"Datos del Paciente"</h4>
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <SliderField label="Edad" icon="fa-user" min=18.0 max=120.0 step=1.0 color="#6366F1" 
                         value=edad_val on_change=edad_set />
                 </div>
-                <div class="mt-2 grid grid-cols-2 gap-2">
-                    <ToggleField label="Insuficiencia Hepática" color="#DC2626" value=hep_val on_change=hep_set />
-                    <ToggleField label="Cardiovascular Severa" color="#DC2626" value=cv_val on_change=cv_set />
-                    <ToggleField label="Insuficiencia Respiratoria" color="#DC2626" value=resp_val on_change=resp_set />
-                    <ToggleField label="Insuficiencia Renal" color="#DC2626" value=renal_val on_change=renal_set />
-                    <ToggleField label="Inmunocomprometido" color="#DC2626" value=immuno_val on_change=immuno_set />
-                    <ToggleField label="Cirugía No Operado/Emergencia" color="#DC2626" value=cirugia_val on_change=cirugia_set />
+                <h4 class="text-xs font-bold uppercase mt-3 mb-2" style="color:var(--uci-muted);">"Enfermedades Crónicas"</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <ToggleField label="Insuficiencia Hepática" color="#6366F1" value=hep_val on_change=hep_set />
+                    <ToggleField label="Cardiovascular Severa" color="#6366F1" value=cv_val on_change=cv_set />
+                    <ToggleField label="Insuficiencia Respiratoria" color="#6366F1" value=resp_val on_change=resp_set />
+                    <ToggleField label="Insuficiencia Renal" color="#6366F1" value=renal_val on_change=renal_set />
+                    <ToggleField label="Inmunocomprometido" color="#6366F1" value=immuno_val on_change=immuno_set />
+                    <ToggleField label="Cirugía No Operado/Emergencia" color="#6366F1" value=cirugia_val on_change=cirugia_set />
                 </div>
             </div>
 

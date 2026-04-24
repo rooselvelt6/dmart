@@ -348,7 +348,6 @@ pub fn calculate_gcs_score_from_total(total: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{Serialize, Deserialize};
 use crate::models::*;
 
     fn normal_patient() -> ApacheIIData {
@@ -371,6 +370,9 @@ use crate::models::*;
             hematocrito: 42.0,
             leucocitos: 8.0,
             plaquetas: 250.0,
+            gcs_ojos: 4,
+            gcs_verbal: 5,
+            gcs_motor: 6,
             gcs_total: 15,
             edad: 40,
             insuficiencia_hepatica: false,
