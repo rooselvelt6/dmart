@@ -595,97 +595,155 @@ validation.rs::validate_apache_measurement()
 
 ---
 
-## 📅 Roadmap 2026
+## 📅 Roadmap 2026 - Seguridad Empresarial y Avanzada
 
-### Q1 2026 - Escalas de Severidad Clínicas
-
-#### NEWS2 (National Early Warning Score 2)
-- [ ] 7 parámetros fisiológicos + oxígeno suplementario (máx. 20 puntos)
-- [ ] Detección temprana de deterioro (6-8 horas antes de eventos críticos)
-- [ ] Clasificación: Bajo (0-4), Moderado (5-6), Alto (≥7)
-- [ ] Escala SpO2 alternativa para pacientes con hipercapnia
-- [ ] Integración con sistemas de alerta hospitalaria
-
-#### SAPS III (Simplified Acute Physiology Score III)
-- [ ] 20 variables fisiológicas para predicción de mortalidad
-- [ ] Adaptación a poblaciones específicas de UCI
-- [ ] Comparativa con APACHE II existente
-
-#### SOFA (Sequential Organ Failure Assessment)
-- [ ] Evaluación de 6 sistemas de órganos
-- [ ] Seguimiento de deterioro orgánico secuencial
-- [ ] Integración con datos de ventilación mecánica
+El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial con enfoque en seguridad, interoperabilidad y análisis predictivo.
 
 ---
 
-### Q2 2026 - Seguridad Empresarial
+### 🔐 Q1 2026 - Seguridad de Datos y Cifrado
 
-#### Cifrado de Datos
-- [ ] **AES-256** - Cifrado de datos en reposo
-  - Base de datos cifrada (SurrealDB encryption layer)
-  - Backups cifrados automáticamente
-  - Archivos de configuración protegidos
-- [ ] **ChaCha20-Poly1305** - Cifrado autenticado (AEAD)
-  - Comunicaciones internas entre servicios
+#### Cifrado de Datos en Reposo
+- [ ] **AES-256-GCM** - Cifrado de base de datos SurrealDB
+  - Key derivation con Argon2id para claves maestras
+  - Cifrado granular por tabla (pacientes, mediciones, usuarios)
+  - Backups cifrados automáticamente con rotación de claves
+- [ ] **ChaCha20-Poly1305** - Cifrado autenticado para datos sensibles
   - Integración con dispositivos IoT médicos
-  - Protección de datos en tránsito
+  - Comunicaciones internas entre microservicios
 
-#### Autenticación de Credenciales
-- [ ] **Argon2id** - Hashing de contraseñas
-  - Resistente a ataques GPU/ASIC
-  - Memoria-hard (previene side-channel attacks)
-  - Cumplimiento PHC 2015
+#### Auditoría HIPAA Completa
+- [ ] **Audit Log Avanzado**
+  - Registro inmutable de accesos PHI (6 años retención)
+  - Índices encriptados para búsqueda de eventos
+  - Exportación de auditoría para compliance reporting
+- [ ] **Data Loss Prevention (DLP)**
+  - Detección de intentos de exfiltración de datos
+  - Alertas en tiempo real para accesos anómalos
 
-#### Comunicación entre Microservicios
-- [ ] **ZeroIce/IceRPC** - Framework RPC empresarial
-  - QUIC/HTTP3 nativo para baja latencia
-  - Type-safe entre servicios
-  - Integración con sistemas heredados hospitalarios
+#### Seguridad de Aplicación
+- [ ] **Rate Limiting** inteligente por usuario/IP
+- [ ] **CSP Headers** (Content Security Policy) para WASM
+- [ ] **HSTS** (HTTP Strict Transport Security)
 
 ---
 
-### Q3 2026 - Autenticación Empresarial
+### 🔑 Q2 2026 - Autenticación Empresarial
 
 #### Sistema de Identidad
 - [ ] **OAuth 2.0 + OpenID Connect**
-  - Autenticación moderna (reemplaza login básico)
-  - Tokens JWT con firma digital
-  - Refresh tokens seguros
+  - Provider interno compatible con estándares
+  - Tokens JWT firmados con RS256/ES256
+  - Refresh tokens con rotación automática
+- [ ] **LDAP/Active Directory Integration**
+  - Sincronización de usuarios desde directorio corporativo
+  - Grupos LDAP mapeados a roles RBAC
 
-#### Integración Corporativa
-- [ ] **SSO (Single Sign-On)**
-  - SAML 2.0 para integración con directorios corporativos
-  - LDAP para autenticación institucional
-  - Soporte para hospitales multi-sitio
+#### Multi-Factor Authentication (MFA)
+- [ ] **TOTP** - Google Authenticator, Authy compatible
+- [ ] **WebAuthn/FIDO2** - Llaves hardware (YubiKey)
+- [ ] **Biometrics** - Huella dactilar, reconocimiento facial (web APIs)
+- [ ] **SMS/Email OTP** - Códigos de respaldo
 
-#### Control de Acceso
-- [ ] **MFA (Multi-Factor Authentication)**
-  - TOTP (aplicaciones authenticator)
-  - Biometrics (huella, rostro)
-  - Hardware keys (WebAuthn/FIDO2)
-- [ ] **RBAC (Role-Based Access Control)**
-  - Roles: Administrador, Médico, Enfermera, Técnico
-  - Permisos granulares por acción
-  - Auditoría completa de accesos
+#### Single Sign-On (SSO)
+- [ ] **SAML 2.0** - Integración con hospitales multi-sitio
+- [ ] **Session Federation** - Sesiones compartidas entre aplicaciones
+- [ ] **Logout Single** - Cierre de sesión centralizado
 
 ---
 
-### Q4 2026 - Inteligencia Artificial y Analytics
+### 🌐 Q3 2026 - Interoperabilidad y Estándares
 
-#### Redes Neuronales
-- [ ] **Implementación con Burn** (Rust Deep Learning)
-  - Predicción de deterioro clínico
-  - Detección temprana de sepsis
-  - Modelos de mortalidad comparativos
-- [ ] **Explicabilidad de Modelos**
-  - SHAP values para interpretar predicciones
-  - Visualización de factores de riesgo
+#### HL7 FHIR R4 Integration
+- [ ] **FHIR Patient** - Import/export de pacientes
+- [ ] **FHIR Observation** - Mediciones como recursos FHIR
+- [ ] **FHIR Condition** - Diagnósticos ICD-10
+- [ ] **FHIR DiagnosticReport** - Reportes clínicos estructurados
+- [ ] **SMART on FHIR** - Aplicaciones third-party
 
-#### Analytics y Alertas
-- [ ] Dashboard de analytics en tiempo real
-- [ ] Sistema de alertas automáticas (NEWS2 triggers)
-- [ ] API para integración con sistemas hospitalarios
-- [ ] Módulo de investigación clínica
+#### Integración de Dispositivos
+- [ ] **HL7 V2** - Conexión con monitores de signos vitales
+- [ ] **IEEE 11073** - Protocolo de dispositivos médicos
+- [ ] ** MQTT/IoT** - Sensores de sala UCI
+- [ ] **WebSocket Streaming** - Datos en tiempo real
+
+#### API Gateway
+- [ ] **GraphQL API** - Consultas flexibles para dashboards
+- [ ] **gRPC** - Comunicación de baja latencia
+- [ ] **API Keys** - Gestión para integrations third-party
+- [ ] **Rate Limiting por API Key**
+
+---
+
+### 📊 Q4 2026 - Analytics y Machine Learning
+
+#### Dashboard Ejecutivo
+- [ ] **Gráfico Radar por Paciente**
+  - Visualización multi-dimensional: APACHE, GCS, SOFA, NEWS2, SAPS3
+  - Comparación con rangos normales
+  - Tendencias temporales superpuestas
+- [ ] **Heatmaps de UCI**
+  - Mapa de planta con estado de cada cama
+  - Alertas visuales de deterioro
+- [ ] **KPIs en Tiempo Real**
+  - Mortalidad predicted vs actual
+  - Estancia media por diagnóstico
+  - Ocupación de UCI
+
+#### Machine Learning con Burn
+- [ ] **Predicción de Deterioro**
+  - Modelo LSTM para predicción 6-12 horas
+  - Features: tendencias de scores, labs, vitales
+- [ ] **Detección de Sepsis Temprana**
+  - Modelo Random Forest con alertas SOFA
+  - Integración con datos de laboratorio
+- [ ] **Mortality Risk Stratification**
+  - Ensemble de modelos (APACHE + ML)
+  - Calibración de probabilidades
+
+#### Explicabilidad de Modelos (XAI)
+- [ ] **SHAP Values** - Importancia de features
+- [ ] **LIME Explanations** - Justificación de predicciones
+- [ ] **Feature Attribution可视化** - Gráficos de contribución
+
+---
+
+### 🎨 UX/UI Improvements
+
+#### Experience Premium
+- [ ] **Dark Mode persistente** con preferencia del sistema
+- [ ] **Gráficos 3D** con WebGL (Three.js/WASM)
+- [ ] **Animaciones fluidas** - Transiciones de estado
+- [ ] **PWA Offline** - Funciona sin conexión
+- [ ] **Notificaciones Push** - Alertas de deterioro
+
+#### Accesibilidad
+- [ ] **WCAG 2.1 AA** compliance
+- [ ] **Screen Reader** support
+- [ ] **Keyboard Navigation** completa
+- [ ] **Alto contraste** para UCI (luces bajas)
+
+---
+
+### 🔧 Technical Debt & Infrastructure
+
+#### Optimizaciones
+- [ ] **SQLite → SurrealDB** - Transacciones ACID completas
+- [ ] **Connection Pooling** para base de datos
+- [ ] **Lazy Loading** de componentes WASM
+- [ ] **Service Worker** para caching offline
+
+#### Testing
+- [ ] **Integration Tests** de API endpoints
+- [ ] **E2E Tests** con Playwright
+- [ ] **Load Testing** con k6
+- [ ] **Security Scanning** automatizado
+
+#### DevOps
+- [ ] **Docker Compose** para desarrollo fácil
+- [ ] **CI/CD** con GitHub Actions
+- [ ] **Semantic Versioning** para releases
+- [ ] **Changelog** automatizado
 
 ---
 
@@ -712,8 +770,19 @@ validation.rs::validate_apache_measurement()
 - **Argon2**: Winternitz P, et al. (2015). Password Hashing Competition
 - **ChaCha20-Poly1305**: Bernstein D.J. (2008). ChaCha, a variant of Salsa20
 
-### Redes Neuronales (Futuro)
-- **Burn Deep Learning Framework**: https://burn.dev/
+### Seguridad Empresarial
+- **HIPAA Compliance**: U.S. Department of Health and Human Services
+- **NIST SP 800-53**: Security and Privacy Controls
+- **ISO 27001**: Information Security Management
+- **GDPR**: General Data Protection Regulation (EU patients)
+
+### HL7 FHIR
+- **HL7 FHIR R4**: HL7 International, 2019
+- **SMART on FHIR**: Health IT Standards
+
+### Machine Learning
+- **Burn Framework**: https://burn.dev/
+- **SHAP**: Lundberg & Lee (2017). Nature Methods
 
 ---
 
@@ -738,10 +807,13 @@ validation.rs::validate_apache_measurement()
 | ✅ Estándar clínico | Implementación fiel de APACHE II (Knaus 1985) |
 | ✅ Tests rigurosos | 63+ tests validando cálculos médicos |
 | ✅ Tipado seguro | Rust previene errores en tiempo de compilación |
-| ✅ Documentación | 4 documentos técnicos para artículo |
+| ✅ Documentación | Documentación técnica completa |
 | ✅ UI moderna | Interfaz glassmorphism responsiva |
 | ✅ WASM | Frontend compilado, alto rendimiento |
 | ✅ Empotrado | Base de datos local, sin infraestructura |
+| ✅ 6 scores clínicos | APACHE II, GCS, NEWS2, SAPS3, SOFA, Mortalidad |
+| ✅ Radar Chart | Visualización multi-dimensional por paciente |
+| ✅ Flujo documentado | Arquitectura y análisis de datos en README |
 
 ---
 
