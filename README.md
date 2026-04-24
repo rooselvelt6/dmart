@@ -424,6 +424,177 @@ dmart/
 
 ---
 
+## 🔄 Flujo de Datos
+
+### Arquitectura del Flujo
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              FRONTEND (WASM/Leptos)                          │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
+│  │  Register    │    │ Measurements │    │   Dashboard  │                   │
+│  │   Patient    │    │     Entry     │    │   & Charts   │                   │
+│  └──────┬───────┘    └──────┬───────┘    └──────▲───────┘                   │
+└─────────┼────────────────────┼────────────────────┼────────────────────────┘
+          │                    │                    │
+          ▼                    ▼                    │
+    ┌─────────────────────────────────────────────────┐
+    │              HTTP API (Axum Router)              │
+    │  POST /api/patients  │  POST /api/measurements   │
+    │  GET  /api/patients  │  GET  /api/stats          │
+    └──────────┬───────────┴──────────┬───────────────┘
+               │                      │
+               ▼                      ▼
+    ┌─────────────────────────────────────────────────┐
+    │              SECURITY LAYER                       │
+    │  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+    │  │  JWT Auth │  │   RBAC   │  │  Audit   │       │
+    │  │  & Login  │  │  Check   │  │   Log    │       │
+    │  └──────────┘  └──────────┘  └──────────┘       │
+    └─────────────────────┬─────────────────────────────┘
+                          │
+               ┌──────────┴──────────┐
+               ▼                      ▼
+    ┌──────────────────────┐  ┌──────────────────────┐
+    │    VALIDATION        │  │     CALCULATION      │
+    │  ┌────────────────┐  │  │  ┌────────────────┐  │
+    │  │ Range Check   │  │  │  │  APACHE II     │  │
+    │  │ Physiological │  │  │  │  GCS           │  │
+    │  │ Clinical      │  │  │  │  NEWS2/SAPS3   │  │
+    │  └────────────────┘  │  │  │  SOFA          │  │
+    └──────────────────────┘  │  │  Mortality %   │  │
+                              │  └────────────────┘  │
+                              └──────────────────────┘
+                                        │
+                                        ▼
+    ┌─────────────────────────────────────────────────┐
+    │              STORAGE LAYER                       │
+    │  ┌──────────────────┐  ┌──────────────────┐     │
+    │  │   SurrealDB      │  │   Valkey/Redis  │     │
+    │  │   (RocksDB)      │  │   (Sessions)     │     │
+    │  │   pacientes      │  │   Cache          │     │
+    │  │   mediciones     │  │                  │     │
+    │  └──────────────────┘  └──────────────────┘     │
+    └─────────────────────────────────────────────────┘
+```
+
+### Flujo Detallado por Componente
+
+#### 1. Registro de Paciente
+
+```
+Usuario llena formulario
+    ↓
+Frontend (pages/register.rs)
+    → Valida campos requeridos
+    → Crea objeto Patient
+    ↓
+API POST /api/patients
+    → Middleware: JWT Auth + RBAC
+    → Handler: patients.rs::create_patient()
+        → db_ops::create_patient()
+        → SurrealDB (tabla: pacientes)
+    ↓
+Respuesta: Patient creado con ID
+    → Frontend actualiza store
+    → Redirige a dashboard
+```
+
+#### 2. Registro de Medición
+
+```
+Usuario ingresa 12+ variables fisiológicas
+    ↓
+Frontend (pages/measurement.rs)
+    → Cada campo con validación en tiempo real
+    → Calcula GCS parcialmente
+    ↓
+API POST /api/patients/{id}/measurements
+    → Middleware: JWT Auth + RBAC
+    → Handler: measurements.rs::create_measurement()
+        │
+        ├→ validation.rs::validate_apache_measurement()
+        │   - Verifica rangos físicos (ej: temp 25-45°C)
+        │   - Verifica valores críticos (warnings)
+        │   - Detecta valores inválidos (errors)
+        │
+        ├→ scales.rs::calculate_apache_ii()
+        │   - 12 variables fisiológicas (0-252 pts)
+        │   - Edad (0-6 pts)
+        │   - GCS (0-12 pts)
+        │   - Chronic health (0-5 pts)
+        │   - Total: 0-71 pts
+        │
+        ├→ scales.rs::calculate_gcs()
+        │   - Eye (1-4) + Verbal (1-5) + Motor (1-6)
+        │   - Total: 3-15 pts
+        │
+        ├→ scales.rs::calculate_mortality()
+        │   - Logit = -0.286 + 0.146 × APACHEII + 0.808 × chronic
+        │   - Mortality = 100 × e^logit / (1 + e^logit)
+        │
+        ├→ scales.rs::calculate_news2(), calculate_saps3(), calculate_sofa()
+        │
+        └→ db_ops::create_measurement()
+            → SurrealDB (tabla: mediciones)
+    ↓
+Respuesta: Measurement con scores calculados
+    → Frontend actualiza gráficos temporales
+    → Muestra alertas si valores críticos
+```
+
+### Puntos de Entrada de Datos
+
+| Punto | Método | Datos | Validación |
+|-------|--------|-------|------------|
+| Registro Paciente | `POST /api/patients` | Demográficos, Admisión | Campos requeridos |
+| Nueva Medición | `POST /api/measurements` | 12 fisiológicas + GCS | Rangos clínicos |
+| Login | `POST /api/auth/login` | Username, Password | Argon2id |
+
+### Procesamiento de Scores Clínicos
+
+| Score | Archivo | Entrada | Salida | Puntos |
+|-------|---------|---------|--------|--------|
+| **APACHE II** | `scales.rs` | 12 vars + edad + chronic | Total | 0-71 |
+| **GCS** | `scales.rs` | Eye + Verbal + Motor | Total | 3-15 |
+| **NEWS2** | `scales.rs` | 7 vars + O2 | Total | 0-20 |
+| **SAPS III** | `scales.rs` | 20 vars | Total | 0-100 |
+| **SOFA** | `scales.rs` | 6 órganos | Total | 0-24 |
+| **Mortalidad** | `scales.rs` | APACHE II + chronic | % | 0-100% |
+
+### Validación de Datos
+
+```
+validation.rs::validate_apache_measurement()
+├── Validación de Rangos Físicos
+│   ├── Temperatura: 25-45°C
+│   ├── Presión Arterial: 0-300 mmHg
+│   ├── Frecuencia Cardíaca: 0-300 lpm
+│   ├── Frecuencia Respiratoria: 0-100
+│   ├── PaO2: 0-500 mmHg
+│   ├── pH: 6.5-8.0
+│   ├── Sodio: 100-180 mEq/L
+│   ├── Potasio: 1.5-10 mEq/L
+│   └── Creatinina: 0-15 mg/dL
+│
+├── Validación de Consistencia GCS
+│   └── Eye + Verbal + Motor = 3-15
+│
+└── Retorno: ValidationResult
+    ├── valid: bool
+    ├── errors: Vec<ValidationError>
+    └── warnings: Vec<ValidationWarning>
+```
+
+### Almacenamiento
+
+| Componente | Datos | Persistencia |
+|------------|-------|--------------|
+| **SurrealDB** | Pacientes, Mediciones, Usuarios | RocksDB (embebido) |
+| **Valkey** | Sessiones HTTP, Cache queries | Memoria + disco |
+
+---
+
 ## 📅 Roadmap 2026
 
 ### Q1 2026 - Escalas de Severidad Clínicas
