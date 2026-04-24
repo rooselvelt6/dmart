@@ -11,54 +11,55 @@ pub fn Saps3Scale(
     let level = Memo::new(move |_| Saps3Level::from_score(score.get()));
 
     view! {
-        <div class="glass-card p-6 sm:p-10 border-indigo-500/20 bg-white shadow-xl animate-fade-in">
-            <div class="flex flex-col lg:flex-row gap-10">
-                <div class="flex-1 space-y-8">
-                    <div class="flex items-center gap-4 mb-6">
-                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 text-2xl">
+        <div class="glass-card p-3 sm:p-4 lg:p-6 border-indigo-500/20 shadow-xl" style="background:var(--uci-card); overflow:hidden;">
+            <div class="flex flex-col xl:flex-row gap-4 xl:gap-8">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 sm:gap-5 mb-4 sm:mb-6">
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl sm:text-2xl" 
+                             style="background:linear-gradient(135deg,#6366F1,#8B5CF6); color:white;">
                             <i class="fa-solid fa-chart-line"></i>
                         </div>
                         <div>
-                            <h3 class="text-2xl font-black text-uci-text tracking-tight uppercase">"SAPS III"</h3>
-                            <p class="text-xs font-bold text-uci-muted tracking-widest uppercase">"Simplified Acute Physiology Score III"</p>
+                            <h3 class="text-2xl sm:text-3xl lg:text-4xl font-black text-[var(--uci-text)] tracking-tight uppercase">"SAPS III"</h3>
+                            <p class="text-xs sm:text-sm lg:text-lg font-semibold" style="color:var(--uci-muted);">"Simplified Acute Physiology"</p>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100/50 mb-8">
+                    <div class="grid grid-cols-3 gap-2 sm:gap-4 p-3 sm:p-4 rounded-xl lg:rounded-2xl mb-4 sm:mb-6" style="background:var(--uci-surface);">
                         <div class="text-center">
-                            <div class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">"Caja 1"</div>
-                            <div class="text-2xl font-black text-indigo-900">{move || breakdown.get().box1}</div>
-                            <div class="text-[9px] text-indigo-400 font-bold uppercase">"Antecedentes"</div>
+                            <div class="text-xs sm:text-sm font-black" style="color:#6366F1;">"Box 1"</div>
+                            <div class="text-xl sm:text-2xl lg:text-3xl font-black" style="color:var(--uci-text);">{move || breakdown.get().box1}</div>
+                            <div class="text-[10px] sm:text-xs" style="color:var(--uci-muted);">"Antecedentes"</div>
                         </div>
-                        <div class="text-center border-x border-indigo-200/50 px-4">
-                            <div class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">"Caja 2"</div>
-                            <div class="text-2xl font-black text-indigo-900">{move || breakdown.get().box2}</div>
-                            <div class="text-[9px] text-indigo-400 font-bold uppercase">"Circunstancias"</div>
+                        <div class="text-center border-x" style="border-color:var(--uci-border);">
+                            <div class="text-xs sm:text-sm font-black" style="color:#6366F1;">"Box 2"</div>
+                            <div class="text-xl sm:text-2xl lg:text-3xl font-black" style="color:var(--uci-text);">{move || breakdown.get().box2}</div>
+                            <div class="text-[10px] sm:text-xs" style="color:var(--uci-muted);">"Circunstancias"</div>
                         </div>
                         <div class="text-center">
-                            <div class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">"Caja 3"</div>
-                            <div class="text-2xl font-black text-indigo-900">{move || breakdown.get().box3}</div>
-                            <div class="text-[9px] text-indigo-400 font-bold uppercase">"Fisiología"</div>
+                            <div class="text-xs sm:text-sm font-black" style="color:#6366F1;">"Box 3"</div>
+                            <div class="text-xl sm:text-2xl lg:text-3xl font-black" style="color:var(--uci-text);">{move || breakdown.get().box3}</div>
+                            <div class="text-[10px] sm:text-xs" style="color:var(--uci-muted);">"Fisiología"</div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
                         <SapsMetric label="GCS" icon="fa-brain" 
                             value=Signal::derive(move || data.get().gcs_total as f32)
                             min=3.0 max=15.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.gcs_total = v as u8)) />
 
-                        <SapsMetric label="Frecuencia Cardíaca" icon="fa-heartbeat" 
+                        <SapsMetric label="FC" icon="fa-heartbeat" 
                             value=Signal::derive(move || data.get().frecuencia_cardiaca)
                             min=30.0 max=200.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.frecuencia_cardiaca = v)) />
 
-                        <SapsMetric label="Presión Sistólica" icon="fa-gauge-high" 
+                        <SapsMetric label="PAS" icon="fa-gauge-high" 
                             value=Signal::derive(move || data.get().presion_sistolica)
                             min=40.0 max=250.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.presion_sistolica = v)) />
 
-                        <SapsMetric label="Temperatura" icon="fa-thermometer" 
+                        <SapsMetric label="Temp" icon="fa-thermometer" 
                             value=Signal::derive(move || data.get().temperatura)
                             min=33.0 max=42.0 step=0.1
                             on_change=Callback::new(move |v| data.update(|d| d.temperatura = v)) />
@@ -75,21 +76,22 @@ pub fn Saps3Scale(
                     </div>
                 </div>
 
-                <div class="lg:w-80 flex flex-col gap-6">
-                    <div class="bg-uci-bg rounded-3xl p-8 border-2 border-indigo-500/30 shadow-inner text-center space-y-4">
-                        <div class="text-xs font-black text-indigo-500 uppercase tracking-[0.2em]">"Score SAPS III"</div>
-                        <div class="text-7xl font-black text-uci-text font-mono leading-none tracking-tighter">
+                <div class="xl:w-72 lg:w-full shrink-0">
+                    <div class="rounded-2xl xl:rounded-3xl p-4 sm:p-6 lg:p-8 border-2 shadow-inner text-center"
+                         style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.05)); border-color:rgba(99,102,241,0.3);">
+                        <div class="text-xs sm:text-sm lg:text-lg font-black uppercase tracking-wider" style="color:#6366F1;">"SAPS III"</div>
+                        <div class="text-5xl sm:text-6xl lg:text-7xl font-black font-mono leading-none tracking-tighter" style="color:var(--uci-text);">
                             {move || score.get()}
                         </div>
-                        <div class=move || format!("text-lg font-black uppercase tracking-widest {}", level.get().color_class())>
+                        <div class="text-sm sm:text-lg lg:text-xl font-black uppercase tracking-widest mt-2" style=move || format!("color:{};", level.get().color_class())>
                             {move || level.get().label()}
                         </div>
                     </div>
 
-                    <div class="p-6 border border-uci-border rounded-2xl bg-white space-y-4">
-                        <h4 class="text-xs font-black text-uci-muted uppercase tracking-widest">"Nota del Estándar"</h4>
-                        <p class="text-[10px] font-medium text-uci-muted leading-relaxed">
-                            "SAPS III permite ajustar la probabilidad de mortalidad según la region geográfica. Utiliza las variables medidas en la primera hora de ingreso a UCI."
+                    <div class="rounded-xl lg:rounded-2xl p-3 sm:p-4 mt-3 sm:mt-4 border" style="background:var(--uci-surface); border-color:var(--uci-border);">
+                        <div class="text-xs sm:text-sm font-black uppercase tracking-wider" style="color:var(--uci-muted);">"Nota"</div>
+                        <p class="text-xs sm:text-sm leading-relaxed" style="color:var(--uci-muted);">
+                            "SAPS III ajusta mortalidad según región geográfica."
                         </p>
                     </div>
                 </div>
@@ -108,36 +110,27 @@ fn SapsMetric(
     step: f32,
     on_change: Callback<f32>,
 ) -> impl IntoView {
-    let val_pct = move || {
-        let v = value.get();
-        ((v - min) / (max - min) * 100.0).clamp(0.0, 100.0)
-    };
-
     view! {
-        <div class="space-y-3 group">
-            <div class="flex justify-between items-center">
-                <label class="text-[10px] font-black text-uci-muted uppercase tracking-widest flex items-center gap-2">
+        <div class="p-3 sm:p-4 rounded-xl border" style="background:var(--uci-surface); border-color:var(--uci-border);">
+            <div class="flex justify-between items-center gap-2">
+                <label class="text-xs sm:text-sm font-bold flex items-center gap-2" style="color:var(--uci-muted);">
                     <i class=format!("fa-solid {}", icon)></i>
                     {label}
                 </label>
-                <span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                    {move || format!("{:.1}", value.get())}
+                <span class="text-sm sm:text-lg font-bold font-mono" style="color:#6366F1;">
+                    {move || if step < 1.0 { format!("{:.1}", value.get()) } else { format!("{:.0}", value.get()) }}
                 </span>
             </div>
-            <div class="relative py-2">
-                <input 
-                    type="range" class="w-full"
-                    min=min max=max step=step
-                    prop:value=move || value.get()
-                    on:input=move |ev| {
-                        if let Ok(v) = event_target_value(&ev).parse::<f32>() {
-                            on_change.run(v);
-                        }
+            <input 
+                type="range" class="w-full h-2"
+                min=min max=max step=step
+                prop:value=move || value.get()
+                on:input=move |ev| {
+                    if let Ok(v) = event_target_value(&ev).parse::<f32>() {
+                        on_change.run(v);
                     }
-                    style=move || format!("--val: {}%", val_pct())
-                    data-sev="normal"
-                />
-            </div>
+                }
+            />
         </div>
     }
 }
