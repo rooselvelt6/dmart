@@ -20,12 +20,13 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ Cálculo automático de APACHE II (12 variables fisiológicas)
 - ✅ Cálculo de Glasgow Coma Scale (GCS)
 - ✅ Estimación de riesgo de mortalidad hospitalaria
+- ✅ Puntuación por edad + enfermedades crónicas
 - ✅ 63+ tests de validación pasando
 - ✅ Documentación técnica completa
 - ✅ Arquitectura moderna y escalable
 - ✅ NEWS2, SAPS III, SOFA (clínicas)
 - ✅ Seguridad: Argon2id, RBAC, ChaCha20, Auditoría
-- ✅ Frontend WASM de alto rendimiento
+- ✅ Frontend WASM de alto rendimiento (Leptos 0.8)
 
 ---
 
@@ -35,7 +36,7 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 |------|------------|---------|-------------|
 | **Lenguaje** | Rust | 1.70+ | Sistema de tipos seguros, sin GC |
 | **Backend** | Axum | 0.7 | Framework web async, alto rendimiento |
-| **Frontend** | Leptos | 0.7 | Framework reactivo WASM |
+| **Frontend** | Leptos | **0.8** | Framework reactivo WASM |
 | **WASM Build** | Trunk | 0.21 | Build tool para aplicaciones WASM |
 | **Estilos** | TailwindCSS | 3.x | CSS utilitario moderno |
 | **Base de Datos** | SurrealDB | 2.x | Base de datos embebida (RocksDB) |
@@ -123,20 +124,23 @@ AUDIT LOG - HIPAA 6 years retention
   - pH arterial, Sodio, Potasio
   - Creatinina, Hematocrito, Leucocitos
   - Glasgow Coma Scale (GCS)
-- Puntuación por edad (0-6 puntos)
-- Evaluación de enfermedades crónicas severas (5 puntos)
+- **Puntuación por edad** (0-6 puntos según estándar Knaus)
+- **Evaluación de enfermedades crónicas severas** (5 puntos):
+  - Insuficiencia hepática, cardiovascular, respiratoria, renal
+  - Inmunocomprometido
+  - Cirugía de emergencia/no operado
 - **Score máximo: 71 puntos**
+- **Resultados separados**: APS, Gravedad, Mortalidad
 
 ### Scores y Métricas
-- Cálculo automático de APACHE II
+- Cálculo automático de APACHE II con desglose:
+  - **APS** (Acute Physiology Score): 12 variables fisiológicas
+  - **Puntos por Edad**: 0-6 según estándar Knaus
+  - **Puntos Crónicos**: 0-5 por enfermedades severas
 - Cálculo automático de GCS (3-15 puntos)
 - Estimación de riesgo de mortalidad hospitalaria
 - Clasificación de severidad (Bajo/Moderado/Severo/Crítico)
 - Evolución temporal del paciente con gráficos
-- 🔜 NEWS2 - Detección temprana de deterioro
-- 🔜 SAPS III - Predicción de mortalidad avanzada
-- 🔜 SOFA - Evaluación de fallo orgánico secuencial
-- 🔜 Predicción con Redes Neuronales (Burn)
 
 ### Exportación
 - Reportes en formato CSV

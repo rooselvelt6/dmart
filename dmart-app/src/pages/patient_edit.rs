@@ -30,7 +30,7 @@ pub fn PatientEditPage() -> impl IntoView {
             </Show>
 
             <Suspense fallback=move || view! { <div style="text-align:center; padding:60px; color:var(--uci-muted);">"Cargando..."</div> }>
-                {move || patient_res.get().map(|res_wrapper| match &*res_wrapper {
+                {move || patient_res.get().map(|res_wrapper| match res_wrapper {
                     Ok(p) => {
                         let patient = RwSignal::new(p.clone());
                         let pid_val = patient_id();

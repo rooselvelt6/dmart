@@ -165,7 +165,7 @@ fn PatientPokemonCard(patient: PatientListItem) -> impl IntoView {
                         })
                     } else {
                         Either::Right(view! {
-                            <EvolutionChart measurements=ms.clone() height=50 compact=true />
+                            <EvolutionChart measurements=ms.to_vec() height=50 compact=true />
                         })
                     }
                 })}

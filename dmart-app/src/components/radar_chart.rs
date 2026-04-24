@@ -1,5 +1,4 @@
 use dmart_shared::models::*;
-use dmart_shared::scales::*;
 use leptos::prelude::*;
 
 #[derive(Clone, PartialEq)]

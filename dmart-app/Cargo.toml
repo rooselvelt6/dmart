@@ -9,15 +9,15 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 dmart-shared = { path = "../dmart-shared" }
 
-# Leptos (0.7 para CSR - migración a 0.8 pendiente para SSR)
-leptos = { version = "0.7", features = ["csr"] }
-leptos_router = { version = "0.7" }
+# Leptos 0.8 - Full-stack reactive framework
+leptos = { version = "0.8", features = ["csr"] }
+leptos_router = { version = "0.8" }
 console_error_panic_hook = "0.1"
 regex = "1.10"
 
 # HTTP client (WASM)
-gloo-net = { version = "0.6", features = ["http"] }
-gloo-storage = "0.3"
+gloo-net = { version = "0.7", features = ["http"] }
+gloo-storage = "0.4"
 gloo-timers = { version = "0.3", features = ["futures"] }
 
 # Randomness for WASM

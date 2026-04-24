@@ -60,7 +60,7 @@ pub fn PatientDetailPage() -> impl IntoView {
     view! {
         <div class="page-enter">
             <Suspense fallback=move || view! { <div class="p-10 text-uci-muted">"Cargando detalles..."</div> }>
-                {move || patient_res.get().map(|res_wrapper| match &*res_wrapper {
+                {move || patient_res.get().map(|res_wrapper| match res_wrapper {
                     Ok(p_wrapper) => {
                         let p = p_wrapper.clone();
                         Either::Left(view! {
@@ -201,7 +201,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                         <i class="fa-solid fa-chart-line"></i>"Evolución del APACHE II"
                                     </h3>
                                     <Suspense fallback=move || view! { <div class="h-48 flex items-center justify-center text-uci-muted"><i class="fa-solid fa-spinner fa-spin text-xl"></i>" Cargando..."</div> }>
-                                        {move || measurements_res.get().map(|res_wrapper| match &*res_wrapper {
+                                        {move || measurements_res.get().map(|res_wrapper| match res_wrapper {
                                             Ok(ms) if ms.is_empty() => Either::Left(view! { 
                                                 <div class="h-48 flex flex-col items-center justify-center text-uci-muted bg-uci-bg/30 rounded-xl">
                                                     <i class="fa-solid fa-chart-simple text-3xl mb-3 opacity-50"></i>
@@ -235,7 +235,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                             </thead>
                                             <tbody class="text-sm">
                                                 <Suspense>
-                                                    {move || measurements_res.get().map(|res_wrapper| match &*res_wrapper {
+                                                    {move || measurements_res.get().map(|res_wrapper| match res_wrapper {
                                                         Ok(ms) => Either::Left(ms.iter().map(|m| {
                                                             let timestamp = m.timestamp.clone();
                                                             let score = m.apache_score;

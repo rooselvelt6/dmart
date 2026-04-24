@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 use leptos::either::Either;
-use crate::api::{self, UciStatsResponse, PromedioScores, GravedadStats};
+use crate::api::{self, UciStatsResponse};
 use crate::components::severity_badge::SeverityBadge;
 
 #[component]
@@ -22,7 +22,7 @@ pub fn UciStats() -> impl IntoView {
                     <p class="text-uci-muted">"Cargando estadísticas..."</p>
                 </div>
             }>
-                {move || stats.get().map(|res| match &*res {
+                {move || stats.get().map(|res| match res {
                     Ok(s) => Either::Left(view! { <StatsDashboard stats=s.clone() /> }),
                     Err(e) => Either::Right(view! {
                         <div class="glass-card p-10 text-center text-uci-critical">

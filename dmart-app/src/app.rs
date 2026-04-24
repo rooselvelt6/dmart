@@ -253,12 +253,3 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
         </nav>
     }
 }
-
-fn svg_icon(path: &str) -> impl IntoView {
-    let path = path.to_string();
-    view! {
-        <svg xmlns="http://www.w3.org/2000/svg" style="width:18px;height:18px;flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d=path />
-        </svg>
-    }
-}
