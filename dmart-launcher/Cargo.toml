@@ -1,0 +1,10 @@
+[package]
+name = "dmart-launcher"
+version = "0.1.0"
+edition = "2021"
+authors = ["dMart"]
+
+[dependencies]
+chrono = "0.4"
+
+[workspace]

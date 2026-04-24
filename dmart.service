@@ -1,0 +1,22 @@
+[Unit]
+Description=dMart UCI Server - Sistema de Gestión de Cuidados Intensivos
+After=network.target
+
+[Service]
+Type=simple
+User=tdy
+WorkingDirectory=/home/tdy/Escritorio/dmart
+ExecStart=/home/tdy/Escritorio/dmart/target/release/dmart-server
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/tdy/Escritorio/dmart/server.log
+StandardError=append:/home/tdy/Escritorio/dmart/server.log
+
+# Seguridad
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/tdy/Escritorio/dmart/data /home/tdy/Escritorio/dmart/dist
+
+[Install]
+WantedBy=multi-user.target
