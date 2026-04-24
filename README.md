@@ -17,16 +17,16 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 
 ### Destacados
 
-- ✅ Cálculo automático de APACHE II (12 variables fisiológicas)
-- ✅ Cálculo de Glasgow Coma Scale (GCS)
-- ✅ Estimación de riesgo de mortalidad hospitalaria
-- ✅ Puntuación por edad + enfermedades crónicas
-- ✅ 63+ tests de validación pasando
-- ✅ Documentación técnica completa
-- ✅ Arquitectura moderna y escalable
-- ✅ NEWS2, SAPS III, SOFA (clínicas)
-- ✅ Seguridad: Argon2id, RBAC, ChaCha20, Auditoría
-- ✅ Frontend WASM de alto rendimiento (Leptos 0.8)
+- ✅ Cálculo automático de **APACHE II** (12 variables fisiológicas)
+- ✅ **GCS** integrado (Ojos + Verbal + Motor)
+- ✅ Estimación de **mortalidad hospitalaria**
+- ✅ Puntuación por **edad** (estándar Knaus)
+- ✅ **Enfermedades crónicas** (6 toggles)
+- ✅ **66+ tests** de validación pasando
+- ✅ **NEWS2**, SAPS III, SOFA
+- ✅ Seguridad: Argon2id, RBAC, Zeroize
+- ✅ Frontend **WASM responsivo** (Leptos 0.8)
+- ✅ **Responsive design** para móvil/escritorio
 
 ---
 
@@ -808,16 +808,45 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 | Logro | Descripción |
 |-------|-------------|
 | ✅ Sistema completo | Gestión total de UCI desde cero |
-| ✅ Estándar clínico | Implementación fiel de APACHE II (Knaus 1985) |
-| ✅ Tests rigurosos | 63+ tests validando cálculos médicos |
-| ✅ Tipado seguro | Rust previene errores en tiempo de compilación |
-| ✅ Documentación | Documentación técnica completa |
-| ✅ UI moderna | Interfaz glassmorphism responsiva |
+| ✅ Estándar clínico | APACHE II según Knaus 1985 (71 puntos máx) |
+| ✅ **66+ tests** | Validación de cálculos médicos |
+| ✅ Tipado seguro | Rust previene errores en compilación |
+| ✅ Documentación | Docs técnicas completas en /docs |
+| ✅ UI moderna | Glassmorphism responsiva |
 | ✅ WASM | Frontend compilado, alto rendimiento |
 | ✅ Empotrado | Base de datos local, sin infraestructura |
 | ✅ 6 scores clínicos | APACHE II, GCS, NEWS2, SAPS3, SOFA, Mortalidad |
-| ✅ Radar Chart | Visualización multi-dimensional por paciente |
-| ✅ Flujo documentado | Arquitectura y análisis de datos en README |
+| ✅ Responsive | Funciona en móvil y escritorio |
+| ✅ Zeroize | Protección de datos sensibles |
+
+---
+
+## 🚀 Uso Hospitalario
+
+Este sistema está diseñado para usarse en **Unidades de Cuidados Intensivos** de hospitales:
+
+### Instalación:
+```bash
+# Compilar
+cargo build --release
+
+# Frontend WASM
+cd dmart-app && trunk build
+
+# Ejecutar servidor
+DMART_PORT=3000 ./target/release/dmart-server
+```
+
+### Acceso:
+- **Local**: http://localhost:3000
+- **Red hospitalaria**: http://IP_SERVIDOR:3000
+
+### Características para uso hospitalario:
+- ✅ Funciona **sin internet** (base de datos local)
+- ✅ Cálculo automático APACHE II
+- ✅ Historial de pacientes
+- ✅ Gráficos de evolución
+- ✅ Exportación CSV/PDF
 
 ---
 
