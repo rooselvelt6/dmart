@@ -152,19 +152,28 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
             "nav-sidebar {} {}",
             if sidebar_open.get() { "open" } else { "" },
             if sidebar_open.get() { "fixed inset-0 z-50" } else { "hidden md:block fixed left-0 top-0 z-50 h-screen" }
-        ) style="background:var(--uci-surface);">
-            <div style="padding:24px 16px 16px; border-bottom:1px solid var(--uci-border);">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+        ) style="background:var(--uci-surface); backdrop-filter:blur(12px);">
+            <div style="padding:20px 16px 20px; border-bottom:1px solid var(--uci-border); background:linear-gradient(180deg, var(--uci-surface) 0%, rgba(59,130,246,0.03) 100%);">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
                     <div style="
-                        width:36px; height:36px; border-radius:10px;
-                        background:linear-gradient(135deg,#3B82F6,#6366F1);
+                        width:44px; height:44px; border-radius:14px;
+                        background:linear-gradient(135deg, #0EA5E9 0%, #2563EB 50%, #6366F1 100%);
                         display:flex; align-items:center; justify-content:center;
-                        box-shadow: 0 4px 12px rgba(59,130,246,0.4);
-                        font-size:18px; font-weight:900; color:white; flex-shrink:0;
-                    ">"+"</div>
+                        box-shadow: 0 4px 16px rgba(14, 165, 233, 0.35), inset 0 1px 1px rgba(255,255,255,0.2);
+                        font-size:20px; font-weight:900; color:white; flex-shrink:0;
+                        position:relative; overflow:hidden;
+                    ">
+                        <i class="fa-solid fa-heart-pulse" style="position:relative; z-index:1; color:white;"></i>
+                        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%); transform:translateX(-100%); animation:shimmer 3s infinite;"></div>
+                    </div>
                     <div class="hidden md:block">
-                        <div style="font-weight:700; font-size:16px; color:var(--uci-text);">"UCI - DMART"</div>
-                        <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px;">"Cuidados Intensivos"</div>
+                        <div style="font-weight:700; font-size:17px; color:var(--uci-text); letter-spacing:-0.3px;">
+                            <span style="color:#0EA5E9;">UCI</span> <span style="font-weight:800; color:var(--uci-text);">DMART</span>
+                        </div>
+                        <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1.5px; font-weight:600; margin-top:2px;">
+                            <i class="fa-solid fa-plus-minus" style="font-size:8px; margin-right:4px;"></i>
+                            Unidad de Cuidados Intensivos
+                        </div>
                     </div>
                     <button
                         on:click=close_sidebar
@@ -175,47 +184,68 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         </svg>
                     </button>
                 </div>
+                <style>
+                    {".@keyframes shimmer { 0% { transform:translateX(-100%); } 100% { transform:translateX(100%); } }"}
+                </style>
             </div>
 
-            <div style="padding:12px 8px; flex:1; overflow-y:auto;">
-                <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px; padding:8px 8px 4px; font-weight:600;">"PRINCIPAL"</div>
+            <div style="padding:16px 12px; flex:1; overflow-y:auto;">
+                <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; padding:8px 10px 8px; font-weight:700;">
+                    <i class="fa-solid fa-layer-group" style="margin-right:6px; font-size:8px;"></i>PRINCIPAL
+                </div>
 
                 <A href="/" attr:class=move || format!("nav-link {}", if is_active_exact("/") { "active" } else { "" })>
-                    <i class="fa-solid fa-house w-6 text-center text-lg" style="color:#10B981;"></i>
-                    "Dashboard"
+                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
+                        <i class="fa-solid fa-house w-6 text-center text-lg" style="color:white;"></i>
+                    </div>
+                    <span style="font-weight:500;">Dashboard</span>
                 </A>
 
                 <A href="/patients" attr:class=move || format!("nav-link {}", if is_active_exact("/patients") { "active" } else { "" })>
-                    <i class="fa-solid fa-users w-6 text-center text-lg" style="color:#3B82F6;"></i>
-                    "Pacientes"
+                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);">
+                        <i class="fa-solid fa-users w-6 text-center text-lg" style="color:white;"></i>
+                    </div>
+                    <span style="font-weight:500;">Pacientes</span>
                 </A>
 
                 <A href="/stats" attr:class=move || format!("nav-link {}", if is_active("/stats") { "active" } else { "" })>
-                    <i class="fa-solid fa-chart-bar w-6 text-center text-lg" style="color:#8B5CF6;"></i>
-                    "Estadísticas"
+                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);">
+                        <i class="fa-solid fa-chart-simple w-6 text-center text-lg" style="color:white;"></i>
+                    </div>
+                    <span style="font-weight:500;">Estadísticas</span>
                 </A>
 
-                <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:1px; padding:12px 8px 4px; font-weight:600;">"ACCIONES"</div>
+                <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; padding:20px 10px 8px; font-weight:700;">
+                    <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px; font-size:8px;"></i>ACCIONES
+                </div>
 
                 <A href="/patients/new" attr:class=move || format!("nav-link {}", if is_active_exact("/patients/new") { "active" } else { "" })>
-                    <i class="fa-solid fa-user-plus w-6 text-center text-lg" style="color:#F59E0B;"></i>
-                    "Nuevo Paciente"
+                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+                        <i class="fa-solid fa-user-plus w-6 text-center text-lg" style="color:white;"></i>
+                    </div>
+                    <span style="font-weight:500;">Nuevo Paciente</span>
                 </A>
 
                 {move || active_patient_id().map(|pid| {
                     let base = format!("/patients/{}", pid);
                     view! {
-                        <div class="mt-4 pt-4 border-t border-uci-border sidebar-quick-fade">
-                            <div style="font-size:10px; color:var(--uci-accent); text-transform:uppercase; letter-spacing:1px; padding:4px 8px 8px; font-weight:900;">"PACIENTE ACTIVO"</div>
+                        <div class="mt-4 pt-4 border-t border-uci-border sidebar-quick-fade" style="background:linear-gradient(180deg, rgba(236,72,153,0.06) 0%, transparent 100%); margin:12px; border-radius:12px; padding:12px;">
+                            <div style="font-size:10px; color:#EC4899; text-transform:uppercase; letter-spacing:1px; padding:4px 8px 8px; font-weight:900;">
+                                <i class="fa-solid fa-id-card-clip" style="margin-right:5px;"></i>PACIENTE ACTIVO
+                            </div>
                             
                             <A href=base.clone() attr:class="nav-link">
-                                <i class="fa-solid fa-id-card w-6 text-center text-lg" style="color:#EC4899;"></i>
-                                "Expediente / Perfil"
+                                <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%);">
+                                    <i class="fa-solid fa-user-injured w-6 text-center text-lg" style="color:white;"></i>
+                                </div>
+                                <span style="font-weight:500;">Expediente</span>
                             </A>
 
                             <A href=format!("{}/measure", base) attr:class="nav-link">
-                                <i class="fa-solid fa-calculator w-6 text-center text-lg" style="color:#06B6D4;"></i>
-                                "Medir Escalas"
+                                <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #06B6D4 0%, #0891B2 100%);">
+                                    <i class="fa-solid fa-calculator w-6 text-center text-lg" style="color:white;"></i>
+                                </div>
+                                <span style="font-weight:500;">Medir Escalas</span>
                             </A>
                         </div>
                     }

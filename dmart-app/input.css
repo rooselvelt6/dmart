@@ -272,18 +272,19 @@
     display: flex;
     flex-direction: column;
     transition: background-color 0.3s, border-color 0.3s;
+    isolation: isolate;
   }
   .nav-link {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 14px 18px;
+    padding: 12px 16px;
     border-radius: 12px;
     color: var(--uci-muted);
     font-weight: 600;
-    font-size: 16px;
+    font-size: 15px;
     text-decoration: none;
-    transition: all 0.2s;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     border: none;
     background: transparent;
@@ -291,13 +292,21 @@
     text-align: left;
   }
   .nav-link:hover { 
-    background: var(--uci-accent); 
-    color: white; 
+    background: linear-gradient(90deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.06) 100%);
+    color: var(--uci-accent);
+    transform: translateX(4px);
+  }
+  .nav-icon-wrapper {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   }
   .nav-link.active { 
-    background: var(--uci-accent); 
+    background: linear-gradient(90deg, var(--uci-accent) 0%, #6366F1 100%);
     color: white; 
-    box-shadow: 0 4px 12px rgba(59,130,236,0.3);
+    box-shadow: 0 4px 16px rgba(59,130,236,0.4);
+    transform: translateX(4px);
   }
 
   /* Main content area ───────────────────────── */
