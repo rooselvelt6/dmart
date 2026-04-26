@@ -312,6 +312,12 @@ pub struct Patient {
     #[serde(default)]
     pub procesos_invasivos: Vec<String>,
 
+    // Cama asignada
+    #[serde(default)]
+    pub cama_id: Option<String>,
+    #[serde(default)]
+    pub cama_numero: Option<u8>,
+
     // Estado calculado
     #[serde(default)]
     pub estado_gravedad: SeverityLevel,
@@ -368,6 +374,8 @@ impl Patient {
             centro_origen: None,
             ventilacion_mecanica: false,
             procesos_invasivos: Vec::new(),
+            cama_id: None,
+            cama_numero: None,
             estado_gravedad: SeverityLevel::Bajo,
             ultimo_apache_score: None,
             ultimo_gcs_score: None,
@@ -738,6 +746,15 @@ impl std::fmt::Display for UserRole {
 }
 
 impl UserRole {
+    pub fn label(&self) -> &'static str {
+        match self {
+            UserRole::Admin => "Admin",
+            UserRole::Medico => "Medico",
+            UserRole::Enfermero => "Enfermero",
+            UserRole::Viewer => "Viewer",
+        }
+    }
+
     pub fn can_edit(&self) -> bool {
         matches!(self, UserRole::Admin | UserRole::Medico)
     }
@@ -807,4 +824,231 @@ impl From<&User> for UserInfo {
             nombre: u.nombre.clone(),
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cama - Gestión de Camas UCI
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum EstadoCama {
+    #[default]
+    Libre,
+    Ocupada,
+    Mantenimiento,
+    Limpieza,
+}
+
+impl EstadoCama {
+    pub fn label(&self) -> &'static str {
+        match self {
+            EstadoCama::Libre => "Libre",
+            EstadoCama::Ocupada => "Ocupada",
+            EstadoCama::Mantenimiento => "Mantenimiento",
+            EstadoCama::Limpieza => "Limpieza",
+        }
+    }
+
+    pub fn puede_asignar(&self) -> bool {
+        matches!(self, EstadoCama::Libre)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cama {
+    #[serde(skip_serializing, skip_deserializing, default)]
+    pub id: Option<String>,
+
+    #[serde(default)]
+    pub cama_id: String,
+
+    #[serde(default)]
+    pub numero: u8,
+
+    #[serde(default)]
+    pub estado: EstadoCama,
+
+    #[serde(default)]
+    pub paciente_id: Option<String>,
+
+    #[serde(default)]
+    pub paciente_nombre: Option<String>,
+
+    #[serde(default)]
+    pub created_at: String,
+}
+
+impl Cama {
+    pub fn new(numero: u8) -> Self {
+        Self {
+            id: None,
+            cama_id: Uuid::new_v4().to_string(),
+            numero,
+            estado: EstadoCama::Libre,
+            paciente_id: None,
+            paciente_nombre: None,
+            created_at: Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+impl Default for Cama {
+    fn default() -> Self {
+        Self::new(1)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Equipo - Gestión de Equipos Clínicos
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum TipoEquipo {
+    #[default]
+    VentiladorMecanico,
+    Monitor,
+    Computador,
+    BombaInfusion,
+   Otro,
+}
+
+impl TipoEquipo {
+    pub fn label(&self) -> &'static str {
+        match self {
+            TipoEquipo::VentiladorMecanico => "Ventilador Mecánico",
+            TipoEquipo::Monitor => "Monitor",
+            TipoEquipo::Computador => "Computador",
+            TipoEquipo::BombaInfusion => "Bomba de Infusión",
+            TipoEquipo::Otro => "Otro",
+        }
+    }
+
+    pub fn icon(&self) -> &'static str {
+        match self {
+            TipoEquipo::VentiladorMecanico => "fa-wind",
+            TipoEquipo::Monitor => "fa-desktop",
+            TipoEquipo::Computador => "fa-laptop",
+            TipoEquipo::BombaInfusion => "fa-syringe",
+            TipoEquipo::Otro => "fa-kit-medical",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum EstadoEquipo {
+    #[default]
+    Activo,
+    Mantenimiento,
+    Inactivo,
+    Reparacion,
+}
+
+impl EstadoEquipo {
+    pub fn label(&self) -> &'static str {
+        match self {
+            EstadoEquipo::Activo => "Activo",
+            EstadoEquipo::Mantenimiento => "En Mantenimiento",
+            EstadoEquipo::Inactivo => "Inactivo",
+            EstadoEquipo::Reparacion => "En Reparación",
+        }
+    }
+
+    pub fn disponible(&self) -> bool {
+        matches!(self, EstadoEquipo::Activo)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Equipo {
+    #[serde(skip_serializing, skip_deserializing, default)]
+    pub id: Option<String>,
+
+    #[serde(default)]
+    pub equipo_id: String,
+
+    #[serde(default)]
+    pub nombre: String,
+
+    #[serde(default)]
+    pub tipo: TipoEquipo,
+
+    #[serde(default)]
+    pub marca: String,
+
+    #[serde(default)]
+    pub modelo: String,
+
+    #[serde(default)]
+    pub serial: String,
+
+    #[serde(default)]
+    pub estado: EstadoEquipo,
+
+    #[serde(default)]
+    pub cama_id: Option<String>,
+
+    #[serde(default)]
+    pub proveedor: String,
+
+    #[serde(default)]
+    pub fecha_compra: String,
+
+    #[serde(default)]
+    pub garantia_hasta: Option<String>,
+
+    #[serde(default)]
+    pub notas: String,
+
+    #[serde(default)]
+    pub created_at: String,
+}
+
+impl Equipo {
+    pub fn new(nombre: String, tipo: TipoEquipo) -> Self {
+        Self {
+            id: None,
+            equipo_id: Uuid::new_v4().to_string(),
+            nombre,
+            tipo,
+            marca: String::new(),
+            modelo: String::new(),
+            serial: String::new(),
+            estado: EstadoEquipo::Activo,
+            cama_id: None,
+            proveedor: String::new(),
+            fecha_compra: Utc::now().format("%Y-%m-%d").to_string(),
+            garantia_hasta: None,
+            notas: String::new(),
+            created_at: Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+impl Default for Equipo {
+    fn default() -> Self {
+        Self::new(String::new(), TipoEquipo::Otro)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin DTOs
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AdminStats {
+    pub total_camas: u8,
+    pub camas_libres: u8,
+    pub camas_ocupadas: u8,
+    pub camas_mantenimiento: u8,
+    pub total_equipos: u32,
+    pub equipos_activos: u32,
+    pub equipos_mantenimiento: u32,
+    pub total_staff: u32,
+    pub medicos_activos: u32,
+    pub enfermeros_activos: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InitCamasRequest {
+    pub cantidad: u8,
 }

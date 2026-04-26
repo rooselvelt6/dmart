@@ -6,3 +6,4 @@ pub mod patient_detail;
 pub mod measurement;
 pub mod login;
 pub mod uci_stats;
+pub mod admin;

@@ -41,7 +41,7 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 | **Frontend** | Leptos | **0.8** | Framework reactivo WASM |
 | **WASM Build** | Trunk | 0.21 | Build tool para aplicaciones WASM |
 | **Estilos** | TailwindCSS | 3.x | CSS utilitario moderno |
-| **Base de Datos** | SurrealDB | 2.x | Base de datos embebida (RocksDB) |
+| **Base de Datos** | SurrealDB | 2.x | Base de datos embebida (**SurrealKV**) |
 | **Cache** | Valkey/Redis | 6+ | Cache de sesiones y datos |
 | **Serialización** | Serde | 1.x | Serialización/deserialización JSON |
 
@@ -69,8 +69,8 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
                                        │
                             ┌─────────┴─────────┐
                             │                   │
-                       SurrealDB            Valkey
-                       (RocksDB)           (Cache)
+SurrealDB            Valkey
+                        (SurrealKV)          (Cache)
 ```
 
 ### Diagrama de Seguridad
@@ -225,7 +225,7 @@ if !result.valid {
 | **Validación de Entrada** | ✅ Implementado | Sanitización de datos |
 | **Typesafe** | ✅ Implementado | Rust previene bugs en compilación |
 | **WASM** | ✅ Implementado | Frontend compilado |
-| **Base de Datos Embebida** | ✅ Implementado | Datos locales (RocksDB) |
+| **Base de Datos Embebida** | ✅ Implementado | Datos locales (**SurrealKV**) |
 
 ### Módulos de Seguridad
 
@@ -474,11 +474,11 @@ dmart/
                                         │
                                         ▼
     ┌─────────────────────────────────────────────────┐
-    │              STORAGE LAYER                       │
-    │  ┌──────────────────┐  ┌──────────────────┐     │
-    │  │   SurrealDB      │  │   Valkey/Redis  │     │
-    │  │   (RocksDB)      │  │   (Sessions)     │     │
-    │  │   pacientes      │  │   Cache          │     │
+│              STORAGE LAYER                       │
+│  ┌──────────────────┐  ┌──────────────────┐     │
+│  │   SurrealDB      │  │   Valkey/Redis  │     │
+│  │   (SurrealKV)   │  │   (Sessions)     │     │
+│  │   pacientes      │  │   Cache          │     │
     │  │   mediciones     │  │                  │     │
     │  └──────────────────┘  └──────────────────┘     │
     └─────────────────────────────────────────────────┘
@@ -596,7 +596,7 @@ validation.rs::validate_apache_measurement()
 
 | Componente | Datos | Persistencia |
 |------------|-------|--------------|
-| **SurrealDB** | Pacientes, Mediciones, Usuarios | RocksDB (embebido) |
+| **SurrealDB** | Pacientes, Mediciones, Usuarios | SurrealKV (embebido) |
 | **Valkey** | Sessiones HTTP, Cache queries | Memoria + disco |
 
 ---
@@ -821,6 +821,7 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 | ✅ 6 scores clínicos | APACHE II, GCS, NEWS2, SAPS3, SOFA, Mortalidad |
 | ✅ Responsive | Funciona en móvil y escritorio |
 | ✅ Zeroize | Protección de datos sensibles |
+| ✅ **SurrealKV** | Storage nativo Rust (sin RocksDB) |
 
 ---
 

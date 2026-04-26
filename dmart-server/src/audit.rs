@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use surrealdb::engine::local::Db;
@@ -409,21 +411,21 @@ impl AuditService {
 pub mod macros {
     #[macro_export]
     macro_rules! audit_login {
-        ($service:expr, $user_id:expr, $username:expr, $($args:tt)*) => {
+        ($service:expr_2021, $user_id:expr_2021, $username:expr_2021, $($args:tt)*) => {
             $service.log_login_success($user_id, $username, None $(, $args)*).await
         };
     }
 
     #[macro_export]
     macro_rules! audit_login_failed {
-        ($service:expr, $username:expr, $reason:expr, $($args:tt)*) => {
+        ($service:expr_2021, $username:expr_2021, $reason:expr_2021, $($args:tt)*) => {
             $service.log_login_failed($username, $reason, None $(, $args)*).await
         };
     }
 
     #[macro_export]
     macro_rules! audit_patient {
-        ($service:expr, $user_id:expr, $username:expr, $patient_id:expr, $action:expr $(, $success:expr)?) => {
+        ($service:expr_2021, $user_id:expr_2021, $username:expr_2021, $patient_id:expr_2021, $action:expr_2021 $(, $success:expr_2021)?) => {
             $service.log_patient_access($user_id, $username, $patient_id, $action, true $(, $success)?).await
         };
     }

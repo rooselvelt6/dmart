@@ -12,6 +12,25 @@ pub fn RegisterPage() -> impl IntoView {
     let saving   = RwSignal::new(false);
     let error    = RwSignal::new(None::<String>);
     let navigate = use_navigate();
+    let cama_disponible = RwSignal::new(None::<(String, u8)>);
+    let sin_camas = RwSignal::new(false);
+
+    spawn_local(async move {
+        let resp: Result<serde_json::Value, _> = api::get("/api/admin/check-camas").await;
+        if let Ok(data) = resp {
+            if let Some(d) = data.get("data") {
+                if let Some(disponible) = d.get("disponible").and_then(|v| v.as_bool()) {
+                    if disponible {
+                        let cama_id = d.get("cama_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let numero = d.get("numero").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+                        cama_disponible.set(Some((cama_id, numero)));
+                    } else {
+                        sin_camas.set(true);
+                    }
+                }
+            }
+        }
+    });
 
     let edad_calculada = Memo::new(move |_| {
         let p = patient.get();
@@ -40,22 +59,39 @@ pub fn RegisterPage() -> impl IntoView {
 
     let on_submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();
+        
+        let sin = sin_camas.get();
+        if sin {
+            error.set(Some("No hay camas disponibles. No se puede registrar el paciente.".to_string()));
+            return;
+        }
+        
         saving.set(true);
         error.set(None);
         let p = patient.get();
         let nav = navigate.clone();
-        spawn_local(async move {
-            match api::create_patient(&p).await {
-                Ok(created) => {
-                    saving.set(false);
-                    nav(&format!("/patients/{}", created.patient_id), Default::default());
+        
+        if let Some((cama_id, cama_num)) = cama_disponible.get() {
+            let mut paciente_con_cama = p;
+            paciente_con_cama.cama_id = Some(cama_id);
+            paciente_con_cama.cama_numero = Some(cama_num);
+        
+            spawn_local(async move {
+                match api::create_patient(&paciente_con_cama).await {
+                    Ok(created) => {
+                        saving.set(false);
+                        nav(&format!("/patients/{}", created.patient_id), Default::default());
+                    }
+                    Err(e) => {
+                        saving.set(false);
+                        error.set(Some(e));
+                    }
                 }
-                Err(e) => {
-                    saving.set(false);
-                    error.set(Some(e));
-                }
-            }
-        });
+            });
+        } else {
+            saving.set(false);
+            error.set(Some("Debe esperar a que una cama esté disponible.".to_string()));
+        }
     };
 
     let validate_cedula = move |v: &str| {
@@ -81,6 +117,20 @@ pub fn RegisterPage() -> impl IntoView {
                 <h1 class="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight" style="color:var(--uci-text);">"Expediente Clínico"</h1>
                 <p class="text-sm md:text-base mt-2" style="color:var(--uci-muted);">"Registro formal de ingreso a la Unidad de Cuidados Intensivos"</p>
             </div>
+
+            {move || sin_camas.get().then(|| view! {
+                <div class="p-4 md:p-5 rounded-xl mb-6 md:mb-8 text-sm font-semibold flex items-center gap-3" style="background:rgba(234,179,8,0.1); border:1px solid rgba(234,179,8,0.3); color:#CA8A04;">
+                    <i class="fa-solid fa-bed-empty text-lg"></i>
+                    "No hay camas disponibles. No es posible registrar pacientes en este momento."
+                </div>
+            })}
+
+            {move || cama_disponible.get().map(|(_cama_id, cama_num)| view! {
+                <div class="p-4 rounded-xl mb-6 md:mb-8 text-sm flex items-center gap-3" style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); color:#16A34A;">
+                    <i class="fa-solid fa-bed text-lg"></i>
+                    <span>Cama asignada: <strong>{format!("#{}", cama_num)}</strong></span>
+                </div>
+            })}
 
             {move || error.get().map(|e| view! {
                 <div class="p-4 md:p-5 rounded-xl mb-6 md:mb-8 text-sm font-semibold flex items-center gap-3" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#DC2626;">

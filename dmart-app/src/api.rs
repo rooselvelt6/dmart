@@ -191,3 +191,40 @@ pub fn export_csv_url(patient_id: &str) -> String {
 pub fn export_pdf_url(patient_id: &str) -> String {
     format!("{}/patients/{}/export/pdf", API_BASE, patient_id)
 }
+
+// ─── Admin ──────────────────────────────────────────────────────────
+
+pub async fn get_admin_stats() -> ApiResult<AdminStats> {
+    let resp: ApiResponse<AdminStats> =
+        Request::get(&format!("{}/admin/stats", API_BASE)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn init_camas(cantidad: u8) -> ApiResult<Vec<Cama>> {
+    #[derive(serde::Serialize)]
+    struct Req { cantidad: u8 }
+    let resp: ApiResponse<Vec<Cama>> =
+        Request::post(&format!("{}/admin/camas/init", API_BASE))
+            .json(&Req { cantidad }).map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn list_camas() -> ApiResult<Vec<Cama>> {
+    let resp: ApiResponse<Vec<Cama>> =
+        Request::get(&format!("{}/admin/camas", API_BASE)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn get<T: for<'de> serde::Deserialize<'de>>(path: &str) -> ApiResult<T> {
+    let resp: ApiResponse<T> =
+        Request::get(&format!("{}{}", API_BASE, path)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}

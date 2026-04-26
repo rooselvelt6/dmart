@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chacha20poly1305::{
     aead::{Aead, KeyInit, OsRng},
     ChaCha20Poly1305, Nonce,

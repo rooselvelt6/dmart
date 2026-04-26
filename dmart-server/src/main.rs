@@ -9,7 +9,7 @@ mod audit;
 use std::net::SocketAddr;
 use axum::{
     Router,
-    routing::get,
+    routing::{get, post},
     http::{Method, StatusCode},
     response::{Html, IntoResponse},
 };
@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
     let db_path = std::env::var("DMART_DB_PATH")
         .unwrap_or_else(|_| "./data/dmart.db".to_string());
     let database = db::connect(&db_path).await?;
-    tracing::info!("✅  SurrealDB (RocksDB) conectado en {}", db_path);
+    tracing::info!("✅  SurrealDB conectado en {}", db_path);
 
     // Cache (opcional — no bloquea si no está disponible)
     let valkey_url = std::env::var("DMART_VALKEY_URL")
@@ -85,11 +85,27 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health_check))
         // Stats
         .route("/stats", get(api::stats::get_stats))
+        // Admin
+        .route("/admin/stats", get(api::admin::get_admin_stats))
+        .route("/admin/camas/init", post(api::admin::init_camas_api))
+        .route("/admin/camas", get(api::admin::list_camas_api))
+        .route("/admin/camas/{id}", get(api::admin::get_cama_api).put(api::admin::update_cama_api).delete(api::admin::delete_cama_api))
+        .route("/admin/camas/disponibles", get(api::admin::get_camas_disponibles))
+        .route("/admin/check-camas", get(api::admin::check_camas_disponibles))
+        .route("/admin/equipos", get(api::admin::list_equipos_api).post(api::admin::create_equipo_api))
+        .route("/admin/equipos/{id}", get(api::admin::get_equipo_api).put(api::admin::update_equipo_api).delete(api::admin::delete_equipo_api))
+        .route("/admin/equipos/cama/{cama_id}", get(api::admin::list_equipos_por_cama_api))
+        .route("/admin/equipos/asignar", post(api::admin::asignar_equipo_cama_api))
+        .route("/admin/equipos/{equipo_id}/desvincular", post(api::admin::desvincular_equipo_api))
+        .route("/admin/staff", get(api::admin::list_staff_api).post(api::admin::create_staff_api))
+        .route("/admin/staff/{id}", get(api::admin::get_staff_api).put(api::admin::update_staff_api).delete(api::admin::delete_staff_api))
+        .route("/admin/staff/{id}/toggle", post(api::admin::toggle_user_active))
         // Auth
         .nest("/auth", api::auth::router())
         // Patients
         .route("/patients", get(api::patients::list_patients).post(api::patients::create_patient))
         .route("/patients/{id}", get(api::patients::get_patient).put(api::patients::update_patient).delete(api::patients::delete_patient))
+        .route("/patients/{id}/egreso", post(api::patients::egreso_paciente))
         // Measurements (registro completo)
         .route("/patients/{id}/measurements", get(api::measurements::get_measurements).post(api::measurements::create_measurement))
         .route("/patients/{id}/measurements/last", get(api::measurements::get_last_measurement))
@@ -126,6 +142,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/patients/{id}/scales/saps3", get(spa_handler))
         .route("/scales", get(spa_handler))
         .route("/stats", get(spa_handler))
+        .route("/admin", get(spa_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 

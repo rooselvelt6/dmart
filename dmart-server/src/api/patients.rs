@@ -60,6 +60,13 @@ pub async fn create_patient(
     State(db): State<Database>,
     Json(patient): Json<Patient>,
 ) -> impl IntoResponse {
+    if let (Some(cama_id), Some(_pnombre)) = (&patient.cama_id, &patient.cama_numero) {
+        let nombre_completo = patient.nombre_completo();
+        if let Err(e) = db_ops::asignar_cama_paciente(&db, cama_id, &patient.patient_id, &nombre_completo).await {
+            return (StatusCode::BAD_REQUEST, Json(ApiResponse::<Patient>::err(format!("Error asignando cama: {}", e)))).into_response();
+        }
+    }
+
     match db_ops::create_patient(&db, patient).await {
         Ok(p) => (StatusCode::CREATED, Json(ApiResponse::ok(p))).into_response(),
         Err(e) => (
@@ -116,6 +123,31 @@ pub async fn delete_patient(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<()>::err(e.to_string())),
+        ).into_response(),
+    }
+}
+
+// POST /api/patients/:id/egreso - Liberar cama al egresar paciente
+pub async fn egreso_paciente(
+    State(db): State<Database>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let paciente = db_ops::get_patient(&db, &id).await;
+    
+    match paciente {
+        Ok(Some(p)) => {
+            if let Some(cama_id) = &p.cama_id {
+                let _ = db_ops::liberar_cama(&db, cama_id).await;
+            }
+            (StatusCode::OK, Json(ApiResponse::ok("Paciente egresado, cama liberada"))).into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<String>::err("Paciente no encontrado")),
+        ).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<String>::err(e.to_string())),
         ).into_response(),
     }
 }

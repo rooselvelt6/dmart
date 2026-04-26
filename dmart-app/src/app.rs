@@ -2,7 +2,7 @@ use crate::components::theme_toggle::ThemeToggle;
 use crate::pages::{
     dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
     patient_detail::PatientDetailPage, patient_edit::PatientEditPage, patients::PatientsPage,
-    register::RegisterPage, uci_stats::UciStats,
+    register::RegisterPage, uci_stats::UciStats, admin::AdminPage,
 };
 use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
@@ -101,6 +101,14 @@ pub fn App() -> impl IntoView {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <MeasurementPage /> })
+                            }
+                        } />
+
+                        <Route path=path!("/admin") view=move || {
+                            if !is_auth() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else {
+                                Either::Right(view! { <AdminPage /> })
                             }
                         } />
                     </Routes>
@@ -224,6 +232,13 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <i class="fa-solid fa-user-plus w-6 text-center text-lg" style="color:white;"></i>
                     </div>
                     <span style="font-weight:500;">Nuevo Paciente</span>
+                </A>
+
+                <A href="/admin" attr:class=move || format!("nav-link {}", if is_active("/admin") { "active" } else { "" })>
+                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);">
+                        <i class="fa-solid fa-gears w-6 text-center text-lg" style="color:white;"></i>
+                    </div>
+                    <span style="font-weight:500;">Administración</span>
                 </A>
 
                 {move || active_patient_id().map(|pid| {
