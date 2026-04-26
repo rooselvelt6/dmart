@@ -5,14 +5,17 @@ mod crypto;
 pub mod auth;
 pub mod rbac;
 mod audit;
+mod security;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 use axum::{
     Router,
     routing::{get, post},
-    http::{Method, StatusCode},
+    http::{Method, StatusCode, header, HeaderName, HeaderValue},
     response::{Html, IntoResponse},
 };
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::{
     cors::{CorsLayer, Any},
     services::ServeDir,
@@ -29,14 +32,19 @@ struct HealthResponse {
     timestamp: String,
 }
 
-async fn health_check() -> impl axum::response::IntoResponse {
+async fn health_check() -> impl IntoResponse {
     let now = chrono::Utc::now().to_rfc3339();
     let response = HealthResponse {
         status: "healthy".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         timestamp: now,
     };
-    (axum::http::StatusCode::OK, axum::Json(response))
+    let mut res = (StatusCode::OK, axum::Json(response)).into_response();
+    // Add security headers
+    for (name, value) in security::security_headers() {
+        res.headers_mut().insert(name, value);
+    }
+    res
 }
 
 async fn spa_handler() -> impl IntoResponse {
@@ -147,6 +155,14 @@ async fn main() -> anyhow::Result<()> {
     let dist_path = std::env::var("DMART_DIST_PATH")
         .unwrap_or_else(|_| "./dist".to_string());
 
+    // Security
+    let (rate_limiter, login_throttle) = security::create_security_state();
+    let rate_limiter = Arc::new(rate_limiter);
+    let login_throttle = Arc::new(login_throttle);
+
+    // Use a simpler approach - add security headers to all responses via a callback
+    // For rate limiting, we'll check on each API request
+    
     let app = Router::new()
         .nest("/api", api_router)
         .fallback_service(ServeDir::new(&dist_path))
@@ -167,6 +183,27 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin", get(spa_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
+
+    // Add security headers to all responses
+    let app = app.layer(SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY"),
+    )).layer(SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    )).layer(SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-xss-protection"),
+        HeaderValue::from_static("1; mode=block"),
+    )).layer(SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    )).layer(SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("permissions-policy"),
+        HeaderValue::from_static("geolocation=(), microphone=(), camera=()"),
+    )).layer(SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("cross-origin-opener-policy"),
+        HeaderValue::from_static("same-origin"),
+    ));
 
     // Server
     let port: u16 = std::env::var("DMART_PORT")
