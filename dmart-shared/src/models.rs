@@ -773,8 +773,7 @@ impl UserRole {
 pub struct User {
     pub user_id: String,
     pub username: String,
-    #[serde(skip_serializing)]
-    pub password_hash: String,
+    pub password_hash: String,  // Needed for DB storage
     pub rol: UserRole,
     pub nombre: String,
     pub activo: bool,

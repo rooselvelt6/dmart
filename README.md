@@ -27,8 +27,11 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ Seguridad: Argon2id, RBAC, Zeroize
 - ✅ Frontend **WASM responsivo** (Leptos 0.8)
 - ✅ **Responsive design** para móvil/escritorio
-- ✅ **Dark Mode** integrado
-- ✅ **WASM optimizado** (5.5MB vs 20MB)
+- ✅ **Dark/Light Mode** con variables CSS adaptativas
+- ✅ **WASM optimizado** (5.9MB)
+- ✅ **Persistencia SurrealKV** - datos sobreviven reinicios
+- ✅ **Admin auto-seed** - usuario admin/admin123 en primer inicio
+- ✅ **Graceful shutdown** - cierre limpio del servidor
 
 ---
 
@@ -802,7 +805,134 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 | Obtener paciente | ~2ms |
 | Export CSV | ~50ms |
 | Export PDF | ~100ms |
-| **WASM** | **5.5MB (optimizado)** |
+| **WASM** | **5.9MB (optimizado)** |
+
+---
+
+## 🔧 Cambios Recientes (26 Abril 2026)
+
+### Migración de RocksDB a SurrealKV
+
+**Problema:** El servidor usaba RocksDB y tenía problemas de estabilidad (crashes aleatorios).
+
+**Solución:** Migración completa a SurrealDB con storage SurrealKV (puro Rust).
+
+```toml
+# Antes (RocksDB)
+dmart-server/Cargo.toml
+surrealdb = { version = "2", features = ["kv-rocksdb"] }
+
+# Después (SurrealKV)
+surrealdb = { version = "2", features = ["kv-rods"] }
+# O mejor aún - usar feature default (SurrealKV)
+surrealdb = "2"  # Usa SurrealKV por defecto
+```
+
+**Beneficios:**
+- Storage 100% Rust (sin dependencias C)
+- Compilación más rápida
+- Datos persisten correctamente entre reinicios
+- Menos dependencias externas
+
+### Implementaciones Realizadas
+
+| Cambio | Descripción | Archivo |
+|--------|-------------|---------|
+| **Persistencia garantizada** | `fs::create_dir_all()` para asegurar directorio de datos | `db.rs` |
+| **Seed automático admin** | Usuario `admin/admin123` creado en primer inicio | `auth.rs`, `main.rs` |
+| **Panic handler global** | Log detallado antes de crashes | `main.rs` |
+| **Graceful shutdown** | Manejo de SIGINT/SIGTERM | `main.rs` |
+| **Ruta absoluta DB** | Detecta `current_dir()` para path correcto | `main.rs` |
+| **Fix Auth API** | Registro retorna `UserInfo` en vez de `User` | `api/auth.rs` |
+
+### Comando de Inicio
+
+```bash
+# El servidor ahora:
+# 1. Crea data/dmart.db automáticamente
+# 2. Seedea admin/admin123 si es primer inicio
+# 3. Limpia SIGINT/SIGTERM
+# 4. Log de errores antes de panic
+
+cargo run --package dmart-server
+```
+
+### Verificación de Persistencia
+
+```bash
+# 1. Iniciar servidor
+cargo run --package dmart-server
+
+# 2. Login con admin
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# 3. Crear pacientes
+curl -X POST http://localhost:3000/api/patients \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Test","sexo":"M","edad":50}'
+
+# 4. Verificar stats
+curl http://localhost:3000/api/stats | jq '.data.total_pacientes'
+
+# 5. Reiniciar servidor
+pkill dmart-server
+cargo run --package dmart-server
+
+# 6. Login funciona, datos persisten
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+# ✅ JWT token recibido
+```
+
+### Fix de UI Stats (Leptos 0.8)
+
+**Problema:** La página de estadísticas no renderizaba datos.
+
+**Causa:** El `view!` macro de Leptos no permite `match` con diferentes tipos de views.
+
+**Solución:** Usar el patrón de `patients.rs` con `LocalResource` y `unwrap_or_else`:
+
+```rust
+// Antes (fallaba)
+let stats = LocalResource::new(|| async {
+    match api::get_stats().await {
+        Ok(s) => s,
+        Err(e) => return Err(e)  // ❌ Tipos incompatibles en match
+    }
+});
+
+// Después (funciona)
+let stats_resource = LocalResource::new(|| {
+    async move {
+        api::get_stats().await.unwrap_or_else(|_| UciStatsResponse {
+            // ... default
+        })
+    }
+});
+```
+
+### Tema Claro/Oscuro Adaptativo
+
+**Problema:** Los colores de estadísticas eran fijos (oscuros) y no se adaptaban al tema.
+
+**Solución:** Uso de variables CSS `var(--uci-*)`:
+
+```rust
+// Antes
+<div style="background:#1e293b;">  // Siempre oscuro
+
+// Después
+<div style="background:var(--uci-surface);">  // Se adapta automáticamente
+```
+
+**Variables CSS usadas:**
+- `var(--uci-surface)` → fondo del card
+- `var(--uci-text)` → texto principal
+- `var(--uci-muted)` → texto secundario
+- `var(--uci-border)` → bordes
 
 ---
 

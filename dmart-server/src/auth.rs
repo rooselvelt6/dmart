@@ -7,6 +7,7 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, 
 use serde::{Deserialize, Serialize};
 use surrealdb::engine::local::Db;
 use surrealdb::Surreal;
+use tracing;
 use uuid::Uuid;
 
 use dmart_shared::models::*;
@@ -211,5 +212,51 @@ pub fn extract_token_from_header(header: &str) -> Option<&str> {
         Some(&header[7..])
     } else {
         None
+    }
+}
+
+/// Seed default admin user if no users exist
+pub async fn seed_default_admin(db: &Surreal<Db>) -> Result<bool> {
+    let users: Vec<User> = db
+        .select("users")
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    
+    if !users.is_empty() {
+        tracing::info!("👥 Found {} users, skipping seed", users.len());
+        return Ok(false);
+    }
+    
+    tracing::info!("🌱 Seeding default admin user...");
+    let params = Params::new(65536, 3, 4, Some(32)).unwrap();
+    let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+    
+    let salt = SaltString::generate(&mut rand::thread_rng());
+    let password_hash = argon2
+        .hash_password(b"admin123", &salt)
+        .map_err(|e| anyhow::anyhow!("Hash error: {}", e))?;
+    
+    let user = User {
+        user_id: Uuid::new_v4().to_string(),
+        username: "admin".to_string(),
+        password_hash: password_hash.to_string(),
+        rol: UserRole::Admin,
+        nombre: "Administrador".to_string(),
+        activo: true,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+    
+    let created: Option<User> = db
+        .create(("users", "admin"))
+        .content(user)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    
+    match created {
+        Some(_) => {
+            tracing::info!("✅ Admin user created: admin / admin123");
+            Ok(true)
+        }
+        None => Err(anyhow::anyhow!("Failed to create admin user")),
     }
 }

@@ -10,6 +10,11 @@ use dmart_shared::models::*;
 pub type Database = Arc<Surreal<Db>>;
 
 pub async fn connect(path: &str) -> Result<Database> {
+    // Ensure parent directory exists for persistence
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
     let db = Surreal::new::<SurrealKv>(path).await?;
     db.use_ns("dmart").use_db("icu").await?;
     Ok(Arc::new(db))

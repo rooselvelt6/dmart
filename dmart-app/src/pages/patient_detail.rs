@@ -79,7 +79,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                                 <div class="flex items-center gap-4 text-sm text-uci-muted">
                                                     <span class="flex items-center gap-1"><i class="fa-solid fa-id-card text-xs"></i>{p.cedula.clone()}</span>
                                                     <span class="flex items-center gap-1"><i class="fa-solid fa-folder text-xs"></i>{p.historia_clinica.clone()}</span>
-                                                    <span class="flex items-center gap-1"><i class="fa-solid fa-hospital text-xs"></i>{p.fecha_ingreso_uci[..10].to_string()}</span>
+                                                    <span class="flex items-center gap-1"><i class="fa-solid fa-hospital text-xs"></i>{p.fecha_ingreso_uci.get(0..10).map(|s| s.to_string()).unwrap_or("-".into())}</span>
                                                 </div>
                                             </div>
                                         </div>

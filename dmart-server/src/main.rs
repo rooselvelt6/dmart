@@ -52,6 +52,13 @@ async fn spa_handler() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Setup panic hook FIRST - before any async code
+    let default_panic = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        eprintln!("💥 PANIC in dmart-server: {:?}", info);
+        default_panic(info);
+    }));
+
     // Logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
@@ -60,13 +67,28 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("🏥  UCI-DMART Server iniciando...");
+    tracing::info!("🏥 UCI-DMART Server initializing...");
 
-    // Database
-    let db_path = std::env::var("DMART_DB_PATH")
-        .unwrap_or_else(|_| "./data/dmart.db".to_string());
+    // Use absolute path for data persistence
+    let db_path = std::env::var("DMART_DB_PATH").unwrap_or_else(|_| {
+        let base = std::env::current_dir().unwrap_or_default();
+        base.join("data/dmart.db")
+            .to_str()
+            .unwrap_or("./data/dmart.db")
+            .to_string()
+    });
+    
+    // Ensure data directory exists
+    if let Some(parent) = std::path::Path::new(&db_path).parent() {
+        std::fs::create_dir_all(parent)?;
+        tracing::info!("📁 Data directory: {}", parent.display());
+    }
+    
     let database = db::connect(&db_path).await?;
-    tracing::info!("✅  SurrealDB conectado en {}", db_path);
+    tracing::info!("✅ SurrealDB connected at {}", db_path);
+
+    // Seed default admin user if no users exist
+    auth::seed_default_admin(&database).await?;
 
     // Cache (opcional — no bloquea si no está disponible)
     let valkey_url = std::env::var("DMART_VALKEY_URL")
@@ -153,11 +175,25 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(3000);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
-    tracing::info!("🚀  Servidor corriendo en http://{}", addr);
+    // Graceful shutdown setup
+    let shutdown_signal = async {
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).unwrap();
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
+        tokio::select! {
+            _ = sigint.recv() => tracing::info!("📤 Received SIGINT"),
+            _ = sigterm.recv() => tracing::info!("📤 Received SIGTERM"),
+        }
+    };
+
+    tracing::info!("🚀 Server running at http://{}", addr);
     tracing::info!("    API:      http://{}/api/patients", addr);
     tracing::info!("    Frontend: http://{}/", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal)
+        .await?;
+    
+    tracing::info!("🛑 Server shutdown complete");
     Ok(())
 }

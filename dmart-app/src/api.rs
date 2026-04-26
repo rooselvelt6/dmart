@@ -1,8 +1,8 @@
 /// HTTP client — communicates with the Axum backend API
 use dmart_shared::models::*;
 use gloo_net::http::Request;
-use serde_json::Value;
 use serde::Deserialize;
+use serde_json::Value;
 
 const API_BASE: &str = "/api";
 
@@ -50,12 +50,19 @@ pub struct PromedioScores {
 }
 
 pub async fn get_stats() -> ApiResult<UciStatsResponse> {
-    let resp: ApiResponse<UciStatsResponse> =
-        Request::get(&format!("{}/stats", API_BASE)).send().await
-            .map_err(|e| e.to_string())?
-            .json().await
-            .map_err(|e| e.to_string())?;
-    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+    let url = format!("{}/stats", API_BASE);
+    let resp = Request::get(&url).send().await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    let status = resp.status();
+    if status < 200 || status >= 300 {
+        return Err(format!("API error: status {}", status));
+    }
+
+    let resp: ApiResponse<UciStatsResponse> = resp.json().await
+        .map_err(|e| format!("JSON parse error: {}", e))?;
+
+    resp.data.ok_or_else(|| resp.error.unwrap_or_else(|| "No data".to_string()))
 }
 
 pub async fn get_patient(id: &str) -> ApiResult<Patient> {

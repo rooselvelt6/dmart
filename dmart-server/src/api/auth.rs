@@ -55,10 +55,10 @@ async fn list_users(
 async fn register(
     State(db): State<Database>,
     Json(req): Json<RegisterRequest>,
-) -> Result<Json<ApiResponse<User>>, StatusCode> {
+) -> Result<Json<ApiResponse<UserInfo>>, StatusCode> {
     let auth_service = AuthService::new((*db).clone());
     match auth_service.register(req).await {
-        Ok(user) => Ok(Json(ApiResponse::ok(user))),
+        Ok(user) => Ok(Json(ApiResponse::ok(UserInfo::from(&user)))),
         Err(e) => Ok(Json(ApiResponse::err(e))),
     }
 }
