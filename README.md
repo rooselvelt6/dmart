@@ -28,10 +28,13 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ Frontend **WASM responsivo** (Leptos 0.8)
 - ✅ **Responsive design** para móvil/escritorio
 - ✅ **Dark/Light Mode** con variables CSS adaptativas
-- ✅ **WASM optimizado** (5.9MB)
+- ✅ **WASM optimizado** (2.2MB)
 - ✅ **Persistencia SurrealKV** - datos sobreviven reinicios
 - ✅ **Admin auto-seed** - usuario admin/admin123 en primer inicio
 - ✅ **Graceful shutdown** - cierre limpio del servidor
+- ✅ **Dashboard unificado** con scores, distribución y recursos
+- ✅ **Admin CRUD** camas (con tipo), equipos y personal
+- ✅ **Tablas de registro** en panel admin (camas, equipos, staff)
 
 ---
 
@@ -146,6 +149,21 @@ AUDIT LOG - HIPAA 6 years retention
 - Estimación de riesgo de mortalidad hospitalaria
 - Clasificación de severidad (Bajo/Moderado/Severo/Crítico)
 - Evolución temporal del paciente con gráficos
+
+### Gestión de Recursos
+- Camas UCI con tipos (General, Aislamiento, Pediátrica, Coronaria, Quemados)
+- Estados de cama (Libre, Ocupada, Mantenimiento, Limpieza)
+- Equipos clínicos con asignación a camas
+- Personal médico (Admin, Médico, Enfermero, Viewer)
+- CRUD completo en panel de administración
+
+### Dashboard Unificado
+- Cards de resumen de pacientes (Total, Críticos, Severos, Estables)
+- Promedio de scores clínicos (APACHE II, GCS, SOFA, SAPS3, NEWS2)
+- Distribución de gravedad con gráfico
+- Estadísticas de recursos (camas, equipos, staff)
+- Grid de pacientes activos con evolución temporal
+- Tabla de pacientes recientes
 
 ### Exportación
 - Reportes en formato CSV
@@ -369,6 +387,35 @@ POST /api/patients/:/measurements           # Crear
 GET  /api/patients/:id/measurements/last    # Última medición
 ```
 
+##### Estadísticas
+```http
+GET /api/stats              # Stats UCI (scores, gravedad, recientes)
+```
+
+#### Administración
+```http
+GET    /api/admin/stats               # Stats de recursos
+POST   /api/admin/camas/init          # Inicializar camas
+GET    /api/admin/camas               # Listar camas
+POST   /api/admin/camas               # Crear cama
+GET    /api/admin/camas/:id           # Obtener cama
+PUT    /api/admin/camas/:id           # Actualizar cama
+DELETE /api/admin/camas/:id           # Eliminar cama
+GET    /api/admin/equipos             # Listar equipos
+POST   /api/admin/equipos             # Crear equipo
+GET    /api/admin/equipos/:id         # Obtener equipo
+PUT    /api/admin/equipos/:id         # Actualizar equipo
+DELETE /api/admin/equipos/:id         # Eliminar equipo
+GET    /api/admin/equipos/disponibles # Equipos disponibles
+GET    /api/admin/staff               # Listar personal
+POST   /api/admin/staff               # Crear personal
+GET    /api/admin/staff/:id           # Obtener personal
+PUT    /api/admin/staff/:id           # Actualizar personal
+DELETE /api/admin/staff/:id           # Eliminar personal
+POST   /api/admin/staff/:id/toggle    # Activar/desactivar
+GET    /api/admin/check-camas         # Verificar cama libre
+```
+
 #### Exportación
 ```http
 GET /api/patients/:id/export/csv   # Exportar CSV
@@ -414,10 +461,26 @@ dmart/
 ├── dmart-app/                # Frontend WASM
 │   ├── src/
 │   │   ├── main.rs           # Entry point
-│   │   ├── app.rs            # Router
+│   │   ├── app.rs            # Router + NavSidebar
 │   │   ├── api.rs            # Cliente HTTP
 │   │   ├── pages/            # Páginas UI
+│   │   │   ├── dashboard.rs  # Dashboard unificado
+│   │   │   ├── admin.rs      # Admin CRUD (camas/equipos/staff)
+│   │   │   ├── patients.rs   # Listado de pacientes
+│   │   │   ├── register.rs   # Registro de paciente
+│   │   │   ├── measurement.rs# Toma de mediciones
+│   │   │   ├── patient_detail.rs  # Perfil paciente
+│   │   │   ├── patient_edit.rs    # Editar paciente
+│   │   │   └── login.rs      # Inicio de sesión
 │   │   └── components/       # Componentes
+│   │       ├── chart.rs      # EvolutionChart SVG
+│   │       ├── radar_chart.rs# RadarChart (scores multi-eje)
+│   │       ├── clinical_alerts.rs # Alertas clínicas
+│   │       ├── dashboard_kit.rs   # ScoreBar, DonutChart, StatCard
+│   │       ├── severity_badge.rs  # Badge de gravedad
+│   │       ├── skin_picker.rs     # Selector piel Fitzpatrick
+│   │       ├── theme_toggle.rs    # Dark/Light mode
+│   │       └── scales/       # Componentes de escalas
 │   ├── index.html
 │   ├── Trunk.toml
 │   └── Cargo.toml
@@ -805,7 +868,7 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 | Obtener paciente | ~2ms |
 | Export CSV | ~50ms |
 | Export PDF | ~100ms |
-| **WASM** | **5.9MB (optimizado)** |
+| **WASM** | **2.2MB (optimizado)** |
 
 ---
 
@@ -952,6 +1015,9 @@ let stats_resource = LocalResource::new(|| {
 | ✅ Responsive | Funciona en móvil y escritorio |
 | ✅ Zeroize | Protección de datos sensibles |
 | ✅ **SurrealKV** | Storage nativo Rust (sin RocksDB) |
+| ✅ **Dashboard unificado** | Scores, gráficos, recursos en una vista |
+| ✅ **Admin CRUD** | Camas con tipo, equipos, staff, stats |
+| ✅ **Registro auto-asignación** | Paciente asigna cama libre + equipos |
 
 ---
 
@@ -985,7 +1051,7 @@ DMART_PORT=3000 ./target/release/dmart-server
 - ✅ Gráficos de evolución
 - ✅ Exportación CSV/PDF
 - ✅ Dark Mode
-- ✅ WASM optimizado (5.5MB)
+- ✅ WASM optimizado (2.2MB)
 
 ---
 
