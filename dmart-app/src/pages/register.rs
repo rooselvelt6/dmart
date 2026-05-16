@@ -4,7 +4,7 @@ use leptos::task::spawn_local;
 use leptos_router::hooks::*;
 use dmart_shared::models::*;
 use crate::api;
-use crate::components::{skin_picker::SkinPicker, toggle::Toggle};
+use crate::components::{skin_picker::SkinPicker, toggle::Toggle, location_picker::LocationPicker};
 
 #[component]
 pub fn RegisterPage() -> impl IntoView {
@@ -100,12 +100,12 @@ pub fn RegisterPage() -> impl IntoView {
     };
 
     let validate_cedula = move |v: &str| {
-        let re = regex::Regex::new(r"^[VEJvej]-[0-9]{5,9}$").unwrap();
+        let re = regex::Regex::new(r"^[VEJvej]-[0-9]{5,8}$").unwrap();
         re.is_match(v)
     };
     
     let validate_hc = move |v: &str| {
-        let re = regex::Regex::new(r"^HC-[0-9]{3,8}$").unwrap();
+        let re = regex::Regex::new(r"^HC-[0-9]{3,6}$").unwrap();
         re.is_match(v)
     };
 
@@ -160,33 +160,51 @@ pub fn RegisterPage() -> impl IntoView {
                         
                         <FormField label="Cédula de Identidad *" icon=move || view! { <i class="fa-solid fa-address-card"></i> }>
                             <input class=move || format!("form-input transition-all {}", if cedula_valid.get() { "border-emerald-500/50 bg-emerald-500/5" } else if !patient.get().cedula.is_empty() { "border-rose-500/50 bg-rose-500/5" } else { "" })
-                                type="text" placeholder="V-00000000" required
+                                type="text" placeholder="V-00000000" required maxlength="10"
                                 prop:value=move || patient.get().cedula
                                 on:input=move |ev| { 
                                     let mut v = event_target_value(&ev).to_uppercase();
                                     if !v.is_empty() && !v.starts_with('V') && !v.starts_with('E') {
                                         v = format!("V-{}", v);
                                     }
-                                    patient.update(|p| p.cedula = v); 
+                                    if v.len() <= 10 {
+                                        patient.update(|p| p.cedula = v);
+                                    }
                                 } />
-                            <p class="text-[10px] mt-1 font-bold tracking-wide" class:text-emerald-600=move || cedula_valid.get() class:text-rose-500=move || !cedula_valid.get() && !patient.get().cedula.is_empty()>
-                                {move || if cedula_valid.get() { "✓ Formato válido" } else if !patient.get().cedula.is_empty() { "✗ Use formato V-00000000" } else { "Requerido" }}
+                            <p class="text-[10px] mt-1 font-bold tracking-wide flex justify-between"
+                                class:text-emerald-600=move || cedula_valid.get()
+                                class:text-rose-500=move || !cedula_valid.get() && !patient.get().cedula.is_empty()>
+                                <span>
+                                    {move || if cedula_valid.get() { "✓ Formato válido" } else if !patient.get().cedula.is_empty() { "✗ Use formato V-00000000" } else { "Requerido" }}
+                                </span>
+                                <span style="color:var(--uci-muted);">
+                                    {move || format!("{}/10", patient.get().cedula.len())}
+                                </span>
                             </p>
                         </FormField>
 
                         <FormField label="Historia Clínica *" icon=move || view! { <i class="fa-solid fa-folder-open"></i> }>
                             <input class=move || format!("form-input transition-all {}", if hc_valid.get() { "border-emerald-500/50 bg-emerald-500/5" } else if !patient.get().historia_clinica.is_empty() { "border-rose-500/50 bg-rose-500/5" } else { "" })
-                                type="text" placeholder="HC-00000" required
+                                type="text" placeholder="HC-00000" required maxlength="9"
                                 prop:value=move || patient.get().historia_clinica
                                 on:input=move |ev| { 
                                     let mut v = event_target_value(&ev).to_uppercase();
                                     if !v.is_empty() && !v.starts_with("HC") {
                                         v = format!("HC-{}", v);
                                     }
-                                    patient.update(|p| p.historia_clinica = v); 
+                                    if v.len() <= 9 {
+                                        patient.update(|p| p.historia_clinica = v);
+                                    }
                                 } />
-                            <p class="text-[10px] mt-1 font-bold tracking-wide" class:text-emerald-600=move || hc_valid.get() class:text-rose-500=move || !hc_valid.get() && !patient.get().historia_clinica.is_empty()>
-                                {move || if hc_valid.get() { "✓ Formato válido" } else if !patient.get().historia_clinica.is_empty() { "✗ Use formato HC-00000" } else { "Requerido" }}
+                            <p class="text-[10px] mt-1 font-bold tracking-wide flex justify-between"
+                                class:text-emerald-600=move || hc_valid.get()
+                                class:text-rose-500=move || !hc_valid.get() && !patient.get().historia_clinica.is_empty()>
+                                <span>
+                                    {move || if hc_valid.get() { "✓ Formato válido" } else if !patient.get().historia_clinica.is_empty() { "✗ Use formato HC-00000" } else { "Requerido" }}
+                                </span>
+                                <span style="color:var(--uci-muted);">
+                                    {move || format!("{}/9", patient.get().historia_clinica.len())}
+                                </span>
                             </p>
                         </FormField>
 
@@ -234,6 +252,8 @@ pub fn RegisterPage() -> impl IntoView {
                                         if v == "Venezolano" {
                                             p.nacionalidad = Nacionalidad::Venezolano;
                                             p.pais = "Venezuela".into();
+                                            p.estado = String::new();
+                                            p.ciudad = String::new();
                                         } else {
                                             p.nacionalidad = Nacionalidad::Extranjero;
                                         }
@@ -243,21 +263,25 @@ pub fn RegisterPage() -> impl IntoView {
                                 <option value="Extranjero">"🌍 Extranjero"</option>
                             </select>
                         </FormField>
-                        <FormField label="País" icon=move || view! { <i class="fa-solid fa-earth-americas"></i> }>
-                            <input class="form-input" type="text" placeholder="País de residencia"
-                                prop:value=move || patient.get().pais
-                                on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.pais = v); } />
-                        </FormField>
-                        <FormField label="Estado" icon=move || view! { <i class="fa-solid fa-map-location-dot"></i> }>
-                            <input class="form-input" type="text" placeholder="Estado / Provincia"
-                                prop:value=move || patient.get().estado
-                                on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.estado = v); } />
-                        </FormField>
-                        <FormField label="Ciudad" icon=move || view! { <i class="fa-solid fa-city"></i> }>
-                            <input class="form-input" type="text" placeholder="Ciudad"
-                                prop:value=move || patient.get().ciudad
-                                on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.ciudad = v); } />
-                        </FormField>
+
+                        <div class="lg:col-span-3 md:col-span-2 col-span-1">
+                            <LocationPicker
+                                pais=Signal::derive(move || patient.get().pais)
+                                estado=Signal::derive(move || patient.get().estado)
+                                ciudad=Signal::derive(move || patient.get().ciudad)
+                                on_change_pais=move |v| {
+                                    patient.update(|p| {
+                                        p.pais = v.clone();
+                                        p.estado = String::new();
+                                        p.ciudad = String::new();
+                                        p.nacionalidad = if v == "Venezuela" { Nacionalidad::Venezolano } else { Nacionalidad::Extranjero };
+                                    });
+                                }
+                                on_change_estado=move |v| patient.update(|p| p.estado = v)
+                                on_change_ciudad=move |v| patient.update(|p| p.ciudad = v)
+                            />
+                        </div>
+
                         <FormField label="Familiar Encargado" icon=move || view! { <i class="fa-solid fa-user-shield"></i> }>
                             <input class="form-input" type="text" placeholder="Nombre del responsable"
                                 prop:value=move || patient.get().familiar_encargado

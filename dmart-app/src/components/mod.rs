@@ -1,6 +1,7 @@
 pub mod chart;
 pub mod clinical_alerts;
 pub mod dashboard_kit;
+pub mod location_picker;
 pub mod radar_chart;
 pub mod severity_badge;
 pub mod skin_picker;
