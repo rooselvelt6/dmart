@@ -20,15 +20,21 @@ pub async fn get_admin_stats(State(db): State<Database>) -> ApiResult<AdminStats
     let camas = crate::db::list_camas(&db).await.map_err(err_to_str)?;
     let equipos = crate::db::list_equipos(&db).await.map_err(err_to_str)?;
     let users = crate::db::list_users(&db).await.map_err(err_to_str)?;
+    let camas_por_tipo = crate::db::count_camas_por_tipo(&db).await.map_err(err_to_str)?;
+    let equipos_por_tipo = crate::db::count_equipos_por_tipo(&db).await.map_err(err_to_str)?;
+    let disponibles = crate::db::list_equipos_disponibles(&db).await.map_err(err_to_str)?;
 
     let stats = AdminStats {
         total_camas: camas.len() as u8,
         camas_libres: camas.iter().filter(|c| c.estado == EstadoCama::Libre).count() as u8,
         camas_ocupadas: camas.iter().filter(|c| c.estado == EstadoCama::Ocupada).count() as u8,
         camas_mantenimiento: camas.iter().filter(|c| c.estado == EstadoCama::Mantenimiento || c.estado == EstadoCama::Limpieza).count() as u8,
+        camas_por_tipo,
         total_equipos: equipos.len() as u32,
         equipos_activos: equipos.iter().filter(|e| e.estado == EstadoEquipo::Activo).count() as u32,
         equipos_mantenimiento: equipos.iter().filter(|e| e.estado == EstadoEquipo::Mantenimiento || e.estado == EstadoEquipo::Reparacion).count() as u32,
+        equipos_disponibles: disponibles.len() as u32,
+        equipos_por_tipo,
         total_staff: users.len() as u32,
         medicos_activos: users.iter().filter(|u| u.rol == UserRole::Medico && u.activo).count() as u32,
         enfermeros_activos: users.iter().filter(|u| u.rol == UserRole::Enfermero && u.activo).count() as u32,
@@ -43,23 +49,61 @@ pub async fn init_camas_api(
     State(db): State<Database>,
     Json(req): Json<InitCamasRequest>,
 ) -> ApiResult<Vec<Cama>> {
-    let existentes = crate::db::list_camas(&db).await.map_err(err_to_str)?;
-    if !existentes.is_empty() {
-        return Ok(Json(ApiResponse::err("Las camas ya están inicializadas")));
-    }
+    let tipo = match req.tipo.as_deref().unwrap_or("General") {
+        "Aislamiento" => TipoCama::Aislamiento,
+        "Pediatrica" | "Pediátrica" => TipoCama::Pediatrica,
+        "Coronaria" => TipoCama::Coronaria,
+        "Quemados" => TipoCama::Quemados,
+        "Otro" => TipoCama::Otro,
+        _ => TipoCama::General,
+    };
 
-    let camas = crate::db::init_camas(&db, req.cantidad).await.map_err(err_to_str)?;
+    let camas = crate::db::init_camas(&db, req.cantidad, tipo).await.map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(camas)))
 }
 
 #[derive(serde::Deserialize)]
 pub struct InitCamasRequest {
-    cantidad: u8,
+    pub cantidad: u8,
+    pub tipo: Option<String>,
 }
 
 pub async fn list_camas_api(State(db): State<Database>) -> ApiResult<Vec<Cama>> {
     let camas = crate::db::list_camas(&db).await.map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(camas)))
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateCamaRequest {
+    pub numero: u8,
+    pub tipo: Option<String>,
+    pub estado: Option<String>,
+}
+
+pub async fn create_cama_api(
+    State(db): State<Database>,
+    Json(req): Json<CreateCamaRequest>,
+) -> ApiResult<Cama> {
+    let tipo = match req.tipo.as_deref().unwrap_or("General") {
+        "Aislamiento" => TipoCama::Aislamiento,
+        "Pediatrica" | "Pediátrica" => TipoCama::Pediatrica,
+        "Coronaria" => TipoCama::Coronaria,
+        "Quemados" => TipoCama::Quemados,
+        "Otro" => TipoCama::Otro,
+        _ => TipoCama::General,
+    };
+    let mut cama = Cama::new(req.numero, tipo);
+    if let Some(ref estado) = req.estado {
+        if estado == "Ocupada" {
+            cama.estado = dmart_shared::models::EstadoCama::Ocupada;
+        } else if estado == "Mantenimiento" {
+            cama.estado = dmart_shared::models::EstadoCama::Mantenimiento;
+        } else if estado == "Limpieza" {
+            cama.estado = dmart_shared::models::EstadoCama::Limpieza;
+        }
+    }
+    let created = crate::db::create_cama(&db, cama).await.map_err(err_to_str)?;
+    Ok(Json(ApiResponse::ok(created)))
 }
 
 pub async fn get_cama_api(
@@ -98,6 +142,11 @@ pub async fn get_camas_disponibles(State(db): State<Database>) -> ApiResult<Vec<
     let disponibles: Vec<Cama> = todas.into_iter()
         .filter(|c| c.estado == EstadoCama::Libre)
         .collect();
+    Ok(Json(ApiResponse::ok(disponibles)))
+}
+
+pub async fn get_equipos_disponibles_api(State(db): State<Database>) -> ApiResult<Vec<Equipo>> {
+    let disponibles = crate::db::list_equipos_disponibles(&db).await.map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(disponibles)))
 }
 

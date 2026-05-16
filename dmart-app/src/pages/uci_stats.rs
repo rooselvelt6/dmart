@@ -49,10 +49,10 @@ pub fn StatsContent(stats: UciStatsResponse) -> impl IntoView {
     view! {
         <div class="space-y-6">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard title="Total Pacientes" value=stats.total_pacientes.to_string() color="#3B82F6" />
-                <StatCard title="Criticos" value=stats.por_gravedad.criticos.to_string() color="#EF4444" />
-                <StatCard title="Severos" value=stats.por_gravedad.severos.to_string() color="#F97316" />
-                <StatCard title="Estables" value=(stats.por_gravedad.moderados + stats.por_gravedad.bajos).to_string() color="#10B981" />
+                <StatCard title="Total Pacientes" value=stats.total_pacientes.to_string() _color="#3B82F6" />
+                <StatCard title="Criticos" value=stats.por_gravedad.criticos.to_string() _color="#EF4444" />
+                <StatCard title="Severos" value=stats.por_gravedad.severos.to_string() _color="#F97316" />
+                <StatCard title="Estables" value=(stats.por_gravedad.moderados + stats.por_gravedad.bajos).to_string() _color="#10B981" />
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -74,7 +74,7 @@ pub fn StatsContent(stats: UciStatsResponse) -> impl IntoView {
             </div>
 
             <div class="p-6 rounded-xl" style="background:var(--uci-surface);">
-                <h3 class="text-sm font-bold uppercase mb-4" style="color:var(--uci-text);">Pacientes Recientes ({stats.reciente.len()})</h3>
+                <h3 class="text-sm font-bold uppercase mb-4" style="color:var(--uci-text);">{"Pacientes Recientes ("}{stats.reciente.len()}{")"}</h3>
                 <div class="space-y-2">
                     {stats.reciente.iter().map(|p| {
                         let nivel = format!("{:?}", p.estado_gravedad);
@@ -92,9 +92,9 @@ pub fn StatsContent(stats: UciStatsResponse) -> impl IntoView {
 }
 
 #[component]
-pub fn StatCard(title: &'static str, value: String, color: &'static str) -> impl IntoView {
+pub fn StatCard(title: &'static str, value: String, _color: &'static str) -> impl IntoView {
     view! {
-        <div class="p-4 text-center rounded-xl shadow-md" style="background:var(--uci-surface); border-top:3px solid {color};">
+        <div class="p-4 text-center rounded-xl shadow-md" style="background:var(--uci-surface);">
             <div class="text-3xl font-black" style="color:var(--uci-text);">{value}</div>
             <div class="text-xs font-bold uppercase mt-1" style="color:var(--uci-muted);">{title}</div>
         </div>

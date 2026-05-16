@@ -235,3 +235,190 @@ pub async fn get<T: for<'de> serde::Deserialize<'de>>(path: &str) -> ApiResult<T
             .json().await.map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InitCamasRequest {
+    pub cantidad: u8,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct InitResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CreateCamaRequest {
+    pub numero: u8,
+    pub estado: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct UpdateCamaRequest {
+    pub numero: Option<u8>,
+    pub estado: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CreateEquipoRequest {
+    pub nombre: String,
+    pub tipo: String,
+    pub modelo: String,
+    pub serie: String,
+    pub estado: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct UpdateEquipoRequest {
+    pub nombre: Option<String>,
+    pub tipo: Option<String>,
+    pub modelo: Option<String>,
+    pub serie: Option<String>,
+    pub estado: Option<String>,
+}
+
+pub async fn post<T: serde::Serialize, R: for<'de> serde::Deserialize<'de>>(path: &str, body: T) -> ApiResult<R> {
+    let resp: ApiResponse<R> =
+        Request::post(&format!("{}{}", API_BASE, path))
+            .json(&body).map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn put<T: serde::Serialize, R: for<'de> serde::Deserialize<'de>>(path: &str, body: T) -> ApiResult<R> {
+    let resp: ApiResponse<R> =
+        Request::put(&format!("{}{}", API_BASE, path))
+            .json(&body).map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn delete_cama(id: &str) -> ApiResult<Cama> {
+    let resp: ApiResponse<Cama> =
+        Request::delete(&format!("{}/admin/camas/{}", API_BASE, id)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn create_equipo(req: CreateEquipoRequest) -> ApiResult<Equipo> {
+    post("/admin/equipos", req).await
+}
+
+pub async fn update_equipo(id: &str, req: UpdateEquipoRequest) -> ApiResult<Equipo> {
+    put(&format!("/admin/equipos/{}", id), req).await
+}
+
+pub async fn delete_equipo(id: &str) -> ApiResult<Equipo> {
+    let resp: ApiResponse<Equipo> =
+        Request::delete(&format!("{}/admin/equipos/{}", API_BASE, id)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn get_equipos_disponibles() -> ApiResult<Vec<Equipo>> {
+    let resp: ApiResponse<Vec<Equipo>> =
+        Request::get(&format!("{}/admin/equipos/disponibles", API_BASE)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+// ─── Staff CRUD ─────────────────────────────────────────────────────
+
+pub async fn list_staff() -> ApiResult<Vec<User>> {
+    let resp: ApiResponse<Vec<User>> =
+        Request::get(&format!("{}/admin/staff", API_BASE)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn get_staff(id: &str) -> ApiResult<User> {
+    let resp: ApiResponse<User> =
+        Request::get(&format!("{}/admin/staff/{}", API_BASE, id)).send().await
+            .map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn create_staff(user: &User) -> ApiResult<User> {
+    let resp: ApiResponse<User> =
+        Request::post(&format!("{}/admin/staff", API_BASE))
+            .json(user).map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn update_staff(id: &str, user: &User) -> ApiResult<User> {
+    let resp: ApiResponse<User> =
+        Request::put(&format!("{}/admin/staff/{}", API_BASE, id))
+            .json(user).map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn delete_staff(id: &str) -> ApiResult<()> {
+    Request::delete(&format!("{}/admin/staff/{}", API_BASE, id))
+        .send().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub async fn toggle_staff(id: &str) -> ApiResult<User> {
+    let resp: ApiResponse<User> =
+        Request::post(&format!("{}/admin/staff/{}/toggle", API_BASE, id))
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+// ─── Cama CRUD with tipo ────────────────────────────────────────────
+
+pub async fn create_cama(numero: u8, tipo: &str, estado: &str) -> ApiResult<Cama> {
+    #[derive(serde::Serialize)]
+    struct Req { numero: u8, tipo: String, estado: String }
+    let resp: ApiResponse<Cama> =
+        Request::post(&format!("{}/admin/camas", API_BASE))
+            .json(&Req { numero, tipo: tipo.to_string(), estado: estado.to_string() })
+            .map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn update_cama(id: &str, numero: u8, tipo: &str, estado: &str) -> ApiResult<Cama> {
+    #[derive(serde::Serialize)]
+    struct Req { numero: u8, tipo: String, estado: String }
+    let resp: ApiResponse<Cama> =
+        Request::put(&format!("{}/admin/camas/{}", API_BASE, id))
+            .json(&Req { numero, tipo: tipo.to_string(), estado: estado.to_string() })
+            .map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn create_patient_with_equipos(patient: &Patient, equipos_ids: Vec<String>) -> ApiResult<Patient> {
+    #[derive(serde::Serialize)]
+    struct Req { #[serde(flatten)] patient: Patient, equipos_ids: Vec<String> }
+    let resp: ApiResponse<Patient> =
+        Request::post(&format!("{}/patients", API_BASE))
+            .json(&Req { patient: patient.clone(), equipos_ids })
+            .map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn egreso_paciente(id: &str) -> ApiResult<String> {
+    let resp: ApiResponse<String> =
+        Request::post(&format!("{}/patients/{}/egreso", API_BASE, id))
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}

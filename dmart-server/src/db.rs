@@ -113,10 +113,12 @@ pub async fn get_last_measurement(
 
 // ─── Camas ───────────────────────────────────────────────────────────
 
-pub async fn init_camas(db: &Surreal<Db>, cantidad: u8) -> Result<Vec<Cama>> {
+pub async fn init_camas(db: &Surreal<Db>, cantidad: u8, tipo: TipoCama) -> Result<Vec<Cama>> {
     let mut camas = Vec::new();
-    for i in 1..=cantidad {
-        let cama = Cama::new(i);
+    let existentes = list_camas(db).await?;
+    let start_num = existentes.iter().map(|c| c.numero).max().unwrap_or(0) + 1;
+    for i in 0..cantidad {
+        let cama = Cama::new(start_num + i, tipo.clone());
         let created: Option<Cama> = db
             .create(("camas", cama.cama_id.clone()))
             .content(cama.clone())
@@ -137,6 +139,11 @@ pub async fn create_cama(db: &Surreal<Db>, mut cama: Cama) -> Result<Cama> {
         .content(cama)
         .await?;
     created.ok_or_else(|| anyhow::anyhow!("Failed to create cama"))
+}
+
+pub async fn get_cama_libre_por_tipo(db: &Surreal<Db>, tipo: &TipoCama) -> Result<Option<Cama>> {
+    let todas: Vec<Cama> = db.select("camas").await?;
+    Ok(todas.into_iter().find(|c| c.estado == EstadoCama::Libre && c.tipo == *tipo))
 }
 
 pub async fn get_cama(db: &Surreal<Db>, id: &str) -> Result<Option<Cama>> {
@@ -165,6 +172,21 @@ pub async fn list_camas(db: &Surreal<Db>) -> Result<Vec<Cama>> {
 pub async fn get_cama_libre(db: &Surreal<Db>) -> Result<Option<Cama>> {
     let todas: Vec<Cama> = db.select("camas").await?;
     Ok(todas.into_iter().find(|c| c.estado == EstadoCama::Libre))
+}
+
+pub async fn count_camas_por_tipo(db: &Surreal<Db>) -> Result<Vec<dmart_shared::models::TipoCamaCount>> {
+    use std::collections::HashMap;
+    let todas: Vec<Cama> = db.select("camas").await?;
+    let mut map: HashMap<String, (u8, u8)> = HashMap::new();
+    for c in &todas {
+        let key = c.tipo.label().to_string();
+        let entry = map.entry(key).or_insert((0, 0));
+        entry.0 += 1;
+        if c.estado == EstadoCama::Libre {
+            entry.1 += 1;
+        }
+    }
+    Ok(map.into_iter().map(|(tipo, (total, libres))| dmart_shared::models::TipoCamaCount { tipo, total, libres }).collect())
 }
 
 pub async fn asignar_cama_paciente(
@@ -276,8 +298,36 @@ pub async fn desvincular_equipo_cama(db: &Surreal<Db>, equipo_id: &str) -> Resul
     }
 }
 
+pub async fn list_equipos_disponibles(db: &Surreal<Db>) -> Result<Vec<Equipo>> {
+    let todas: Vec<Equipo> = db.select("equipos").await?;
+    Ok(todas.into_iter().filter(|e| e.estado == EstadoEquipo::Activo && e.cama_id.is_none()).collect())
+}
+
+pub async fn count_equipos_por_tipo(db: &Surreal<Db>) -> Result<Vec<dmart_shared::models::EquipoTipoCount>> {
+    use std::collections::HashMap;
+    let todas: Vec<Equipo> = db.select("equipos").await?;
+    let mut map: HashMap<String, (u32, u32)> = HashMap::new();
+    for e in &todas {
+        let key = e.tipo.label().to_string();
+        let entry = map.entry(key).or_insert((0, 0));
+        entry.0 += 1;
+        if e.estado == EstadoEquipo::Activo && e.cama_id.is_none() {
+            entry.1 += 1;
+        }
+    }
+    Ok(map.into_iter().map(|(tipo, (total, disponibles))| dmart_shared::models::EquipoTipoCount { tipo, total, disponibles }).collect())
+}
+
 pub async fn delete_equipo(db: &Surreal<Db>, id: &str) -> Result<()> {
     let _: Option<Equipo> = db.delete(("equipos", id)).await?;
+    Ok(())
+}
+
+pub async fn liberar_equipos_de_cama(db: &Surreal<Db>, cama_id: &str) -> Result<()> {
+    let equipos = list_equipos_por_cama(db, cama_id).await?;
+    for e in equipos {
+        desvincular_equipo_cama(db, &e.equipo_id).await?;
+    }
     Ok(())
 }
 

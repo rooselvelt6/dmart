@@ -12,23 +12,27 @@ pub fn RegisterPage() -> impl IntoView {
     let saving   = RwSignal::new(false);
     let error    = RwSignal::new(None::<String>);
     let navigate = use_navigate();
-    let cama_disponible = RwSignal::new(None::<(String, u8)>);
+    let cama_disponible = RwSignal::new(None::<(String, u8, String)>);
     let sin_camas = RwSignal::new(false);
+    let equipos_disponibles = RwSignal::new(Vec::<Equipo>::new());
+    let equipos_seleccionados = RwSignal::new(Vec::<String>::new());
 
     spawn_local(async move {
-        let resp: Result<serde_json::Value, _> = api::get("/api/admin/check-camas").await;
+        let resp: Result<serde_json::Value, _> = api::get("/admin/check-camas").await;
         if let Ok(data) = resp {
-            if let Some(d) = data.get("data") {
-                if let Some(disponible) = d.get("disponible").and_then(|v| v.as_bool()) {
-                    if disponible {
-                        let cama_id = d.get("cama_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        let numero = d.get("numero").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
-                        cama_disponible.set(Some((cama_id, numero)));
-                    } else {
-                        sin_camas.set(true);
-                    }
+            if let Some(disponible) = data.get("disponible").and_then(|v| v.as_bool()) {
+                if disponible {
+                    let cama_id = data.get("cama_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let numero = data.get("numero").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+                    cama_disponible.set(Some((cama_id, numero, "General".to_string())));
+                } else {
+                    sin_camas.set(true);
                 }
             }
+        }
+        // Cargar equipos disponibles
+        if let Ok(equipos) = api::get_equipos_disponibles().await {
+            equipos_disponibles.set(equipos);
         }
     });
 
@@ -70,14 +74,15 @@ pub fn RegisterPage() -> impl IntoView {
         error.set(None);
         let p = patient.get();
         let nav = navigate.clone();
+        let equipos_ids = equipos_seleccionados.get();
         
-        if let Some((cama_id, cama_num)) = cama_disponible.get() {
+        if let Some((cama_id, cama_num, _tipo)) = cama_disponible.get() {
             let mut paciente_con_cama = p;
             paciente_con_cama.cama_id = Some(cama_id);
             paciente_con_cama.cama_numero = Some(cama_num);
         
             spawn_local(async move {
-                match api::create_patient(&paciente_con_cama).await {
+                match api::create_patient_with_equipos(&paciente_con_cama, equipos_ids).await {
                     Ok(created) => {
                         saving.set(false);
                         nav(&format!("/patients/{}", created.patient_id), Default::default());
@@ -125,10 +130,10 @@ pub fn RegisterPage() -> impl IntoView {
                 </div>
             })}
 
-            {move || cama_disponible.get().map(|(_cama_id, cama_num)| view! {
+            {move || cama_disponible.get().map(|(_cama_id, cama_num, _tipo)| view! {
                 <div class="p-4 rounded-xl mb-6 md:mb-8 text-sm flex items-center gap-3" style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); color:#16A34A;">
                     <i class="fa-solid fa-bed text-lg"></i>
-                    <span>Cama asignada: <strong>{format!("#{}", cama_num)}</strong></span>
+                    <span>Cama asignada: <strong>{format!("#{}", cama_num)}</strong> <span class="opacity-75">(General)</span></span>
                 </div>
             })}
 
@@ -377,6 +382,55 @@ pub fn RegisterPage() -> impl IntoView {
                         </div>
                     </div>
                 </FormSection>
+
+                <Show when=move || !equipos_disponibles.get().is_empty()>
+                    <FormSection title="Equipos a Asignar" icon=move || view! { <i class="fa-solid fa-kit-medical"></i> }>
+                        <p class="text-sm mb-4" style="color:var(--uci-muted);">"Seleccione los equipos disponibles que se asignarán a la cama del paciente:"</p>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {move || {
+                                let equipos = equipos_disponibles.get();
+                                equipos.iter().map(|e| {
+                                    let eq_id = e.equipo_id.clone();
+                                    let eq_id2 = eq_id.clone();
+                                    let eq_id3 = eq_id.clone();
+                                    let nombre = e.nombre.clone();
+                                    let tipo_label = e.tipo.label().to_string();
+                                    let seleccionado = move || equipos_seleccionados.get().contains(&eq_id);
+                                    let class_fn = move || format!(
+                                        "flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all {}",
+                                        if seleccionado() {
+                                            "border-uci-accent bg-uci-accent/10"
+                                        } else {
+                                            "border-transparent bg-gray-50 dark:bg-gray-800 hover:border-gray-300"
+                                        }
+                                    );
+                                    let checked_fn = move || equipos_seleccionados.get().contains(&eq_id2);
+                                    view! {
+                                        <label class=class_fn>
+                                            <input type="checkbox"
+                                                prop:checked=checked_fn
+                                                on:change=move |_| {
+                                                    equipos_seleccionados.update(|ids| {
+                                                        if ids.contains(&eq_id3) {
+                                                            ids.retain(|x| x != &eq_id3);
+                                                        } else {
+                                                            ids.push(eq_id3.clone());
+                                                        }
+                                                    });
+                                                }
+                                                class="form-checkbox h-4 w-4 rounded border-gray-300 text-uci-accent focus:ring-uci-accent"
+                                            />
+                                            <div>
+                                                <div class="text-sm font-medium" style="color:var(--uci-text);">{nombre}</div>
+                                                <div class="text-xs" style="color:var(--uci-muted);">{tipo_label}</div>
+                                            </div>
+                                        </label>
+                                    }
+                                }).collect_view()
+                            }}
+                        </div>
+                    </FormSection>
+                </Show>
 
                 <div class="flex flex-col md:flex-row justify-end gap-3 md:gap-4 lg:gap-6 mt-10 md:mt-12 lg:mt-16 pb-16 md:pb-20 lg:pb-24">
                     <a href="/patients" class="btn-outline flex items-center justify-center gap-2 px-6 md:px-8 lg:px-10 h-11 md:h-12 lg:h-14 text-sm md:text-base group">

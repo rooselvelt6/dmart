@@ -8,11 +8,10 @@ mod audit;
 mod security;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 use axum::{
     Router,
     routing::{get, post},
-    http::{Method, StatusCode, header, HeaderName, HeaderValue},
+    http::{Method, StatusCode, HeaderName, HeaderValue},
     response::{Html, IntoResponse},
 };
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -98,6 +97,15 @@ async fn main() -> anyhow::Result<()> {
     // Seed default admin user if no users exist
     auth::seed_default_admin(&database).await?;
 
+    // Seed initial beds (4 camas) if none exist
+    let camas_existentes = db::list_camas(&database).await?;
+    if camas_existentes.is_empty() {
+        db::init_camas(&database, 2, dmart_shared::models::TipoCama::General).await?;
+        db::init_camas(&database, 1, dmart_shared::models::TipoCama::Aislamiento).await?;
+        db::init_camas(&database, 1, dmart_shared::models::TipoCama::Pediatrica).await?;
+        tracing::info!("🛏️ Seeded 4 initial beds (2 General, 1 Aislamiento, 1 Pediátrica)");
+    }
+
     // Cache (opcional — no bloquea si no está disponible)
     let valkey_url = std::env::var("DMART_VALKEY_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
@@ -118,11 +126,12 @@ async fn main() -> anyhow::Result<()> {
         // Admin
         .route("/admin/stats", get(api::admin::get_admin_stats))
         .route("/admin/camas/init", post(api::admin::init_camas_api))
-        .route("/admin/camas", get(api::admin::list_camas_api))
+        .route("/admin/camas", get(api::admin::list_camas_api).post(api::admin::create_cama_api))
         .route("/admin/camas/{id}", get(api::admin::get_cama_api).put(api::admin::update_cama_api).delete(api::admin::delete_cama_api))
         .route("/admin/camas/disponibles", get(api::admin::get_camas_disponibles))
         .route("/admin/check-camas", get(api::admin::check_camas_disponibles))
         .route("/admin/equipos", get(api::admin::list_equipos_api).post(api::admin::create_equipo_api))
+        .route("/admin/equipos/disponibles", get(api::admin::get_equipos_disponibles_api))
         .route("/admin/equipos/{id}", get(api::admin::get_equipo_api).put(api::admin::update_equipo_api).delete(api::admin::delete_equipo_api))
         .route("/admin/equipos/cama/{cama_id}", get(api::admin::list_equipos_por_cama_api))
         .route("/admin/equipos/asignar", post(api::admin::asignar_equipo_cama_api))
@@ -155,11 +164,6 @@ async fn main() -> anyhow::Result<()> {
     let dist_path = std::env::var("DMART_DIST_PATH")
         .unwrap_or_else(|_| "./dist".to_string());
 
-    // Security
-    let (rate_limiter, login_throttle) = security::create_security_state();
-    let rate_limiter = Arc::new(rate_limiter);
-    let login_throttle = Arc::new(login_throttle);
-
     // Use a simpler approach - add security headers to all responses via a callback
     // For rate limiting, we'll check on each API request
     
@@ -181,6 +185,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/scales", get(spa_handler))
         .route("/stats", get(spa_handler))
         .route("/admin", get(spa_handler))
+        .route("/admin/{*path}", get(spa_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 

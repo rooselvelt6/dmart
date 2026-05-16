@@ -2,7 +2,7 @@ use crate::components::theme_toggle::ThemeToggle;
 use crate::pages::{
     dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
     patient_detail::PatientDetailPage, patient_edit::PatientEditPage, patients::PatientsPage,
-    register::RegisterPage, uci_stats::UciStats, admin::AdminPage,
+    register::RegisterPage, admin::AdminPage,
 };
 use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
@@ -53,14 +53,6 @@ pub fn App() -> impl IntoView {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <DashboardPage /> })
-                            }
-                        } />
-
-                        <Route path=path!("/stats") view=move || {
-                            if !is_auth() {
-                                Either::Left(view! { <Redirect path="/login"/> })
-                            } else {
-                                Either::Right(view! { <UciStats /> })
                             }
                         } />
 
@@ -214,13 +206,6 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <i class="fa-solid fa-users w-6 text-center text-lg" style="color:white;"></i>
                     </div>
                     <span style="font-weight:500;">Pacientes</span>
-                </A>
-
-                <A href="/stats" attr:class=move || format!("nav-link {}", if is_active("/stats") { "active" } else { "" })>
-                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);">
-                        <i class="fa-solid fa-chart-simple w-6 text-center text-lg" style="color:white;"></i>
-                    </div>
-                    <span style="font-weight:500;">Estadísticas</span>
                 </A>
 
                 <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; padding:20px 10px 8px; font-weight:700;">

@@ -55,15 +55,31 @@ match result {
     }
 }
 
+#[derive(Deserialize)]
+pub struct CreatePatientRequest {
+    #[serde(flatten)]
+    pub patient: Patient,
+    #[serde(default)]
+    pub equipos_ids: Vec<String>,
+}
+
 // POST /api/patients
 pub async fn create_patient(
     State(db): State<Database>,
-    Json(patient): Json<Patient>,
+    Json(req): Json<CreatePatientRequest>,
 ) -> impl IntoResponse {
+    let patient = req.patient;
+    let equipos_ids = req.equipos_ids;
+
     if let (Some(cama_id), Some(_pnombre)) = (&patient.cama_id, &patient.cama_numero) {
         let nombre_completo = patient.nombre_completo();
         if let Err(e) = db_ops::asignar_cama_paciente(&db, cama_id, &patient.patient_id, &nombre_completo).await {
             return (StatusCode::BAD_REQUEST, Json(ApiResponse::<Patient>::err(format!("Error asignando cama: {}", e)))).into_response();
+        }
+
+        // Asignar equipos seleccionados a la cama del paciente
+        for equipo_id in &equipos_ids {
+            let _ = db_ops::asignar_equipo_cama(&db, equipo_id, cama_id).await;
         }
     }
 
@@ -137,9 +153,10 @@ pub async fn egreso_paciente(
     match paciente {
         Ok(Some(p)) => {
             if let Some(cama_id) = &p.cama_id {
+                let _ = db_ops::liberar_equipos_de_cama(&db, cama_id).await;
                 let _ = db_ops::liberar_cama(&db, cama_id).await;
             }
-            (StatusCode::OK, Json(ApiResponse::ok("Paciente egresado, cama liberada"))).into_response()
+            (StatusCode::OK, Json(ApiResponse::ok("Paciente egresado, cama y equipos liberados"))).into_response()
         }
         Ok(None) => (
             StatusCode::NOT_FOUND,

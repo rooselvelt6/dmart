@@ -826,6 +826,45 @@ impl From<&User> for UserInfo {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TipoCama - Tipos de Camas UCI
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum TipoCama {
+    #[default]
+    General,
+    Aislamiento,
+    Pediatrica,
+    Coronaria,
+    Quemados,
+    Otro,
+}
+
+impl TipoCama {
+    pub fn label(&self) -> &'static str {
+        match self {
+            TipoCama::General => "General",
+            TipoCama::Aislamiento => "Aislamiento",
+            TipoCama::Pediatrica => "Pediátrica",
+            TipoCama::Coronaria => "Coronaria",
+            TipoCama::Quemados => "Quemados",
+            TipoCama::Otro => "Otro",
+        }
+    }
+
+    pub fn icon(&self) -> &'static str {
+        match self {
+            TipoCama::General => "fa-bed",
+            TipoCama::Aislamiento => "fa-shield-virus",
+            TipoCama::Pediatrica => "fa-child",
+            TipoCama::Coronaria => "fa-heart",
+            TipoCama::Quemados => "fa-fire",
+            TipoCama::Otro => "fa-question",
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Cama - Gestión de Camas UCI
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -865,6 +904,9 @@ pub struct Cama {
     pub numero: u8,
 
     #[serde(default)]
+    pub tipo: TipoCama,
+
+    #[serde(default)]
     pub estado: EstadoCama,
 
     #[serde(default)]
@@ -878,11 +920,12 @@ pub struct Cama {
 }
 
 impl Cama {
-    pub fn new(numero: u8) -> Self {
+    pub fn new(numero: u8, tipo: TipoCama) -> Self {
         Self {
             id: None,
             cama_id: Uuid::new_v4().to_string(),
             numero,
+            tipo,
             estado: EstadoCama::Libre,
             paciente_id: None,
             paciente_nombre: None,
@@ -893,7 +936,7 @@ impl Cama {
 
 impl Default for Cama {
     fn default() -> Self {
-        Self::new(1)
+        Self::new(1, TipoCama::General)
     }
 }
 
@@ -1039,15 +1082,33 @@ pub struct AdminStats {
     pub camas_libres: u8,
     pub camas_ocupadas: u8,
     pub camas_mantenimiento: u8,
+    pub camas_por_tipo: Vec<TipoCamaCount>,
     pub total_equipos: u32,
     pub equipos_activos: u32,
     pub equipos_mantenimiento: u32,
+    pub equipos_disponibles: u32,
+    pub equipos_por_tipo: Vec<EquipoTipoCount>,
     pub total_staff: u32,
     pub medicos_activos: u32,
     pub enfermeros_activos: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TipoCamaCount {
+    pub tipo: String,
+    pub total: u8,
+    pub libres: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquipoTipoCount {
+    pub tipo: String,
+    pub total: u32,
+    pub disponibles: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitCamasRequest {
     pub cantidad: u8,
+    pub tipo: Option<String>,
 }
