@@ -5,3 +5,7 @@ pub mod auth;
 pub mod scales;
 pub mod stats;
 pub mod admin;
+pub mod institucion;
+pub mod sandbox;
+pub mod diagnosticos;
+pub mod fhir;

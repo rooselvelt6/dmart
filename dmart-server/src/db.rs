@@ -378,3 +378,46 @@ pub async fn delete_user(db: &Surreal<Db>, id: &str) -> Result<()> {
     let _: Option<User> = db.delete(("users", id)).await?;
     Ok(())
 }
+
+// ─── Institucion Config ────────────────────────────────────────────────
+
+pub async fn get_institucion_config(db: &Surreal<Db>) -> Result<Option<InstitucionConfig>> {
+    let configs: Vec<InstitucionConfig> = db.select("institucion_config").await?;
+    Ok(configs.into_iter().next())
+}
+
+pub async fn upsert_institucion_config(
+    db: &Surreal<Db>,
+    config: InstitucionConfig,
+) -> Result<InstitucionConfig> {
+    let existing = get_institucion_config(db).await?;
+    let mut c = config;
+    if let Some(existing) = existing {
+        c.config_id = existing.config_id.clone();
+        let updated: Option<InstitucionConfig> = db
+            .update(("institucion_config", c.config_id.clone()))
+            .content(c)
+            .await?;
+        updated.ok_or_else(|| anyhow::anyhow!("Failed to update institucion config"))
+    } else {
+        if c.config_id.is_empty() {
+            c.config_id = Uuid::new_v4().to_string();
+        }
+        let created: Option<InstitucionConfig> = db
+            .create(("institucion_config", c.config_id.clone()))
+            .content(c)
+            .await?;
+        created.ok_or_else(|| anyhow::anyhow!("Failed to create institucion config"))
+    }
+}
+
+pub async fn seed_institucion_config(db: &Surreal<Db>) -> Result<()> {
+    let existing = get_institucion_config(db).await?;
+    if existing.is_some() {
+        return Ok(());
+    }
+    let default_config = InstitucionConfig::default_config();
+    upsert_institucion_config(db, default_config).await?;
+    tracing::info!("🏥 Seeded default institution config");
+    Ok(())
+}

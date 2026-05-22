@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  dmart-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dmart-server
+    ports:
+      - "3000:3000"
+    environment:
+      - DMART_PORT=3000
+      - DMART_DB_PATH=/app/data/dmart.db
+      - DMART_DIST_PATH=/app/dist
+      - DMART_VALKEY_URL=redis://valkey:6379
+      - RUST_LOG=dmart_server=info,tower_http=info
+    volumes:
+      - dmart-data:/app/data
+    depends_on:
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dmart-net
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: dmart-valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - dmart-net
+
+volumes:
+  dmart-data:
+    driver: local
+  valkey-data:
+    driver: local
+
+networks:
+  dmart-net:
+    driver: bridge

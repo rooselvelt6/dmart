@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  reverse-proxy:
+    image: caddy:2-alpine
+    container_name: dmart-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks:
+      - dmart-net
+    depends_on:
+      - dmart-server
+    restart: unless-stopped
+
+  dmart-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dmart-server
+    environment:
+      - DMART_PORT=3000
+      - DMART_DB_PATH=/app/data/dmart.db
+      - DMART_DIST_PATH=/app/dist
+      - DMART_VALKEY_URL=redis://valkey:6379
+      - RUST_LOG=dmart_server=info,tower_http=info
+    volumes:
+      - dmart-data:/app/data
+    depends_on:
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - dmart-net
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: dmart-valkey
+    volumes:
+      - valkey-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - dmart-net
+
+  backup:
+    image: alpine:latest
+    container_name: dmart-backup
+    volumes:
+      - dmart-data:/data:ro
+      - ./backups:/backups
+    entrypoint: |
+      sh -c "
+        apk add --no-cache curl postgresql-client;
+        echo '0 3 * * * /scripts/backup.sh' > /etc/crontabs/root;
+        crond -f -l 2
+      "
+    depends_on:
+      - dmart-server
+    restart: unless-stopped
+    networks:
+      - dmart-net
+
+volumes:
+  dmart-data:
+    driver: local
+  valkey-data:
+    driver: local
+  caddy-data:
+    driver: local
+
+networks:
+  dmart-net:
+    driver: bridge

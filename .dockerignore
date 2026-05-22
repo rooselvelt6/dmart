@@ -1,0 +1,10 @@
+target/
+.git/
+.gitignore
+*.md
+dist/
+data/
+.vscode/
+.idea/
+*.log
+dmart.pid

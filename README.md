@@ -34,6 +34,7 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ **Graceful shutdown** - cierre limpio del servidor
 - ✅ **Dashboard unificado** con scores, distribución y recursos
 - ✅ **Admin CRUD** camas (con tipo), equipos y personal
+- ✅ **Configuración de Institución** (nombre, RIF, dirección, teléfono, email, logo)
 - ✅ **Tablas de registro** en panel admin (camas, equipos, staff)
 
 ---
@@ -414,6 +415,8 @@ PUT    /api/admin/staff/:id           # Actualizar personal
 DELETE /api/admin/staff/:id           # Eliminar personal
 POST   /api/admin/staff/:id/toggle    # Activar/desactivar
 GET    /api/admin/check-camas         # Verificar cama libre
+GET    /api/admin/institucion         # Obtener configuración de institución
+PUT    /api/admin/institucion         # Actualizar configuración de institución
 ```
 
 #### Exportación
@@ -454,6 +457,8 @@ dmart/
 │   ├── src/
 │   │   ├── main.rs           # Punto de entrada
 │   │   ├── api/              # Endpoints REST
+│   │   │   ├── institucion.rs # Configuración de institución
+│   │   │   └── ...
 │   │   ├── db.rs             # Conexión SurrealDB
 │   │   └── cache.rs          # Cache Valkey/Redis
 │   └── Cargo.toml
@@ -465,7 +470,7 @@ dmart/
 │   │   ├── api.rs            # Cliente HTTP
 │   │   ├── pages/            # Páginas UI
 │   │   │   ├── dashboard.rs  # Dashboard unificado
-│   │   │   ├── admin.rs      # Admin CRUD (camas/equipos/staff)
+│   │   │   ├── admin.rs      # Admin CRUD (camas/equipos/staff/institucion)
 │   │   │   ├── patients.rs   # Listado de pacientes
 │   │   │   ├── register.rs   # Registro de paciente
 │   │   │   ├── measurement.rs# Toma de mediciones
@@ -872,6 +877,31 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 
 ---
 
+## 🔧 Cambios Recientes (22 Mayo 2026)
+
+### Panel de Configuración de Institución
+
+Se agregó una nueva pestaña "Institución" en el panel de administración para configurar los datos del hospital.
+
+**Nuevo endpoint:**
+```http
+GET /api/admin/institucion    # Obtener config
+PUT /api/admin/institucion    # Actualizar config
+```
+
+**Campos disponibles:**
+- Nombre, RIF, Dirección, Teléfono, Email, URL del Logo
+
+**Componentes agregados:**
+- `InstitucionPanel` en `dmart-app/src/pages/admin.rs`
+- `api/institucion.rs` en el servidor (handlers GET/PUT)
+- `db.rs`: funciones `get_institucion_config` / `upsert_institucion_config`
+- Seed automático de configuración por defecto al iniciar
+
+### Cero Warnings
+
+Se eliminaron las funciones no utilizadas `parse_tipo_cama` y `parse_estado_cama` del frontend. El proyecto compila con 0 errores y 0 warnings.
+
 ## 🔧 Cambios Recientes (26 Abril 2026)
 
 ### Migración de RocksDB a SurrealKV
@@ -1017,6 +1047,8 @@ let stats_resource = LocalResource::new(|| {
 | ✅ **SurrealKV** | Storage nativo Rust (sin RocksDB) |
 | ✅ **Dashboard unificado** | Scores, gráficos, recursos en una vista |
 | ✅ **Admin CRUD** | Camas con tipo, equipos, staff, stats |
+| ✅ **Configuración Institución** | Nombre, RIF, dirección, contacto, logo |
+| ✅ **Cero warnings** | Proyecto compila sin errores ni advertencias |
 | ✅ **Registro auto-asignación** | Paciente asigna cama libre + equipos |
 
 ---

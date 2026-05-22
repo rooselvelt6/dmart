@@ -1,0 +1,23 @@
+# =============================================================================
+# Development Dockerfile - rebuild server only, serve WASM from host
+# =============================================================================
+FROM rust:1.77-slim-bookworm AS dev
+
+RUN apt-get update && apt-get install -y pkg-config libssl-dev inotify-tools && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY dmart-shared/ dmart-shared/
+COPY dmart-server/ dmart-server/
+
+RUN cargo build --release --package dmart-server
+
+EXPOSE 3000
+
+ENV DMART_PORT=3000
+ENV DMART_DB_PATH=/app/data/dmart.db
+ENV DMART_DIST_PATH=/app/dist
+ENV RUST_LOG=dmart_server=debug,tower_http=debug
+
+ENTRYPOINT ["/app/target/release/dmart-server"]

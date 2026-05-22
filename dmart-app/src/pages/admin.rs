@@ -74,6 +74,9 @@ pub fn AdminPage() -> impl IntoView {
                     <button class=tab_class("staff") on:click=move |_| set_active_tab.set("staff".to_string())>
                         <i class="fa-solid fa-users mr-2"></i>"Personal"
                     </button>
+                    <button class=tab_class("institucion") on:click=move |_| set_active_tab.set("institucion".to_string())>
+                        <i class="fa-solid fa-hospital mr-2"></i>"Institución"
+                    </button>
                 </div>
 
                 <Show when=move || active_tab.get() == "camas">
@@ -84,6 +87,9 @@ pub fn AdminPage() -> impl IntoView {
                 </Show>
                 <Show when=move || active_tab.get() == "staff">
                     <StaffPanel/>
+                </Show>
+                <Show when=move || active_tab.get() == "institucion">
+                    <InstitucionPanel/>
                 </Show>
             </div>
         </div>
@@ -106,26 +112,6 @@ fn admin_stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl In
 }
 
 // ─── Shared ──────────────────────────────────────────────────────
-
-fn parse_tipo_cama(s: &str) -> TipoCama {
-    match s {
-        "Aislamiento" => TipoCama::Aislamiento,
-        "Pediátrica" => TipoCama::Pediatrica,
-        "Coronaria" => TipoCama::Coronaria,
-        "Quemados" => TipoCama::Quemados,
-        "Otro" => TipoCama::Otro,
-        _ => TipoCama::General,
-    }
-}
-
-fn parse_estado_cama(s: &str) -> EstadoCama {
-    match s {
-        "Ocupada" => EstadoCama::Ocupada,
-        "Mantenimiento" => EstadoCama::Mantenimiento,
-        "Limpieza" => EstadoCama::Limpieza,
-        _ => EstadoCama::Libre,
-    }
-}
 
 fn parse_tipo_equipo(s: &str) -> TipoEquipo {
     match s {
@@ -152,6 +138,109 @@ fn parse_rol(s: &str) -> UserRole {
         "Medico" => UserRole::Medico,
         "Enfermero" => UserRole::Enfermero,
         _ => UserRole::Viewer,
+    }
+}
+
+// ─── Institución Panel ────────────────────────────────────────────
+
+#[component]
+fn InstitucionPanel() -> impl IntoView {
+    let (config, set_config) = signal(InstitucionConfig::default());
+    let (guardado, set_guardado) = signal(false);
+    let loading = RwSignal::new(false);
+    let error_msg = RwSignal::new(None::<String>);
+
+    spawn_local(async move {
+        if let Ok(c) = api::get::<InstitucionConfig>("/admin/institucion").await {
+            set_config.set(c);
+        }
+    });
+
+    let save = move || {
+        loading.set(true);
+        error_msg.set(None);
+        set_guardado.set(false);
+        let data = config.get();
+        spawn_local(async move {
+            match api::put::<_, InstitucionConfig>("/admin/institucion", &data).await {
+                Ok(_) => {
+                    loading.set(false);
+                    set_guardado.set(true);
+                }
+                Err(e) => {
+                    loading.set(false);
+                    error_msg.set(Some(e));
+                }
+            }
+        });
+    };
+
+    view! {
+        <div>
+            <h2 class="text-lg font-bold mb-6" style="color:var(--uci-text);">
+                <i class="fa-solid fa-hospital mr-2" style="color:var(--uci-accent);"></i>"Configuración de la Institución"
+            </h2>
+
+            {move || error_msg.get().map(|e| view! {
+                <div class="p-3 rounded-lg mb-4 text-sm font-semibold flex items-center gap-2"
+                    style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#DC2626;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>{e}
+                </div>
+            })}
+
+            {move || (guardado.get()).then(|| view! {
+                <div class="p-3 rounded-lg mb-4 text-sm font-semibold flex items-center gap-2"
+                    style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10B981;">
+                    <i class="fa-solid fa-check-circle"></i>"Configuración guardada correctamente"
+                </div>
+            })}
+
+            <div class="p-6 rounded-xl" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Nombre de la Institución"</label>
+                        <input class="form-input w-full" type="text"
+                            prop:value=move || config.get().nombre
+                            on:input=move |ev| set_config.update(|c| c.nombre = event_target_value(&ev)) />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"RIF"</label>
+                        <input class="form-input w-full" type="text"
+                            prop:value=move || config.get().rif
+                            on:input=move |ev| set_config.update(|c| c.rif = event_target_value(&ev)) />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Dirección"</label>
+                        <input class="form-input w-full" type="text"
+                            prop:value=move || config.get().direccion
+                            on:input=move |ev| set_config.update(|c| c.direccion = event_target_value(&ev)) />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Teléfono"</label>
+                        <input class="form-input w-full" type="text"
+                            prop:value=move || config.get().telefono
+                            on:input=move |ev| set_config.update(|c| c.telefono = event_target_value(&ev)) />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Email"</label>
+                        <input class="form-input w-full" type="email"
+                            prop:value=move || config.get().email
+                            on:input=move |ev| set_config.update(|c| c.email = event_target_value(&ev)) />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"URL del Logo"</label>
+                        <input class="form-input w-full" type="text"
+                            prop:value=move || config.get().logo_url.unwrap_or_default()
+                            on:input=move |ev| set_config.update(|c| c.logo_url = Some(event_target_value(&ev))) />
+                    </div>
+                </div>
+                <div class="flex justify-end mt-6">
+                    <button on:click=move |_| save() class="btn-primary px-6 h-10 text-sm" disabled=loading>
+                        {move || if loading.get() { "Guardando..." } else { "Guardar" }}
+                    </button>
+                </div>
+            </div>
+        </div>
     }
 }
 

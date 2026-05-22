@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use axum::{
     Router,
     routing::{get, post},
+    extract::State,
     http::{Method, StatusCode, HeaderName, HeaderValue},
     response::{Html, IntoResponse},
 };
@@ -23,23 +24,45 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use serde::Serialize;
+use std::sync::OnceLock;
+use std::time::Instant;
+
+fn start_instant() -> &'static Instant {
+    static INSTANT: OnceLock<Instant> = OnceLock::new();
+    INSTANT.get_or_init(|| Instant::now())
+}
+
+fn uptime_seconds() -> u64 {
+    start_instant().elapsed().as_secs()
+}
 
 #[derive(Serialize)]
 struct HealthResponse {
     status: String,
     version: String,
     timestamp: String,
+    uptime_seconds: u64,
+    database: String,
+    cache: String,
 }
 
-async fn health_check() -> impl IntoResponse {
+async fn health_check(State(db): State<crate::db::Database>) -> impl IntoResponse {
     let now = chrono::Utc::now().to_rfc3339();
+
+    let db_status = match db.query("SELECT 1").await {
+        Ok(_) => "connected".to_string(),
+        Err(e) => format!("error: {}", e),
+    };
+
     let response = HealthResponse {
-        status: "healthy".to_string(),
+        status: if db_status == "connected" { "healthy".to_string() } else { "degraded".to_string() },
         version: env!("CARGO_PKG_VERSION").to_string(),
         timestamp: now,
+        uptime_seconds: uptime_seconds(),
+        database: db_status,
+        cache: "valkey_optional".to_string(),
     };
     let mut res = (StatusCode::OK, axum::Json(response)).into_response();
-    // Add security headers
     for (name, value) in security::security_headers() {
         res.headers_mut().insert(name, value);
     }
@@ -96,6 +119,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Seed default admin user if no users exist
     auth::seed_default_admin(&database).await?;
+
+    // Seed institution config if none exists
+    db::seed_institucion_config(&database).await?;
 
     // Seed initial beds (4 camas) if none exist
     let camas_existentes = db::list_camas(&database).await?;
@@ -158,6 +184,17 @@ async fn main() -> anyhow::Result<()> {
         // Export
         .route("/patients/{id}/export/csv", get(api::export::export_csv))
         .route("/patients/{id}/export/pdf", get(api::export::export_pdf))
+        // Institucion
+        .route("/admin/institucion", get(api::institucion::get_institucion).put(api::institucion::upsert_institucion))
+        // Diagnosticos CIE-10
+        .route("/diagnosticos", get(api::diagnosticos::list_diagnosticos))
+        .route("/diagnosticos/search", get(api::diagnosticos::search_diagnosticos))
+        // Sandbox
+        .route("/sandbox/generate", post(api::sandbox::generate_patients))
+        .route("/sandbox/clear", post(api::sandbox::clear_sandbox))
+        // FHIR R4
+        .route("/fhir/Patient", get(api::fhir::fhir_patient_search))
+        .route("/fhir/Patient/{id}", get(api::fhir::fhir_patient_get))
         .with_state(database);
 
     // Static files (serving compiled WASM frontend)

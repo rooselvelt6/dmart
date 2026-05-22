@@ -422,3 +422,54 @@ pub async fn egreso_paciente(id: &str) -> ApiResult<String> {
             .json().await.map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
+
+// ─── Institucion Config ─────────────────────────────────────────────
+
+pub async fn get_institucion_config() -> ApiResult<InstitucionConfig> {
+    let resp: ApiResponse<InstitucionConfig> =
+        Request::get(&format!("{}/admin/institucion", API_BASE))
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn update_institucion_config(config: &InstitucionConfig) -> ApiResult<InstitucionConfig> {
+    let resp: ApiResponse<InstitucionConfig> =
+        Request::put(&format!("{}/admin/institucion", API_BASE))
+            .json(config).map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+// ─── Diagnosticos CIE-10 ───────────────────────────────────────────
+
+pub async fn search_diagnosticos(query: &str) -> ApiResult<Vec<Diagnostico>> {
+    let resp: ApiResponse<Vec<Diagnostico>> =
+        Request::get(&format!("{}/diagnosticos/search?q={}", API_BASE, query))
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+// ─── Sandbox ────────────────────────────────────────────────────────
+
+pub async fn generate_sandbox_data(cantidad: u32, mediciones: u32) -> ApiResult<String> {
+    #[derive(serde::Serialize)]
+    struct Req { cantidad_pacientes: u32, mediciones_por_paciente: u32 }
+    let resp: ApiResponse<String> =
+        Request::post(&format!("{}/sandbox/generate", API_BASE))
+            .json(&Req { cantidad_pacientes: cantidad, mediciones_por_paciente: mediciones })
+            .map_err(|e| e.to_string())?
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn clear_sandbox_data() -> ApiResult<String> {
+    let resp: ApiResponse<String> =
+        Request::post(&format!("{}/sandbox/clear", API_BASE))
+            .send().await.map_err(|e| e.to_string())?
+            .json().await.map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}

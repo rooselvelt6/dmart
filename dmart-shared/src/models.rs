@@ -278,6 +278,8 @@ pub struct Patient {
     #[serde(default)]
     pub fecha_nacimiento: String, // ISO date string YYYY-MM-DD
     #[serde(default)]
+    pub edad: u8,
+    #[serde(default)]
     pub familiar_encargado: String,
 
     // Ingreso hospitalario
@@ -359,6 +361,7 @@ impl Patient {
             lugar_nacimiento: String::new(),
             direccion: String::new(),
             fecha_nacimiento: String::new(),
+            edad: 0,
             familiar_encargado: String::new(),
             fecha_ingreso_hospital: now.clone(),
             fecha_ingreso_uci: now.clone(),
@@ -1111,4 +1114,165 @@ pub struct EquipoTipoCount {
 pub struct InitCamasRequest {
     pub cantidad: u8,
     pub tipo: Option<String>,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// InstitucionConfig - Configuración de la institución hospitalaria
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstitucionConfig {
+    #[serde(skip_serializing, skip_deserializing, default)]
+    pub id: Option<String>,
+
+    #[serde(default)]
+    pub config_id: String,
+
+    #[serde(default)]
+    pub nombre: String,
+
+    #[serde(default)]
+    pub direccion: String,
+
+    #[serde(default)]
+    pub rif: String,
+
+    #[serde(default)]
+    pub telefono: String,
+
+    #[serde(default)]
+    pub email: String,
+
+    #[serde(default)]
+    pub logo_url: Option<String>,
+
+    #[serde(default)]
+    pub zona_horaria: String,
+
+    #[serde(default)]
+    pub moneda: String,
+
+    #[serde(default)]
+    pub pais: String,
+
+    #[serde(default)]
+    pub ciudad: String,
+
+    #[serde(default)]
+    pub codigo_postal: String,
+
+    #[serde(default)]
+    pub website: String,
+
+    #[serde(default)]
+    pub created_at: String,
+
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+impl Default for InstitucionConfig {
+    fn default() -> Self {
+        let now = Utc::now().to_rfc3339();
+        Self {
+            id: None,
+            config_id: Uuid::new_v4().to_string(),
+            nombre: String::new(),
+            direccion: String::new(),
+            rif: String::new(),
+            telefono: String::new(),
+            email: String::new(),
+            logo_url: None,
+            zona_horaria: "America/Caracas".to_string(),
+            moneda: "VES".to_string(),
+            pais: "Venezuela".to_string(),
+            ciudad: String::new(),
+            codigo_postal: String::new(),
+            website: String::new(),
+            created_at: now.clone(),
+            updated_at: now,
+        }
+    }
+}
+
+impl InstitucionConfig {
+    pub fn default_config() -> Self {
+        Self::default()
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sandbox - Generación de datos sintéticos
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxGenerateRequest {
+    pub cantidad_pacientes: u32,
+    pub mediciones_por_paciente: u32,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Diagnostico CIE-10
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Diagnostico {
+    pub codigo: String,
+    pub descripcion: String,
+    pub categoria: String,
+}
+
+impl Diagnostico {
+    pub fn new(codigo: &str, descripcion: &str, categoria: &str) -> Self {
+        Self {
+            codigo: codigo.to_string(),
+            descripcion: descripcion.to_string(),
+            categoria: categoria.to_string(),
+        }
+    }
+}
+
+pub fn diagnosticos_uci() -> Vec<Diagnostico> {
+    vec![
+        Diagnostico::new("A41.9", "Sepsis, no especificada", "Infecciosas"),
+        Diagnostico::new("A41.0", "Sepsis por Staphylococcus aureus", "Infecciosas"),
+        Diagnostico::new("A41.1", "Sepsis por otros estafilococos", "Infecciosas"),
+        Diagnostico::new("A41.5", "Sepsis por otros organismos gramnegativos", "Infecciosas"),
+        Diagnostico::new("B34.2", "Infección por coronavirus, no especificada", "Infecciosas"),
+        Diagnostico::new("J15.9", "Neumonía bacteriana, no especificada", "Respiratorias"),
+        Diagnostico::new("J18.9", "Neumonía, no especificada", "Respiratorias"),
+        Diagnostico::new("J96.0", "Insuficiencia respiratoria aguda", "Respiratorias"),
+        Diagnostico::new("J96.9", "Insuficiencia respiratoria, no especificada", "Respiratorias"),
+        Diagnostico::new("J80", "Síndrome de dificultad respiratoria del adulto", "Respiratorias"),
+        Diagnostico::new("J44.9", "Enfermedad pulmonar obstructiva crónica, no especificada", "Respiratorias"),
+        Diagnostico::new("I21.9", "Infarto agudo de miocardio, no especificado", "Cardiovasculares"),
+        Diagnostico::new("I50.9", "Insuficiencia cardíaca, no especificada", "Cardiovasculares"),
+        Diagnostico::new("I46.9", "Paro cardíaco, no especificado", "Cardiovasculares"),
+        Diagnostico::new("I10", "Hipertensión esencial (primaria)", "Cardiovasculares"),
+        Diagnostico::new("I48", "Fibrilación y aleteo auricular", "Cardiovasculares"),
+        Diagnostico::new("I61.9", "Hemorragia intracerebral, no especificada", "Neurológicas"),
+        Diagnostico::new("I63.9", "Infarto cerebral, no especificado", "Neurológicas"),
+        Diagnostico::new("G93.4", "Encefalopatía, no especificada", "Neurológicas"),
+        Diagnostico::new("G40.9", "Epilepsia, no especificada", "Neurológicas"),
+        Diagnostico::new("N17.9", "Insuficiencia renal aguda, no especificada", "Renales"),
+        Diagnostico::new("N18.9", "Enfermedad renal crónica, no especificada", "Renales"),
+        Diagnostico::new("K72.9", "Insuficiencia hepática, no especificada", "Hepáticas"),
+        Diagnostico::new("K70.3", "Cirrosis alcohólica del hígado", "Hepáticas"),
+        Diagnostico::new("E10.9", "Diabetes mellitus tipo 1, sin complicaciones", "Endócrinas"),
+        Diagnostico::new("E11.9", "Diabetes mellitus tipo 2, sin complicaciones", "Endócrinas"),
+        Diagnostico::new("E86", "Deshidratación", "Endócrinas"),
+        Diagnostico::new("E87.1", "Hipoosmolaridad e hiponatremia", "Endócrinas"),
+        Diagnostico::new("D65", "Coagulación intravascular diseminada", "Hematológicas"),
+        Diagnostico::new("D69.6", "Trombocitopenia, no especificada", "Hematológicas"),
+        Diagnostico::new("S06.9", "Traumatismo intracraneal, no especificado", "Traumatismos"),
+        Diagnostico::new("S36.0", "Traumatismo del bazo", "Traumatismos"),
+        Diagnostico::new("T79.4", "Shock traumático", "Traumatismos"),
+        Diagnostico::new("T81.1", "Shock postquirúrgico", "Complicaciones"),
+        Diagnostico::new("R57.0", "Shock cardiogénico", "Shock"),
+        Diagnostico::new("R57.1", "Shock hipovolémico", "Shock"),
+        Diagnostico::new("R57.2", "Shock séptico", "Shock"),
+        Diagnostico::new("R57.8", "Otras formas de shock", "Shock"),
+        Diagnostico::new("Z03.9", "Observación por sospecha de enfermedad", "Otras"),
+        Diagnostico::new("Z51.5", "Cuidados paliativos", "Otras"),
+    ]
 }
