@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
 use gloo_storage::{LocalStorage, Storage};
+use crate::api;
 
 #[component]
 pub fn LoginPage() -> impl IntoView {
@@ -24,18 +25,19 @@ pub fn LoginPage() -> impl IntoView {
         let set_auth = set_is_auth.clone();
         
         spawn_local(async move {
-            gloo_timers::future::TimeoutFuture::new(800).await;
-            
-            if !u.is_empty() && !p.is_empty() {
-                let _ = LocalStorage::set("dmart_auth", "true");
-                if let Some(setter) = set_auth {
-                    setter.set(true);
+            match api::login(&u, &p).await {
+                Ok(response) => {
+                    let _ = LocalStorage::set("dmart_auth", &response.token);
+                    if let Some(setter) = set_auth {
+                        setter.set(true);
+                    }
+                    set_loading.set(false);
+                    nav("/", Default::default());
                 }
-                set_loading.set(false);
-                nav("/", Default::default());
-            } else {
-                set_loading.set(false);
-                set_error.set(true);
+                Err(_) => {
+                    set_loading.set(false);
+                    set_error.set(true);
+                }
             }
         });
     };
