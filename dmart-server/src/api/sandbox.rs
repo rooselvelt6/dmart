@@ -41,7 +41,7 @@ pub async fn generate_patients(
 pub async fn clear_sandbox(
     State(db): State<Database>,
 ) -> ApiResult<String> {
-    let pacientes = crate::db::list_patients(&db).await.map_err(err_to_str)?;
+    let pacientes = crate::db::list_patients(&db, 50000, 0).await.map_err(err_to_str)?;
     let mut deleted = 0u32;
     for p in &pacientes {
         if let Err(e) = crate::db::delete_patient(&db, &p.patient_id).await {

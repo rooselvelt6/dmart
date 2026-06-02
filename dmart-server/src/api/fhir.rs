@@ -124,26 +124,27 @@ pub async fn fhir_patient_search(
     State(db): State<Database>,
     Query(params): Query<FhirSearchQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let patients = crate::db::list_patients(&db).await.map_err(err_to_str)?;
+    let fhir_count = params._count.unwrap_or(50).min(200) as u32;
+    let patients = crate::db::list_patients(&db, fhir_count, 0).await.map_err(err_to_str)?;
 
-    let filtered: Vec<&Patient> = if let Some(name) = &params.name {
+    let entries: Vec<FhirBundleEntry> = if let Some(name) = &params.name {
         let lower = name.to_lowercase();
         patients.iter().filter(|p| {
             p.nombre.to_lowercase().contains(&lower) ||
             p.apellido.to_lowercase().contains(&lower)
-        }).collect()
-    } else {
-        patients.iter().collect()
-    };
-
-    let count = params._count.unwrap_or(50);
-    let entries: Vec<FhirBundleEntry> = filtered
-        .into_iter()
-        .take(count)
+        })
+        .take(fhir_count as usize)
         .map(|p| FhirBundleEntry {
             resource: patient_to_fhir(p),
         })
-        .collect();
+        .collect()
+    } else {
+        patients.iter()
+            .map(|p| FhirBundleEntry {
+                resource: patient_to_fhir(p),
+            })
+            .collect()
+    };
 
     let bundle = FhirBundle {
         resource_type: "Bundle".to_string(),

@@ -2,12 +2,12 @@ use axum::{
     Router,
     routing::{post, get},
     extract::State,
-    http::StatusCode,
+    http::{StatusCode, HeaderMap},
     Json,
 };
 use dmart_shared::models::*;
 use crate::db::Database;
-use crate::auth::{AuthService, LoginRequest, LoginResponse, RegisterRequest};
+use crate::auth::{AuthService, LoginRequest, LoginResponse, RegisterRequest, extract_token_from_header};
 
 pub fn router() -> Router<Database> {
     Router::new()
@@ -16,6 +16,7 @@ pub fn router() -> Router<Database> {
         .route("/me", get(me))
         .route("/users", get(list_users))
         .route("/register", post(register))
+        .route("/refresh", post(refresh))
 }
 
 async fn login(
@@ -24,8 +25,18 @@ async fn login(
 ) -> Result<Json<ApiResponse<LoginResponse>>, StatusCode> {
     let auth_service = AuthService::new((*db).clone());
     match auth_service.authenticate(&req.username, &req.password).await {
-        Ok(response) => Ok(Json(ApiResponse::ok(response))),
-        Err(e) => Ok(Json(ApiResponse::err(e))),
+        Ok(response) => {
+            if let Some(audit) = crate::audit::audit() {
+                let _ = audit.log_login_success(&response.user.user_id, &response.user.username, None).await;
+            }
+            Ok(Json(ApiResponse::ok(response)))
+        }
+        Err(e) => {
+            if let Some(audit) = crate::audit::audit() {
+                let _ = audit.log_login_failed(&req.username, &e, None).await;
+            }
+            Ok(Json(ApiResponse::err(e)))
+        }
     }
 }
 
@@ -59,6 +70,25 @@ async fn register(
     let auth_service = AuthService::new((*db).clone());
     match auth_service.register(req).await {
         Ok(user) => Ok(Json(ApiResponse::ok(UserInfo::from(&user)))),
+        Err(e) => Ok(Json(ApiResponse::err(e))),
+    }
+}
+
+async fn refresh(
+    State(db): State<Database>,
+    headers: HeaderMap,
+) -> Result<Json<ApiResponse<LoginResponse>>, StatusCode> {
+    let auth_service = AuthService::new((*db).clone());
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let token = match extract_token_from_header(auth_header) {
+        Some(t) => t,
+        None => return Ok(Json(ApiResponse::err("Token no proporcionado"))),
+    };
+    match auth_service.refresh_token(token).await {
+        Ok(response) => Ok(Json(ApiResponse::ok(response))),
         Err(e) => Ok(Json(ApiResponse::err(e))),
     }
 }

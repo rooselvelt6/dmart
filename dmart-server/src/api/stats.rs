@@ -47,7 +47,8 @@ pub struct PromedioScores {
 pub async fn get_stats(
     State(db): State<Database>,
 ) -> impl IntoResponse {
-    let result = db_ops::list_patients(&db).await;
+    // Load up to 50000 patients for stats computation
+    let result = db_ops::list_patients(&db, 50000, 0).await;
 
     match result {
         Ok(patients) => {

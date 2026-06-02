@@ -6,18 +6,20 @@ pub mod auth;
 pub mod rbac;
 mod audit;
 mod security;
+mod middleware;
 
 use std::net::SocketAddr;
 use axum::{
     Router,
     routing::{get, post},
     extract::State,
-    http::{Method, StatusCode, HeaderName, HeaderValue},
+    http::{Method, StatusCode, HeaderValue},
+    middleware as axum_mw,
     response::{Html, IntoResponse},
+    extract::DefaultBodyLimit,
 };
-use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::{
-    cors::{CorsLayer, Any},
+    cors::{CorsLayer, Any, AllowOrigin},
     services::ServeDir,
     trace::TraceLayer,
 };
@@ -27,6 +29,10 @@ use serde::Serialize;
 use std::sync::OnceLock;
 use std::time::Instant;
 
+use crate::auth::AuthService;
+use crate::middleware::auth_mod::{AuthMiddlewareConfig, auth_middleware};
+use crate::security::{create_security_state, rate_limit_middleware, login_throttle_middleware};
+
 fn start_instant() -> &'static Instant {
     static INSTANT: OnceLock<Instant> = OnceLock::new();
     INSTANT.get_or_init(|| Instant::now())
@@ -35,6 +41,8 @@ fn start_instant() -> &'static Instant {
 fn uptime_seconds() -> u64 {
     start_instant().elapsed().as_secs()
 }
+
+
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -49,10 +57,12 @@ struct HealthResponse {
 async fn health_check(State(db): State<crate::db::Database>) -> impl IntoResponse {
     let now = chrono::Utc::now().to_rfc3339();
 
-    let db_status = match db.query("SELECT 1").await {
+    let db_status = match db.query("SELECT * FROM patients LIMIT 1").await {
         Ok(_) => "connected".to_string(),
         Err(e) => format!("error: {}", e),
     };
+
+    let cache_status = if cache::cache_available() { "connected".to_string() } else { "unavailable".to_string() };
 
     let response = HealthResponse {
         status: if db_status == "connected" { "healthy".to_string() } else { "degraded".to_string() },
@@ -60,13 +70,9 @@ async fn health_check(State(db): State<crate::db::Database>) -> impl IntoRespons
         timestamp: now,
         uptime_seconds: uptime_seconds(),
         database: db_status,
-        cache: "valkey_optional".to_string(),
+        cache: cache_status,
     };
-    let mut res = (StatusCode::OK, axum::Json(response)).into_response();
-    for (name, value) in security::security_headers() {
-        res.headers_mut().insert(name, value);
-    }
-    res
+    (StatusCode::OK, axum::Json(response)).into_response()
 }
 
 async fn spa_handler() -> impl IntoResponse {
@@ -82,6 +88,9 @@ async fn spa_handler() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env file first (before any env var reads)
+    dotenvy::dotenv().ok();
+
     // Setup panic hook FIRST - before any async code
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -117,6 +126,9 @@ async fn main() -> anyhow::Result<()> {
     let database = db::connect(&db_path).await?;
     tracing::info!("✅ SurrealDB connected at {}", db_path);
 
+    // Initialize audit service
+    audit::init_global_audit((*database).clone());
+
     // Seed default admin user if no users exist
     auth::seed_default_admin(&database).await?;
 
@@ -135,15 +147,46 @@ async fn main() -> anyhow::Result<()> {
     // Cache (opcional — no bloquea si no está disponible)
     let valkey_url = std::env::var("DMART_VALKEY_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
-    let _cache = cache::Cache::connect(&valkey_url).await;
+    let cache_ok = cache::init_global_cache(&valkey_url).await;
+    if cache_ok {
+        tracing::info!("✅ Valkey cache connected");
+    }
 
-    // CORS
-    let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
-        .allow_headers(Any)
-        .allow_origin(Any);
+    // ── Security Setup ──────────────────────────────────────────────
 
-    // API Router
+    // Create AuthService for JWT verification
+    let auth_service = AuthService::new((*database).clone());
+    let auth_config = AuthMiddlewareConfig::new(auth_service);
+
+    // Create security state (rate limiter + login throttle)
+    let security_state = create_security_state();
+
+    // ── CORS ────────────────────────────────────────────────────────
+
+    let cors_origins = std::env::var("DMART_CORS_ORIGIN")
+        .unwrap_or_else(|_| "http://localhost:3000,http://127.0.0.1:3000".to_string());
+
+    let origins: Vec<HeaderValue> = cors_origins
+        .split(',')
+        .filter_map(|s| HeaderValue::from_str(s.trim()).ok())
+        .collect();
+
+    let cors = if origins.is_empty() {
+        tracing::warn!("⚠️ DMART_CORS_ORIGIN empty! Allowing all origins (not recommended for production)");
+        CorsLayer::new()
+            .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+            .allow_headers(Any)
+            .allow_origin(Any)
+    } else {
+        tracing::info!("🔒 CORS restricted to origins: {:?}", origins);
+        CorsLayer::new()
+            .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+            .allow_headers(Any)
+            .allow_origin(AllowOrigin::list(origins))
+    };
+
+    // ── API Router ─────────────────────────────────────────────────
+
     let api_router = Router::new()
         // Health check
         .route("/health", get(health_check))
@@ -195,15 +238,21 @@ async fn main() -> anyhow::Result<()> {
         // FHIR R4
         .route("/fhir/Patient", get(api::fhir::fhir_patient_search))
         .route("/fhir/Patient/{id}", get(api::fhir::fhir_patient_get))
-        .with_state(database);
+        .with_state(database.clone());
 
-    // Static files (serving compiled WASM frontend)
+    // Apply security middleware to API router (layers wrap from outside in)
+    // Login throttling first (before rate limiting to prevent brute force)
+    let api_router = api_router
+        .layer(axum_mw::from_fn_with_state(security_state.clone(), login_throttle_middleware))
+        .layer(axum_mw::from_fn_with_state(security_state.clone(), rate_limit_middleware))
+        // JWT auth middleware (open paths like /auth/login bypass)
+        .layer(axum_mw::from_fn_with_state(auth_config, auth_middleware));
+
+    // ── Static files ────────────────────────────────────────────────
+
     let dist_path = std::env::var("DMART_DIST_PATH")
         .unwrap_or_else(|_| "./dist".to_string());
 
-    // Use a simpler approach - add security headers to all responses via a callback
-    // For rate limiting, we'll check on each API request
-    
     let app = Router::new()
         .nest("/api", api_router)
         .fallback_service(ServeDir::new(&dist_path))
@@ -223,29 +272,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/stats", get(spa_handler))
         .route("/admin", get(spa_handler))
         .route("/admin/{*path}", get(spa_handler))
+        .layer(DefaultBodyLimit::max(1024 * 1024)) // 1MB request body limit
         .layer(cors)
+        .layer(axum_mw::from_fn(security::security_headers_middleware))
         .layer(TraceLayer::new_for_http());
-
-    // Add security headers to all responses
-    let app = app.layer(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("x-frame-options"),
-        HeaderValue::from_static("DENY"),
-    )).layer(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("x-content-type-options"),
-        HeaderValue::from_static("nosniff"),
-    )).layer(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("x-xss-protection"),
-        HeaderValue::from_static("1; mode=block"),
-    )).layer(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("referrer-policy"),
-        HeaderValue::from_static("strict-origin-when-cross-origin"),
-    )).layer(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("permissions-policy"),
-        HeaderValue::from_static("geolocation=(), microphone=(), camera=()"),
-    )).layer(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("cross-origin-opener-policy"),
-        HeaderValue::from_static("same-origin"),
-    ));
 
     // Server
     let port: u16 = std::env::var("DMART_PORT")

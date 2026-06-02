@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-
+use std::sync::OnceLock;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use surrealdb::engine::local::Db;
@@ -7,6 +6,16 @@ use surrealdb::Surreal;
 use uuid::Uuid;
 
 pub const AUDIT_RETENTION_YEARS: i64 = 6;
+
+static GLOBAL_AUDIT: OnceLock<AuditService> = OnceLock::new();
+
+pub fn init_global_audit(db: Surreal<Db>) {
+    let _ = GLOBAL_AUDIT.set(AuditService::new(db));
+}
+
+pub fn audit() -> Option<&'static AuditService> {
+    GLOBAL_AUDIT.get()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditLog {

@@ -3,8 +3,14 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2, Params,
 };
+use axum::{
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode},
+};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 use surrealdb::engine::local::Db;
 use surrealdb::Surreal;
 use tracing;
@@ -12,7 +18,40 @@ use uuid::Uuid;
 
 use dmart_shared::models::*;
 
-const JWT_SECRET: &[u8] = b"dmart-uci-jwt-secret-key-2024-secure";
+impl<S: Send + Sync> FromRequestParts<S> for Claims {
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts.extensions.get::<Claims>().cloned().ok_or((StatusCode::UNAUTHORIZED, "Not authenticated"))
+    }
+}
+
+fn jwt_expiry_hours() -> i64 {
+    static JWT_EXPIRY: OnceLock<i64> = OnceLock::new();
+    *JWT_EXPIRY.get_or_init(|| {
+        std::env::var("JWT_EXPIRY_HOURS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1)
+            .max(1)
+            .min(24)
+    })
+}
+
+fn jwt_secret() -> &'static [u8] {
+    static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
+    JWT_SECRET.get_or_init(|| {
+        std::env::var("JWT_SECRET")
+            .map(|s| s.into_bytes())
+            .unwrap_or_else(|_| {
+                let mut key = vec![0u8; 32];
+                rand::thread_rng().fill_bytes(&mut key);
+                tracing::warn!("⚠️ JWT_SECRET not set! Using auto-generated 32-byte key. Tokens will be invalid after server restart. Set JWT_SECRET in .env");
+                key
+            })
+    })
+    .as_slice()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
@@ -64,6 +103,7 @@ pub struct RegisterRequest {
     pub rol: String,
 }
 
+#[derive(Clone)]
 pub struct AuthService {
     db: Surreal<Db>,
     argon2: Argon2<'static>,
@@ -138,7 +178,8 @@ impl AuthService {
             UserRole::Viewer => vec!["patients:read".to_string()],
         };
         
-        let exp = chrono::Utc::now().timestamp() + 3600;
+        let exp_hours = jwt_expiry_hours();
+        let exp = chrono::Utc::now().timestamp() + exp_hours * 3600;
         let iat = chrono::Utc::now().timestamp();
 
         let claims = Claims {
@@ -153,7 +194,7 @@ impl AuthService {
         let token = encode(
             &Header::default(),
             &claims,
-            &EncodingKey::from_secret(JWT_SECRET),
+            &EncodingKey::from_secret(jwt_secret()),
         )
         .map_err(|e| e.to_string())?;
 
@@ -167,7 +208,7 @@ impl AuthService {
     pub fn verify_token(&self, token: &str) -> Result<Claims, String> {
         let validation = Validation::default();
         let token_data: TokenData<Claims> =
-            decode(token, &DecodingKey::from_secret(JWT_SECRET), &validation)
+            decode(token, &DecodingKey::from_secret(jwt_secret()), &validation)
                 .map_err(|e| e.to_string())?;
 
         let claims = token_data.claims;
@@ -194,6 +235,53 @@ impl AuthService {
             .map_err(|e| e.to_string())?;
 
         Ok(users.into_iter().find(|u| u.user_id == user_id))
+    }
+
+    pub async fn refresh_token(&self, token: &str) -> Result<LoginResponse, String> {
+        let claims = self.verify_token(token)?;
+        let user: Option<User> = self
+            .db
+            .select(("users", &claims.username))
+            .await
+            .map_err(|e| e.to_string())?;
+        let user = user.ok_or_else(|| "Usuario no encontrado".to_string())?;
+
+        if !user.activo {
+            return Err("Usuario inactivo".to_string());
+        }
+
+        let permissions = match user.rol {
+            UserRole::Admin => vec!["*".to_string()],
+            UserRole::Medico => vec!["patients:read".to_string(), "patients:create".to_string(), "measurements:*".to_string()],
+            UserRole::Enfermero => vec!["patients:read".to_string(), "measurements:*".to_string()],
+            UserRole::Viewer => vec!["patients:read".to_string()],
+        };
+
+        let exp_hours = jwt_expiry_hours();
+        let exp = chrono::Utc::now().timestamp() + exp_hours * 3600;
+        let iat = chrono::Utc::now().timestamp();
+
+        let new_claims = Claims {
+            sub: user.user_id.clone(),
+            username: user.username.clone(),
+            rol: user.rol.to_string(),
+            permissions,
+            exp,
+            iat,
+        };
+
+        let token = encode(
+            &Header::default(),
+            &new_claims,
+            &EncodingKey::from_secret(jwt_secret()),
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(LoginResponse {
+            token,
+            user: UserInfo::from(&user),
+            mfa_required: false,
+        })
     }
 
     pub async fn list_users(&self) -> Result<Vec<UserInfo>, String> {
@@ -231,9 +319,14 @@ pub async fn seed_default_admin(db: &Surreal<Db>) -> Result<bool> {
     let params = Params::new(65536, 3, 4, Some(32)).unwrap();
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     
+    let admin_password = std::env::var("DMART_ADMIN_PASSWORD").unwrap_or_else(|_| {
+        tracing::warn!("⚠️ DMART_ADMIN_PASSWORD not set! Using default password 'admin123'. Set this in .env for production!");
+        "admin123".to_string()
+    });
+    
     let salt = SaltString::generate(&mut rand::thread_rng());
     let password_hash = argon2
-        .hash_password(b"admin123", &salt)
+        .hash_password(admin_password.as_bytes(), &salt)
         .map_err(|e| anyhow::anyhow!("Hash error: {}", e))?;
     
     let user = User {
@@ -254,7 +347,7 @@ pub async fn seed_default_admin(db: &Surreal<Db>) -> Result<bool> {
     
     match created {
         Some(_) => {
-            tracing::info!("✅ Admin user created: admin / admin123");
+            tracing::info!("✅ Admin user created with password from DMART_ADMIN_PASSWORD env var");
             Ok(true)
         }
         None => Err(anyhow::anyhow!("Failed to create admin user")),

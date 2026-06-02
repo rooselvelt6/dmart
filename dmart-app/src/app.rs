@@ -16,7 +16,8 @@ use crate::stores::{fetch_patients_cached, load_patients_cached};
 
 #[component]
 pub fn App() -> impl IntoView {
-    let is_auth = move || LocalStorage::get::<String>("dmart_auth").is_ok();
+    let (is_auth, set_is_auth) = signal(LocalStorage::get::<String>("dmart_auth").is_ok());
+    provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
     let _ = crate::stores::create_theme_store();
 
@@ -29,12 +30,12 @@ pub fn App() -> impl IntoView {
     view! {
         <Router>
             <div class="flex flex-col md:flex-row min-h-screen" style="background:var(--uci-bg)">
-                <Show when=is_auth fallback=|| ()>
+                <Show when=move || is_auth.get() fallback=|| ()>
                     <NavSidebar sidebar_open />
                 </Show>
 
-                <main class="w-full md:ml-[260px] p-4 md:p-8" style=move || if is_auth() { "" } else { "margin-left: 0; width: 100%" }>
-                    <Show when=is_auth>
+                <main class="w-full md:ml-[260px] p-4 md:p-8" style=move || if is_auth.get() { "" } else { "margin-left: 0; width: 100%" }>
+                    <Show when=move || is_auth.get()>
                         <button
                             on:click=move |_| sidebar_open.update(|o| *o = !*o)
                             class="md:hidden fixed top-4 left-4 z-30 p-2 rounded-lg shadow-lg"
@@ -49,7 +50,7 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/login") view=LoginPage />
 
                         <Route path=path!("/") view=move || {
-                            if !is_auth() {
+                            if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <DashboardPage /> })
@@ -57,7 +58,7 @@ pub fn App() -> impl IntoView {
                         } />
 
                         <Route path=path!("/patients") view=move || {
-                            if !is_auth() {
+                            if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <PatientsPage /> })
@@ -65,7 +66,7 @@ pub fn App() -> impl IntoView {
                         } />
 
                         <Route path=path!("/patients/new") view=move || {
-                            if !is_auth() {
+                            if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <RegisterPage /> })
@@ -73,7 +74,7 @@ pub fn App() -> impl IntoView {
                         } />
 
                         <Route path=path!("/patients/:id") view=move || {
-                            if !is_auth() {
+                            if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <PatientDetailPage /> })
@@ -81,7 +82,7 @@ pub fn App() -> impl IntoView {
                         } />
 
                         <Route path=path!("/patients/:id/edit") view=move || {
-                            if !is_auth() {
+                            if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <PatientEditPage /> })
@@ -89,7 +90,7 @@ pub fn App() -> impl IntoView {
                         } />
 
                         <Route path=path!("/patients/:id/measure") view=move || {
-                            if !is_auth() {
+                            if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <MeasurementPage /> })
@@ -97,7 +98,7 @@ pub fn App() -> impl IntoView {
                         } />
 
                         <Route path=path!("/admin") view=move || {
-                            if !is_auth() {
+                            if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
                             } else {
                                 Either::Right(view! { <AdminPage /> })

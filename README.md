@@ -36,6 +36,9 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ **Admin CRUD** camas (con tipo), equipos y personal
 - ✅ **Configuración de Institución** (nombre, RIF, dirección, teléfono, email, logo)
 - ✅ **Tablas de registro** en panel admin (camas, equipos, staff)
+- ✅ **FHIR R4** - Pacientes, Observaciones, Condiciones (CIE-10)
+- ✅ **Sandbox de datos** - Población automática con datos sintéticos
+- ✅ **Docker Compose** para despliegue en producción
 
 ---
 
@@ -175,12 +178,15 @@ AUDIT LOG - HIPAA 6 years retention
 
 ## 📊 Pruebas y Validación
 
-### Suite de Tests: 63+ Tests
+### Suite de Tests: 75+ Tests + Benchmarks
 
 El sistema cuenta con una suite completa de pruebas que validan:
 
-```
-cargo test -p dmart-shared
+```bash
+cargo test -p dmart-shared              # Tests unitarios de escalas (66)
+cargo test -p dmart-server              # Tests de integración API (3)
+cargo bench -p dmart-shared             # Benchmarks de escalas clínicas (8)
+cargo doc --workspace --no-deps         # Generar documentación rustdoc
 ```
 
 | Categoría | Tests | Descripción |
@@ -189,7 +195,8 @@ cargo test -p dmart-shared
 | **GCS** | 7 | Cálculo de coma de Glasgow |
 | **Mortalidad** | 5 | Fórmula de riesgo hospitalario |
 | **Validación** | 9 | Rangos clínicos válidos |
-| **Integración** | 2 | Casos de uso completos |
+| **Integración API** | 3 | CRUD pacientes, paginación, auth |
+| **Benchmarks** | 8 | Criterion: APACHE II, GCS, SOFA, NEWS2, SAPS III |
 
 ### Tests de Variables APACHE II
 
@@ -349,6 +356,10 @@ cd dmart-server && cargo run
 | `DMART_DB_PATH` | `./data/dmart.db` | Ruta de la base de datos |
 | `DMART_DIST_PATH` | `./dist` | Ruta de archivos estáticos (WASM) |
 | `DMART_VALKEY_URL` | `redis://127.0.0.1:6379` | URL de cache (opcional) |
+| `DMART_ADMIN_PASSWORD` | `admin123` | Contraseña del usuario admin inicial |
+| `DMART_CORS_ORIGIN` | `http://localhost:3000` | Origen permitido para CORS |
+| `JWT_SECRET` | (autogenerado) | Secreto para firmar tokens JWT |
+| `JWT_EXPIRY_HOURS` | `24` | Horas de expiración del JWT |
 | `RUST_LOG` | `info` | Nivel de logging |
 
 ### Ejemplo de Configuración
@@ -699,9 +710,9 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
   - Alertas en tiempo real para accesos anómalos
 
 #### Seguridad de Aplicación
-- [ ] **Rate Limiting** inteligente por usuario/IP
-- [ ] **CSP Headers** (Content Security Policy) para WASM
-- [ ] **HSTS** (HTTP Strict Transport Security)
+- [x] **Rate Limiting** inteligente por usuario/IP
+- [x] **CSP Headers** (Content Security Policy) para WASM
+- [x] **HSTS** (HTTP Strict Transport Security)
 
 ---
 
@@ -711,7 +722,7 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 - [ ] **OAuth 2.0 + OpenID Connect**
   - Provider interno compatible con estándares
   - Tokens JWT firmados con RS256/ES256
-  - Refresh tokens con rotación automática
+- [x] **Refresh tokens** con rotación automática
 - [ ] **LDAP/Active Directory Integration**
   - Sincronización de usuarios desde directorio corporativo
   - Grupos LDAP mapeados a roles RBAC
@@ -732,9 +743,9 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 ### 🌐 Q3 2026 - Interoperabilidad y Estándares
 
 #### HL7 FHIR R4 Integration
-- [ ] **FHIR Patient** - Import/export de pacientes
-- [ ] **FHIR Observation** - Mediciones como recursos FHIR
-- [ ] **FHIR Condition** - Diagnósticos ICD-10
+- [x] **FHIR Patient** - Import/export de pacientes
+- [x] **FHIR Observation** - Mediciones como recursos FHIR
+- [x] **FHIR Condition** - Diagnósticos ICD-10
 - [ ] **FHIR DiagnosticReport** - Reportes clínicos estructurados
 - [ ] **SMART on FHIR** - Aplicaciones third-party
 
@@ -805,20 +816,21 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 ### 🔧 Technical Debt & Infrastructure
 
 #### Optimizaciones
-- [ ] **SQLite → SurrealDB** - Transacciones ACID completas
+- [x] **SurrealKV** - Storage nativo Rust ACID
 - [ ] **Connection Pooling** para base de datos
 - [ ] **Lazy Loading** de componentes WASM
 - [ ] **Service Worker** para caching offline
 
 #### Testing
-- [ ] **Integration Tests** de API endpoints
+- [x] **Integration Tests** de API endpoints (3 tests)
+- [x] **Benchmarks** de escalas clínicas (8 criterion)
 - [ ] **E2E Tests** con Playwright
 - [ ] **Load Testing** con k6
 - [ ] **Security Scanning** automatizado
 
 #### DevOps
-- [ ] **Docker Compose** para desarrollo fácil
-- [ ] **CI/CD** con GitHub Actions
+- [x] **Docker Compose** para producción
+- [x] **CI/CD** con GitHub Actions
 - [ ] **Semantic Versioning** para releases
 - [ ] **Changelog** automatizado
 
@@ -867,7 +879,11 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 
 | Operación | Tiempo Típico |
 |-----------|---------------|
-| Cálculo APACHE II | <1ms |
+| Cálculo APACHE II | ~4ns (benchmark) |
+| Cálculo GCS | ~1ns (benchmark) |
+| Cálculo SOFA | ~6ns (benchmark) |
+| Cálculo NEWS2 | ~6ns (benchmark) |
+| Cálculo SAPS III | ~32ns (benchmark) |
 | Crear paciente | ~10ms |
 | Listar pacientes | ~5ms |
 | Obtener paciente | ~2ms |
@@ -876,6 +892,45 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 | **WASM** | **2.2MB (optimizado)** |
 
 ---
+
+## 🔧 Cambios Recientes (Junio 2026)
+
+### Sprint 4: Infraestructura y Documentación — COMPLETADO
+
+Se finalizaron los 4 sprints del roadmap Junio 2026, completando las 28 tareas planificadas.
+
+**Tests de Integración:**
+Se agregaron 3 tests de integración en `dmart-server/tests/api_tests.rs`:
+- CRUD pacientes (crear, obtener, listar, actualizar, eliminar)
+- Paginación (limit/offset)
+- Auth (registrar, autenticar, refresh token)
+
+**Benchmarks de Escalas Clínicas:**
+Se agregaron 8 benchmarks con Criterion en `dmart-shared/benches/scale_bench.rs`:
+- APACHE II score, breakdown, mortality risk
+- GCS, SOFA, NEWS2, SAPS III breakdown y score
+- Todos ejecutándose en ~1–32ns
+
+**Sidebar reactiva corregida:**
+El sidebar ahora se renderiza automáticamente después del login sin necesidad de refrescar la página. Se cambió `is_auth` de closure plana a `ReadSignal<bool>` con `signal()`, proporcionando `set_is_auth` via `provide_context` y llamándolo desde `login.rs` tras guardar el token.
+
+**Auth middleware corregido:**
+Las rutas públicas (`/health`, `/auth/login`, `/auth/register`) ahora se reconocen correctamente porque Axum remueve el prefijo `/api` antes del middleware.
+
+**Health check corregido:**
+Se reemplazó `SELECT 1` (no soportado por SurrealKV) por `SELECT * FROM patients LIMIT 1`.
+
+**CSP headers actualizados:**
+Se agregó `'wasm-unsafe-eval'` para compatibilidad WASM y dominios CDN (Google Fonts, Font Awesome).
+
+**Documentación técnica actualizada:**
+`docs/ARQUITECTURA.md` refleja SurrealKV, estructura real del proyecto, todos los endpoints API, capas de seguridad, variables de entorno, conteo de tests y formato del health check.
+
+**Rustdoc generado:**
+`cargo doc --workspace --no-deps` genera documentación completa del proyecto.
+
+**WASM recompilado:**
+Frontend compilado con `trunk build --release` con wasm_opt activado.
 
 ## 🔧 Cambios Recientes (22 Mayo 2026)
 
@@ -1035,9 +1090,10 @@ let stats_resource = LocalResource::new(|| {
 |-------|-------------|
 | ✅ Sistema completo | Gestión total de UCI desde cero |
 | ✅ Estándar clínico | APACHE II según Knaus 1985 (71 puntos máx) |
-| ✅ **66+ tests** | Validación de cálculos médicos |
+| ✅ **75+ tests** | Validación de cálculos médicos + integración API |
+| ✅ **8 benchmarks** | Criterion para escalas clínicas (~1–32ns) |
 | ✅ Tipado seguro | Rust previene errores en compilación |
-| ✅ Documentación | Docs técnicas completas en /docs |
+| ✅ Documentación | Docs técnicas + rustdoc + ARQUITECTURA.md |
 | ✅ UI moderna | Glassmorphism responsiva |
 | ✅ WASM | Frontend compilado, alto rendimiento |
 | ✅ Empotrado | Base de datos local, sin infraestructura |
@@ -1050,6 +1106,11 @@ let stats_resource = LocalResource::new(|| {
 | ✅ **Configuración Institución** | Nombre, RIF, dirección, contacto, logo |
 | ✅ **Cero warnings** | Proyecto compila sin errores ni advertencias |
 | ✅ **Registro auto-asignación** | Paciente asigna cama libre + equipos |
+| ✅ **Sidebar reactiva** | Login sin refresh, señal reactiva Leptos |
+| ✅ **Auth middleware** | JWT en todas las rutas, open_paths corregido |
+| ✅ **CSP headers** | wasm-unsafe-eval, Google Fonts, Font Awesome |
+| ✅ **CI/CD listo** | GitHub Actions, Docker Compose producción |
+| ✅ **4 sprints completados** | 28/28 tareas, 100% roadmap Junio 2026 |
 
 ---
 

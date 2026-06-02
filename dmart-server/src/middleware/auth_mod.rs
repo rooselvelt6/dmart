@@ -2,16 +2,17 @@ use axum::{
     body::Body,
     extract::{Request, State},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
     Json,
 };
-use serde_json::json;
 
 use crate::auth::{extract_token_from_header, AuthService, Claims};
 use dmart_shared::models::ApiResponse;
 
+#[derive(Clone)]
 pub struct AuthMiddlewareConfig {
     pub auth_service: AuthService,
+    #[allow(dead_code)]
     pub required_paths: Vec<String>,
     pub open_paths: Vec<String>,
 }
@@ -21,14 +22,14 @@ impl AuthMiddlewareConfig {
         Self {
             auth_service,
             required_paths: vec![
-                "/api/patients".to_string(),
-                "/api/measurements".to_string(),
-                "/api/stats".to_string(),
+                "/patients".to_string(),
+                "/measurements".to_string(),
+                "/stats".to_string(),
             ],
             open_paths: vec![
-                "/api/health".to_string(),
-                "/api/auth/login".to_string(),
-                "/api/auth/register".to_string(),
+                "/health".to_string(),
+                "/auth/login".to_string(),
+                "/auth/register".to_string(),
             ],
         }
     }
@@ -37,6 +38,7 @@ impl AuthMiddlewareConfig {
         self.open_paths.iter().any(|p| path.starts_with(p))
     }
 
+    #[allow(dead_code)]
     pub fn is_auth_required(&self, path: &str) -> bool {
         !self.is_path_open(path)
     }
@@ -85,6 +87,7 @@ pub async fn auth_middleware(
     }
 }
 
+#[allow(dead_code)]
 pub fn require_auth<T: std::fmt::Display>(claims: &Claims, permission: &str) -> Result<(), String> {
     if claims.has_permission(permission) || claims.has_permission("*") {
         Ok(())
@@ -93,6 +96,7 @@ pub fn require_auth<T: std::fmt::Display>(claims: &Claims, permission: &str) -> 
     }
 }
 
+#[allow(dead_code)]
 pub fn require_role(claims: &Claims, roles: &[&str]) -> Result<(), String> {
     if roles.iter().any(|r| *r == claims.rol || claims.has_permission("*")) {
         Ok(())
@@ -101,11 +105,5 @@ pub fn require_role(claims: &Claims, roles: &[&str]) -> Result<(), String> {
     }
 }
 
-#[derive(axum::extract::FromRef)]
+#[allow(dead_code)]
 pub struct AuthUser(pub Claims);
-
-pub async fn get_auth_user(
-    request: &Request<Body>,
-) -> Option<&Claims> {
-    request.extensions().get::<Claims>()
-}

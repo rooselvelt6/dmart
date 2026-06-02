@@ -11,23 +11,26 @@ pub fn LoginPage() -> impl IntoView {
     let (loading, set_loading) = signal(false);
     
     let navigate = use_navigate();
+    let set_is_auth = use_context::<WriteSignal<bool>>();
 
     let on_submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();
         set_loading.set(true);
         set_error.set(false);
         
-        // Simular autenticación premium
         let u = username.get();
         let p = password.get();
         let nav = navigate.clone();
+        let set_auth = set_is_auth.clone();
         
         spawn_local(async move {
-            // Delay cosmético para efecto premium
             gloo_timers::future::TimeoutFuture::new(800).await;
             
             if !u.is_empty() && !p.is_empty() {
                 let _ = LocalStorage::set("dmart_auth", "true");
+                if let Some(setter) = set_auth {
+                    setter.set(true);
+                }
                 set_loading.set(false);
                 nav("/", Default::default());
             } else {

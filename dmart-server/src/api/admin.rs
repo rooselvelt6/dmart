@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
@@ -16,7 +16,7 @@ fn err_to_str(e: Error) -> (StatusCode, String) {
 // ─── Admin Stats ───────────────────────────────────────────────────
 
 pub async fn get_admin_stats(State(db): State<Database>) -> ApiResult<AdminStats> {
-    let _pacientes = crate::db::list_patients(&db).await.map_err(err_to_str)?;
+    let _pacientes = crate::db::list_patients(&db, 1, 0).await.map_err(err_to_str)?;
     let camas = crate::db::list_camas(&db).await.map_err(err_to_str)?;
     let equipos = crate::db::list_equipos(&db).await.map_err(err_to_str)?;
     let users = crate::db::list_users(&db).await.map_err(err_to_str)?;
@@ -68,9 +68,15 @@ pub struct InitCamasRequest {
     pub tipo: Option<String>,
 }
 
-pub async fn list_camas_api(State(db): State<Database>) -> ApiResult<Vec<Cama>> {
-    let camas = crate::db::list_camas(&db).await.map_err(err_to_str)?;
-    Ok(Json(ApiResponse::ok(camas)))
+pub async fn list_camas_api(
+    State(db): State<Database>,
+    Query(params): Query<PaginationParams>,
+) -> ApiResult<PaginatedResponse<Cama>> {
+    let limit = params.limit();
+    let offset = params.offset();
+    let camas = crate::db::list_camas_paginated(&db, limit, offset).await.map_err(err_to_str)?;
+    let total = crate::db::count_camas(&db).await.map_err(err_to_str)?;
+    Ok(Json(ApiResponse::ok(PaginatedResponse { items: camas, total, limit, offset })))
 }
 
 #[derive(serde::Deserialize)]
@@ -152,9 +158,15 @@ pub async fn get_equipos_disponibles_api(State(db): State<Database>) -> ApiResul
 
 // ─── Equipos API ───────────────────────────────────────────────────
 
-pub async fn list_equipos_api(State(db): State<Database>) -> ApiResult<Vec<Equipo>> {
-    let equipos = crate::db::list_equipos(&db).await.map_err(err_to_str)?;
-    Ok(Json(ApiResponse::ok(equipos)))
+pub async fn list_equipos_api(
+    State(db): State<Database>,
+    Query(params): Query<PaginationParams>,
+) -> ApiResult<PaginatedResponse<Equipo>> {
+    let limit = params.limit();
+    let offset = params.offset();
+    let equipos = crate::db::list_equipos_paginated(&db, limit, offset).await.map_err(err_to_str)?;
+    let total = crate::db::count_equipos(&db).await.map_err(err_to_str)?;
+    Ok(Json(ApiResponse::ok(PaginatedResponse { items: equipos, total, limit, offset })))
 }
 
 pub async fn create_equipo_api(
@@ -230,9 +242,15 @@ pub async fn desvincular_equipo_api(
 
 // ─── Staff Users API ─────────────────────────────────────────────
 
-pub async fn list_staff_api(State(db): State<Database>) -> ApiResult<Vec<User>> {
-    let staff = crate::db::list_staff(&db).await.map_err(err_to_str)?;
-    Ok(Json(ApiResponse::ok(staff)))
+pub async fn list_staff_api(
+    State(db): State<Database>,
+    Query(params): Query<PaginationParams>,
+) -> ApiResult<PaginatedResponse<User>> {
+    let limit = params.limit();
+    let offset = params.offset();
+    let staff = crate::db::list_staff_paginated(&db, limit, offset).await.map_err(err_to_str)?;
+    let total = crate::db::count_staff(&db).await.map_err(err_to_str)?;
+    Ok(Json(ApiResponse::ok(PaginatedResponse { items: staff, total, limit, offset })))
 }
 
 pub async fn create_staff_api(

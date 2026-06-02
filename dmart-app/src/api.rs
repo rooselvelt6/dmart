@@ -221,11 +221,11 @@ pub async fn init_camas(cantidad: u8) -> ApiResult<Vec<Cama>> {
 }
 
 pub async fn list_camas() -> ApiResult<Vec<Cama>> {
-    let resp: ApiResponse<Vec<Cama>> =
-        Request::get(&format!("{}/admin/camas", API_BASE)).send().await
+    let resp: ApiResponse<PaginatedResponse<Cama>> =
+        Request::get(&format!("{}/admin/camas?limit=200", API_BASE)).send().await
             .map_err(|e| e.to_string())?
             .json().await.map_err(|e| e.to_string())?;
-    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+    Ok(resp.data.map(|p| p.items).unwrap_or_default())
 }
 
 pub async fn get<T: for<'de> serde::Deserialize<'de>>(path: &str) -> ApiResult<T> {
@@ -330,11 +330,11 @@ pub async fn get_equipos_disponibles() -> ApiResult<Vec<Equipo>> {
 // ─── Staff CRUD ─────────────────────────────────────────────────────
 
 pub async fn list_staff() -> ApiResult<Vec<User>> {
-    let resp: ApiResponse<Vec<User>> =
-        Request::get(&format!("{}/admin/staff", API_BASE)).send().await
+    let resp: ApiResponse<PaginatedResponse<User>> =
+        Request::get(&format!("{}/admin/staff?limit=200", API_BASE)).send().await
             .map_err(|e| e.to_string())?
             .json().await.map_err(|e| e.to_string())?;
-    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+    Ok(resp.data.map(|p| p.items).unwrap_or_default())
 }
 
 pub async fn get_staff(id: &str) -> ApiResult<User> {

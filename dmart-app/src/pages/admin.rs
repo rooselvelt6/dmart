@@ -259,8 +259,8 @@ fn CamasPanel() -> impl IntoView {
 
     let fetch = move || {
         spawn_local(async move {
-            if let Ok(c) = api::get::<Vec<Cama>>("/admin/camas").await {
-                set_camas.set(c);
+            if let Ok(p) = api::get::<PaginatedResponse<Cama>>("/admin/camas?limit=200").await {
+                set_camas.set(p.items);
             }
         });
     };
@@ -502,8 +502,8 @@ fn EquiposPanel() -> impl IntoView {
 
     let fetch = move || {
         spawn_local(async move {
-            if let Ok(e) = api::get::<Vec<Equipo>>("/admin/equipos").await {
-                set_equipos.set(e);
+            if let Ok(p) = api::get::<PaginatedResponse<Equipo>>("/admin/equipos?limit=200").await {
+                set_equipos.set(p.items);
             }
         });
     };

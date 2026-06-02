@@ -916,7 +916,7 @@ pub fn sofa_breakdown(data: &ApacheIIData) -> SofaBreakdown {
     let pao2 = data.pao2.unwrap_or(80.0);
     let pao2fio2 = if data.fio2 > 0.0 { pao2 / data.fio2 } else { 400.0 };
     
-    let r = points_sofa_respiratorio(pao2fio2, data.ventilacion_mecanica);
+    let r = points_sofa_respiratorio(pao2fio2);
     let c = points_sofa_coagulacion(data.plaquetas);
     let h = points_sofa_hepatico(data.bilirrubina);
     let cv = points_sofa_cardiovascular(data.presion_arterial_media, data.vasopresores, data.dosis_vasopresor);
@@ -928,11 +928,38 @@ pub fn sofa_breakdown(data: &ApacheIIData) -> SofaBreakdown {
 }
 
 pub fn calculate_saps3_breakdown(data: &ApacheIIData) -> Saps3Breakdown {
-    // Simplified SAPS III logic for dashboard visualization
-    let b1 = 0; // Pre-admission
-    let b2 = 0; // Admission circumstances
-    let b3 = calculate_saps_iii_score(data); // Acute physiology
-    Saps3Breakdown { box1: b1, box2: b2, box3: b3, total: b1 + b2 + b3 }
+    let edad_pts = points_saps_edad(data.edad);
+    let comorb_pts = points_saps_comorbilidad(data.inmunocomprometido);
+    let vaso_pts = points_saps_vasoactivos(data.vasopresores);
+    let fuente_pts = points_saps_fuente(data.fuente_admision.as_deref());
+    let dias_pts = points_saps_dias_pre_uci(data.dias_pre_uci);
+    let tipo_pts = points_saps_tipo_admision(data.tipo_admision.as_deref());
+    let inf_pts = points_saps_infeccion(data.infeccion_admision.as_deref());
+
+    let gcs_pts = points_saps_gcs(data.gcs_total);
+    let fc_pts = points_saps_fc(data.frecuencia_cardiaca);
+    let pas_pts = points_saps_pas(data.presion_sistolica);
+    let temp_pts = points_saps_temperatura(data.temperatura);
+    let bili_pts = points_saps_bilirrubina(data.bilirrubina);
+    let creat_pts = points_saps_creatinina(data.creatinina);
+    let wbc_pts = points_saps_leucocitos(data.leucocitos);
+    let ph_pts = points_saps_ph(data.ph_arterial);
+    let plq_pts = points_saps_plaquetas(data.plaquetas);
+
+    let pao2 = data.pao2.unwrap_or(80.0);
+    let pao2fio2 = if data.fio2 > 0.0 {
+        pao2 / data.fio2
+    } else {
+        300.0
+    };
+    let ox_pts = points_saps_oxigenacion(data.ventilacion_mecanica, pao2fio2);
+
+    let box1 = edad_pts + comorb_pts + vaso_pts + fuente_pts + dias_pts;
+    let box2 = tipo_pts + inf_pts;
+    let box3 = gcs_pts + fc_pts + pas_pts + temp_pts + bili_pts + creat_pts + wbc_pts + ph_pts + plq_pts + ox_pts;
+    let total = box1 + box2 + box3;
+
+    Saps3Breakdown { box1, box2, box3, total }
 }
 
 pub fn news2_breakdown(data: &ApacheIIData) -> News2Breakdown {
@@ -963,23 +990,13 @@ pub fn news2_breakdown(data: &ApacheIIData) -> News2Breakdown {
 // SOFA Scoring (0-24 points)
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn points_sofa_respiratorio(pao2fio2: f32, vm: bool) -> u32 {
-    if vm {
-        match pao2fio2 {
-            r if r >= 400.0 => 0,
-            r if r >= 300.0 => 1,
-            r if r >= 200.0 => 2,
-            r if r >= 100.0 => 3,
-            _ => 4,
-        }
-    } else {
-        match pao2fio2 {
-            r if r >= 400.0 => 0,
-            r if r >= 300.0 => 1,
-            r if r >= 200.0 => 2,
-            r if r >= 100.0 => 3,
-            _ => 4,
-        }
+fn points_sofa_respiratorio(pao2fio2: f32) -> u32 {
+    match pao2fio2 {
+        r if r >= 400.0 => 0,
+        r if r >= 300.0 => 1,
+        r if r >= 200.0 => 2,
+        r if r >= 100.0 => 3,
+        _ => 4,
     }
 }
 
@@ -1049,7 +1066,7 @@ pub fn calculate_sofa_score(data: &ApacheIIData) -> u32 {
         400.0
     };
 
-    let resp_pts = points_sofa_respiratorio(pao2fio2, data.ventilacion_mecanica);
+    let resp_pts = points_sofa_respiratorio(pao2fio2);
     let coag_pts = points_sofa_coagulacion(data.plaquetas);
     let hep_pts = points_sofa_hepatico(data.bilirrubina);
     let cardio_pts = points_sofa_cardiovascular(

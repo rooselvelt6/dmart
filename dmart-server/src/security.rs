@@ -6,7 +6,7 @@
 //! - Clickjacking (X-Frame-Options)
 
 use axum::{
-    extract::Request,
+    extract::{Request, State},
     http::{HeaderValue, StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -16,8 +16,14 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use std::collections::HashMap;
 
+/// Combined security state for middleware
+#[derive(Clone)]
+pub struct SecurityState {
+    pub rate_limiter: Arc<RateLimiter>,
+    pub login_throttle: Arc<LoginThrottle>,
+}
+
 /// Rate Limiter using in-memory sliding window (backup for Valkey)
-#[allow(dead_code)]
 pub struct RateLimiter {
     requests: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
     max_requests: u32,
@@ -25,7 +31,6 @@ pub struct RateLimiter {
 }
 
 impl RateLimiter {
-    #[allow(dead_code)]
     pub fn new(max_requests: u32, window_secs: u64) -> Self {
         RateLimiter {
             requests: Arc::new(RwLock::new(HashMap::new())),
@@ -34,7 +39,6 @@ impl RateLimiter {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn check(&self, key: &str) -> bool {
         let now = Instant::now();
         let window = Duration::from_secs(self.window_secs);
@@ -58,7 +62,6 @@ impl RateLimiter {
 }
 
 /// Login throttle tracker (brute force protection)
-#[allow(dead_code)]
 pub struct LoginThrottle {
     attempts: Arc<RwLock<HashMap<String, (u32, Option<Instant>)>>>,
     max_attempts: u32,
@@ -66,7 +69,6 @@ pub struct LoginThrottle {
 }
 
 impl LoginThrottle {
-    #[allow(dead_code)]
     pub fn new(max_attempts: u32, lockout_secs: u64) -> Self {
         LoginThrottle {
             attempts: Arc::new(RwLock::new(HashMap::new())),
@@ -75,7 +77,6 @@ impl LoginThrottle {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn record_failure(&self, key: &str) -> bool {
         let mut attempts = self.attempts.write().await;
         let count = attempts.entry(key.to_string()).or_insert_with(|| (0u32, None));
@@ -94,7 +95,6 @@ impl LoginThrottle {
         attempts.remove(key);
     }
 
-    #[allow(dead_code)]
     pub async fn is_locked(&self, key: &str) -> Option<u64> {
         let attempts = self.attempts.read().await;
         if let Some((_, Some(locked_at))) = attempts.get(key) {
@@ -107,46 +107,52 @@ impl LoginThrottle {
     }
 }
 
-/// Security headers for all responses
+/// All security headers as key-value pairs
 pub fn security_headers() -> Vec<(header::HeaderName, HeaderValue)> {
     vec![
-        // Clickjacking protection
         (header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY")),
-        // XSS protection
         (header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")),
-        // CSP - Content Security Policy
         (
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
                 "default-src 'self'; \
-                script-src 'self' 'unsafe-inline'; \
-                style-src 'self' 'unsafe-inline'; \
+                script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com; \
+                style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; \
+                font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; \
                 img-src 'self' data:; \
-                connect-src 'self'; \
+                connect-src 'self' https://fonts.googleapis.com; \
                 frame-ancestors 'none';"
             ),
         ),
-        // Prevent MIME sniffing
-        (header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")),
-        // X-XSS-Protection (legacy but helpful)
         (header::HeaderName::from_static("x-xss-protection"), HeaderValue::from_static("1; mode=block")),
-        // Referrer policy
         (header::HeaderName::from_static("referrer-policy"), HeaderValue::from_static("strict-origin-when-cross-origin")),
-        // Permissions policy (limit features)
         (header::HeaderName::from_static("permissions-policy"), HeaderValue::from_static("camera=(), microphone=(), geolocation=()")),
+        (header::HeaderName::from_static("cross-origin-opener-policy"), HeaderValue::from_static("same-origin")),
     ]
 }
 
+/// Middleware that applies all security headers to every response
+pub async fn security_headers_middleware(
+    request: Request,
+    next: Next,
+) -> Response {
+    let mut response = next.run(request).await;
+    let headers = security_headers();
+    for (name, value) in headers {
+        response.headers_mut().insert(name, value);
+    }
+    response
+}
+
 /// Middleware to apply rate limiting
-#[allow(dead_code)]
 pub async fn rate_limit_middleware(
+    State(state): State<SecurityState>,
     req: Request,
     next: Next,
-    limiter: Arc<RateLimiter>,
 ) -> Response {
     let key = get_client_key(&req);
     
-    if limiter.check(&key).await {
+    if state.rate_limiter.check(&key).await {
         let mut res = next.run(req).await;
         res.headers_mut().insert(
             header::HeaderName::from_static("x-ratelimit-remaining"),
@@ -162,7 +168,6 @@ pub async fn rate_limit_middleware(
     }
 }
 
-#[allow(dead_code)]
 fn get_client_key(req: &Request) -> String {
     req.headers()
         .get("x-forwarded-for")
@@ -178,15 +183,14 @@ fn get_client_key(req: &Request) -> String {
 }
 
 /// Middleware for login throttling
-#[allow(dead_code)]
 pub async fn login_throttle_middleware(
+    State(state): State<SecurityState>,
     req: Request,
     next: Next,
-    throttle: Arc<LoginThrottle>,
 ) -> Response {
     let key = get_client_key(&req);
     
-    if let Some(remaining) = throttle.is_locked(&key).await {
+    if let Some(remaining) = state.login_throttle.is_locked(&key).await {
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, &remaining.to_string())],
@@ -197,7 +201,7 @@ pub async fn login_throttle_middleware(
     let res = next.run(req).await;
     
     if res.status() == StatusCode::UNAUTHORIZED {
-        if throttle.record_failure(&key).await {
+        if state.login_throttle.record_failure(&key).await {
             tracing::warn!("Login throttle triggered for IP: {}", key);
             return (
                 StatusCode::TOO_MANY_REQUESTS,
@@ -245,14 +249,13 @@ pub fn escape_html(input: &str) -> String {
 }
 
 /// Create global security state
-#[allow(dead_code)]
-pub fn create_security_state() -> (Arc<RateLimiter>, Arc<LoginThrottle>) {
+pub fn create_security_state() -> SecurityState {
     // 100 requests per minute for general endpoints
     let rate_limiter = Arc::new(RateLimiter::new(100, 60));
     // 5 failed logins before 5 minute lockout
     let login_throttle = Arc::new(LoginThrottle::new(5, 300));
     
-    (rate_limiter, login_throttle)
+    SecurityState { rate_limiter, login_throttle }
 }
 
 #[cfg(test)]

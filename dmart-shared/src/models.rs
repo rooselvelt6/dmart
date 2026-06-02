@@ -234,6 +234,33 @@ impl Saps3Level {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Pagination
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaginationParams {
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+impl PaginationParams {
+    pub fn limit(&self) -> u32 {
+        self.limit.unwrap_or(50).min(200)
+    }
+    pub fn offset(&self) -> u32 {
+        self.offset.unwrap_or(0)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub total: u64,
+    pub limit: u32,
+    pub offset: u32,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Patient
 // ─────────────────────────────────────────────────────────────────────────────
 

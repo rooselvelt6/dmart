@@ -47,23 +47,44 @@ pub async fn update_patient(db: &Surreal<Db>, id: &str, patient: Patient) -> Res
     Ok(updated)
 }
 
-pub async fn list_patients(db: &Surreal<Db>) -> Result<Vec<Patient>> {
-    let patients: Vec<Patient> = db.select("patients").await?;
+pub async fn list_patients(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Patient>> {
+    let patients: Vec<Patient> = db
+        .query("SELECT * FROM patients ORDER BY created_at DESC LIMIT $limit START $offset")
+        .bind(("limit", limit as i64))
+        .bind(("offset", offset as i64))
+        .await?
+        .take(0)?;
     Ok(patients)
 }
 
-pub async fn search_patients(db: &Surreal<Db>, query: &str) -> Result<Vec<Patient>> {
-    let q = query.to_lowercase();
-    let patients: Vec<Patient> = db.select("patients").await?;
-    let filtered: Vec<Patient> = patients.into_iter()
-        .filter(|p| {
-            p.nombre.to_lowercase().contains(&q) ||
-            p.apellido.to_lowercase().contains(&q) ||
-            p.cedula.to_lowercase().contains(&q) ||
-            p.historia_clinica.to_lowercase().contains(&q)
-        })
-        .collect();
-    Ok(filtered)
+pub async fn count_patients(db: &Surreal<Db>) -> Result<u64> {
+    let count: Vec<serde_json::Value> = db
+        .query("SELECT count() as count FROM patients GROUP BY count")
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+}
+
+pub async fn search_patients(db: &Surreal<Db>, query: &str, limit: u32, offset: u32) -> Result<Vec<Patient>> {
+    let q = format!("%{}%", query);
+    let patients: Vec<Patient> = db
+        .query("SELECT * FROM patients WHERE nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q ORDER BY created_at DESC LIMIT $limit START $offset")
+        .bind(("q", q))
+        .bind(("limit", limit as i64))
+        .bind(("offset", offset as i64))
+        .await?
+        .take(0)?;
+    Ok(patients)
+}
+
+pub async fn search_patients_count(db: &Surreal<Db>, query: &str) -> Result<u64> {
+    let q = format!("%{}%", query);
+    let count: Vec<serde_json::Value> = db
+        .query("SELECT count() as count FROM patients WHERE nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q GROUP BY count")
+        .bind(("q", q))
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 
 pub async fn delete_patient(db: &Surreal<Db>, id: &str) -> Result<()> {
@@ -74,6 +95,7 @@ pub async fn delete_patient(db: &Surreal<Db>, id: &str) -> Result<()> {
 // ─── Measurements ──────────────────────────────────────────────────────────
 
 pub async fn create_measurement(db: &Surreal<Db>, mut m: Measurement) -> Result<Measurement> {
+    let patient_id = m.patient_id.clone();
     let measurement_id = m.measurement_id.clone();
     if measurement_id.is_empty() {
         m.measurement_id = Uuid::new_v4().to_string();
@@ -82,6 +104,12 @@ pub async fn create_measurement(db: &Surreal<Db>, mut m: Measurement) -> Result<
         .create(("measurements", m.measurement_id.clone()))
         .content(m)
         .await?;
+
+    if crate::cache::cache_available() {
+        crate::cache::cache_del(&format!("measurements:{}", patient_id)).await;
+        crate::cache::cache_del(&format!("last_measurement:{}", patient_id)).await;
+    }
+
     created.ok_or_else(|| anyhow::anyhow!("Failed to create measurement"))
 }
 
@@ -89,12 +117,28 @@ pub async fn get_measurements_for_patient(
     db: &Surreal<Db>,
     patient_id: &str,
 ) -> Result<Vec<Measurement>> {
+    let cache_key = format!("measurements:{}", patient_id);
+    if crate::cache::cache_available() {
+        if let Some(cached) = crate::cache::cache_get(&cache_key).await {
+            if let Ok(measurements) = serde_json::from_str::<Vec<Measurement>>(&cached) {
+                return Ok(measurements);
+            }
+        }
+    }
+
     let pid = patient_id.to_string();
     let measurements: Vec<Measurement> = db
         .query("SELECT * FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC")
         .bind(("pid", pid))
         .await?
         .take(0)?;
+
+    if crate::cache::cache_available() {
+        if let Ok(json) = serde_json::to_string(&measurements) {
+            crate::cache::cache_set(&cache_key, &json, 60).await;
+        }
+    }
+
     Ok(measurements)
 }
 
@@ -102,13 +146,30 @@ pub async fn get_last_measurement(
     db: &Surreal<Db>,
     patient_id: &str,
 ) -> Result<Option<Measurement>> {
+    let cache_key = format!("last_measurement:{}", patient_id);
+    if crate::cache::cache_available() {
+        if let Some(cached) = crate::cache::cache_get(&cache_key).await {
+            if let Ok(m) = serde_json::from_str::<Option<Measurement>>(&cached) {
+                return Ok(m);
+            }
+        }
+    }
+
     let pid = patient_id.to_string();
     let measurements: Vec<Measurement> = db
         .query("SELECT * FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC LIMIT 1")
         .bind(("pid", pid))
         .await?
         .take(0)?;
-    Ok(measurements.into_iter().next())
+    let result = measurements.into_iter().next();
+
+    if crate::cache::cache_available() {
+        if let Ok(json) = serde_json::to_string(&result) {
+            crate::cache::cache_set(&cache_key, &json, 60).await;
+        }
+    }
+
+    Ok(result)
 }
 
 // ─── Camas ───────────────────────────────────────────────────────────
@@ -167,6 +228,24 @@ pub async fn update_cama(db: &Surreal<Db>, id: &str, cama: Cama) -> Result<Optio
 pub async fn list_camas(db: &Surreal<Db>) -> Result<Vec<Cama>> {
     let camas: Vec<Cama> = db.select("camas").await?;
     Ok(camas)
+}
+
+pub async fn list_camas_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Cama>> {
+    let camas: Vec<Cama> = db
+        .query("SELECT * FROM camas ORDER BY numero ASC LIMIT $limit START $offset")
+        .bind(("limit", limit as i64))
+        .bind(("offset", offset as i64))
+        .await?
+        .take(0)?;
+    Ok(camas)
+}
+
+pub async fn count_camas(db: &Surreal<Db>) -> Result<u64> {
+    let count: Vec<serde_json::Value> = db
+        .query("SELECT count() as count FROM camas GROUP BY count")
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 
 pub async fn get_cama_libre(db: &Surreal<Db>) -> Result<Option<Cama>> {
@@ -263,6 +342,24 @@ pub async fn update_equipo(db: &Surreal<Db>, id: &str, equipo: Equipo) -> Result
 pub async fn list_equipos(db: &Surreal<Db>) -> Result<Vec<Equipo>> {
     let equipos: Vec<Equipo> = db.select("equipos").await?;
     Ok(equipos)
+}
+
+pub async fn list_equipos_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Equipo>> {
+    let equipos: Vec<Equipo> = db
+        .query("SELECT * FROM equipos ORDER BY created_at DESC LIMIT $limit START $offset")
+        .bind(("limit", limit as i64))
+        .bind(("offset", offset as i64))
+        .await?
+        .take(0)?;
+    Ok(equipos)
+}
+
+pub async fn count_equipos(db: &Surreal<Db>) -> Result<u64> {
+    let count: Vec<serde_json::Value> = db
+        .query("SELECT count() as count FROM equipos GROUP BY count")
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 
 pub async fn list_equipos_por_cama(db: &Surreal<Db>, cama_id: &str) -> Result<Vec<Equipo>> {
@@ -372,6 +469,28 @@ pub async fn list_staff(db: &Surreal<Db>) -> Result<Vec<User>> {
     Ok(todos.into_iter()
         .filter(|u| matches!(u.rol, UserRole::Medico | UserRole::Enfermero))
         .collect())
+}
+
+pub async fn list_staff_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<User>> {
+    let staff: Vec<User> = db
+        .query("SELECT * FROM users WHERE rol = $medico OR rol = $enfermero ORDER BY created_at DESC LIMIT $limit START $offset")
+        .bind(("medico", "Medico"))
+        .bind(("enfermero", "Enfermero"))
+        .bind(("limit", limit as i64))
+        .bind(("offset", offset as i64))
+        .await?
+        .take(0)?;
+    Ok(staff)
+}
+
+pub async fn count_staff(db: &Surreal<Db>) -> Result<u64> {
+    let count: Vec<serde_json::Value> = db
+        .query("SELECT count() as count FROM users WHERE rol = $medico OR rol = $enfermero GROUP BY count")
+        .bind(("medico", "Medico"))
+        .bind(("enfermero", "Enfermero"))
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 
 pub async fn delete_user(db: &Surreal<Db>, id: &str) -> Result<()> {
