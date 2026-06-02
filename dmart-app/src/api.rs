@@ -64,12 +64,12 @@ pub async fn list_patients(query: Option<&str>) -> ApiResult<Vec<PatientListItem
         Some(q) if !q.is_empty() => format!("{}/patients?q={}", API_BASE, q),
         _ => format!("{}/patients", API_BASE),
     };
-    let resp: ApiResponse<Vec<PatientListItem>> =
+    let resp: ApiResponse<PaginatedResponse<PatientListItem>> =
         authed_get(&url).send().await
             .map_err(|e| e.to_string())?
             .json().await
             .map_err(|e| e.to_string())?;
-    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+    Ok(resp.data.map(|p| p.items).unwrap_or_default())
 }
 
 #[derive(Debug, Clone, Deserialize)]

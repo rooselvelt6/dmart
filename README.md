@@ -895,6 +895,13 @@ El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial 
 
 ## 🔧 Cambios Recientes (Junio 2026)
 
+### Fix: Paginación en listado de pacientes (frontend)
+
+Se corrigió el frontend para manejar correctamente la respuesta paginada del backend (`PaginatedResponse`) en lugar del formato plano anterior.
+
+**Archivo modificado:** `dmart-app/src/api.rs`
+- `list_patients()` ahora deserializa `ApiResponse<PaginatedResponse<PatientListItem>>` y extrae `.items`
+
 ### Sprint 4: Infraestructura y Documentación — COMPLETADO
 
 Se finalizaron los 4 sprints del roadmap Junio 2026, completando las 28 tareas planificadas.
