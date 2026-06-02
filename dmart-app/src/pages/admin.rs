@@ -278,8 +278,8 @@ fn CamasPanel() -> impl IntoView {
     let open_edit = move |c: Cama| {
         set_edit_cama.set(Some(c.clone()));
         set_form_numero.set(c.numero);
-        set_form_tipo.set(c.tipo.label().to_string());
-        set_form_estado.set(c.estado.label().to_string());
+        set_form_tipo.set(format!("{:?}", c.tipo));
+        set_form_estado.set(format!("{:?}", c.estado));
         set_show_form.set(true);
     };
 
@@ -355,7 +355,7 @@ fn CamasPanel() -> impl IntoView {
                             on:change=move |ev| { set_form_tipo.set(event_target_value(&ev)); }>
                             <option value="General">"General"</option>
                             <option value="Aislamiento">"Aislamiento"</option>
-                            <option value="Pediátrica">"Pediátrica"</option>
+                            <option value="Pediatrica">"Pediátrica"</option>
                             <option value="Coronaria">"Coronaria"</option>
                             <option value="Quemados">"Quemados"</option>
                             <option value="Otro">"Otro"</option>
@@ -528,7 +528,7 @@ fn EquiposPanel() -> impl IntoView {
         set_form_marca.set(e.marca.clone());
         set_form_modelo.set(e.modelo.clone());
         set_form_serial.set(e.serial.clone());
-        set_form_estado.set(e.estado.label().to_string());
+        set_form_estado.set(format!("{:?}", e.estado));
         set_show_form.set(true);
     };
 
