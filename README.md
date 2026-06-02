@@ -683,156 +683,99 @@ validation.rs::validate_apache_measurement()
 
 ---
 
-## 📅 Roadmap 2026 - Seguridad Empresarial y Avanzada
+## 📅 Roadmap 2026 - Plan de Mejoras del Sistema
 
-El sistema evoluciona hacia una plataforma de gestión UCI de nivel empresarial con enfoque en seguridad, interoperabilidad y análisis predictivo.
-
----
-
-### 🔐 Q1 2026 - Seguridad de Datos y Cifrado
-
-#### Cifrado de Datos en Reposo
-- [ ] **AES-256-GCM** - Cifrado de base de datos SurrealDB
-  - Key derivation con Argon2id para claves maestras
-  - Cifrado granular por tabla (pacientes, mediciones, usuarios)
-  - Backups cifrados automáticamente con rotación de claves
-- [ ] **ChaCha20-Poly1305** - Cifrado autenticado para datos sensibles
-  - Integración con dispositivos IoT médicos
-  - Comunicaciones internas entre microservicios
-
-#### Auditoría HIPAA Completa
-- [ ] **Audit Log Avanzado**
-  - Registro inmutable de accesos PHI (6 años retención)
-  - Índices encriptados para búsqueda de eventos
-  - Exportación de auditoría para compliance reporting
-- [ ] **Data Loss Prevention (DLP)**
-  - Detección de intentos de exfiltración de datos
-  - Alertas en tiempo real para accesos anómalos
-
-#### Seguridad de Aplicación
-- [x] **Rate Limiting** inteligente por usuario/IP
-- [x] **CSP Headers** (Content Security Policy) para WASM
-- [x] **HSTS** (HTTP Strict Transport Security)
+Plan integral de actualización organizado por tiers de criticidad para llevar dMart a un nivel de producción empresarial.
 
 ---
 
-### 🔑 Q2 2026 - Autenticación Empresarial
+### 🔴 Tier 1 — Seguridad (Producción Bloqueante)
 
-#### Sistema de Identidad
-- [ ] **OAuth 2.0 + OpenID Connect**
-  - Provider interno compatible con estándares
-  - Tokens JWT firmados con RS256/ES256
-- [x] **Refresh tokens** con rotación automática
-- [ ] **LDAP/Active Directory Integration**
-  - Sincronización de usuarios desde directorio corporativo
-  - Grupos LDAP mapeados a roles RBAC
+| # | Mejora | Impacto |
+|---|--------|---------|
+| 1 | **`DMART_MASTER_KEY` obligatorio** vía env con fail al arranque si es default | Cifrado reversible con clave hardcodeada |
+| 2 | **Revocación real de JWT** — blacklist en Redis/Valkey al hacer logout | Sesiones no terminables |
+| 3 | **CSRF Protection** — doble cookie + SameSite=Strict | Vulnerable en state-changing requests |
+| 4 | **`require_role()` en todos los handlers** — admin, patients, measurements | RBAC existe pero no se ejecuta |
+| 5 | **Argon2id configurable** — bajar m_cost de 64MB→19MB por defecto | 4 logins simultáneos = 256MB RAM |
+| 6 | **Ocultar `password_hash`** en respuestas de staff CRUD | Exposición de hashes de usuarios |
+| 7 | **Proteger `/auth/register`** — solo admin puede crear cuentas | Cualquiera crea usuarios hoy |
+| 8 | **Rate limiter real** — fix spoofing X-Forwarded-For, key por IP real | Bypass del rate limiter |
+| 9 | **HSTS + TLS automático** — redirección HTTP→HTTPS, cert self-signed dev | Tráfico en texto plano |
 
-#### Multi-Factor Authentication (MFA)
-- [ ] **TOTP** - Google Authenticator, Authy compatible
-- [ ] **WebAuthn/FIDO2** - Llaves hardware (YubiKey)
-- [ ] **Biometrics** - Huella dactilar, reconocimiento facial (web APIs)
-- [ ] **SMS/Email OTP** - Códigos de respaldo
+### 🟠 Tier 2 — Datos y Arquitectura
 
-#### Single Sign-On (SSO)
-- [ ] **SAML 2.0** - Integración con hospitales multi-sitio
-- [ ] **Session Federation** - Sesiones compartidas entre aplicaciones
-- [ ] **Logout Single** - Cierre de sesión centralizado
+| # | Mejora | Impacto |
+|---|--------|---------|
+| 10 | **Sistema de migraciones SurrealQL** — schema versionado en `migrations/` | Cambios de schema sin data loss |
+| 11 | **Persistencia de diagnósticos** — almacenar en SurrealDB en vez de HashMap en memoria | Diagnósticos se pierden al reiniciar |
+| 12 | **Transacciones atómicas** — creación paciente + asignación cama + equipos | Inconsistencia en fallo parcial |
+| 13 | **Índices en SurrealDB** — `DEFINE INDEX` en `created_at`, `username`, `cama_id`, `estado` | Full scans en cada consulta |
+| 14 | **Año dinámico** — reemplazar `let current_year = 2026` por `chrono::Utc::now()` | Edades incorrectas en 2027+ |
+| 15 | **WHERE queries** — reemplazar `db.select()` sin filtro en auditoría, db.rs, auth | Carga masiva en memoria |
+| 16 | **Stats con agregaciones** — `GROUP BY` en SurrealDB vs cargar 50k filas | OOM en datasets grandes |
+| 17 | **FHIR module activo** — conectar handlers al router (hoy dead code `#[allow(dead_code)]`) | Interoperabilidad no funcional |
 
----
+### 🟡 Tier 3 — Observabilidad y Operaciones
 
-### 🌐 Q3 2026 - Interoperabilidad y Estándares
+| # | Mejora | Impacto |
+|---|--------|---------|
+| 18 | **Prometheus metrics** — contadores de requests, latencia p50/p95/p99, errores por endpoint | Sin monitoreo en producción |
+| 19 | **Logging estructurado** — JSON output + OpenTelemetry tracing (opentelemetry crate) | Debugging en producción imposible |
+| 20 | **`spa_handler()` async** — reemplazar `std::fs::read_to_string` por `tokio::fs` | Bloqueo del event loop |
+| 21 | **Health check enriquecido** — DB ping, cache ping, uptime, versión, conexiones activas | Health check actual mínimo |
+| 22 | **Graceful shutdown mejorado** — drenado de conexiones activas con timeout configurable | Conexiones cortadas en reinicio |
+| 23 | **Recuperación automática** — reconnect DB con backoff exponencial si SurrealKV falla | Caída del servidor por DB |
+| 24 | **Alertas de sistema** — webhook Slack/Email cuando CPU>80%, memoria>90%, disco>85% | Sin notificaciones operativas |
 
-#### HL7 FHIR R4 Integration
-- [x] **FHIR Patient** - Import/export de pacientes
-- [x] **FHIR Observation** - Mediciones como recursos FHIR
-- [x] **FHIR Condition** - Diagnósticos ICD-10
-- [ ] **FHIR DiagnosticReport** - Reportes clínicos estructurados
-- [ ] **SMART on FHIR** - Aplicaciones third-party
+### 🔵 Tier 4 — Frontend y UX
 
-#### Integración de Dispositivos
-- [ ] **HL7 V2** - Conexión con monitores de signos vitales
-- [ ] **IEEE 11073** - Protocolo de dispositivos médicos
-- [ ] ** MQTT/IoT** - Sensores de sala UCI
-- [ ] **WebSocket Streaming** - Datos en tiempo real
+| # | Mejora | Impacto |
+|---|--------|---------|
+| 25 | **Loading states + error handling** en todas las páginas (Suspense, fallback UI) | Pantallas en blanco mientras carga |
+| 26 | **PWA Offline** — Service Worker con cache-first para assets WASM | Inoperable sin internet |
+| 27 | **Notificaciones Push** — alertas de deterioro de paciente vía Service Worker API | Médicos no notificados en tiempo real |
+| 28 | **WCAG 2.1 AA** — roles ARIA, contraste mínimo 4.5:1, navegación por teclado completo | Exclusión de usuarios con discapacidad |
+| 29 | **Virtual scrolling** — renderizar solo filas visibles en listas de 1000+ pacientes | DOM inchable con muchos pacientes |
+| 30 | **Dark mode persistente** — guardar preferencia en localStorage + respetar `prefers-color-scheme` | Tema se resetea al recargar |
+| 31 | **Búsqueda reactiva** — debounce 300ms + resultados en tiempo real en listado pacientes | Búsqueda lenta y sin feedback |
 
-#### API Gateway
-- [ ] **GraphQL API** - Consultas flexibles para dashboards
-- [ ] **gRPC** - Comunicación de baja latencia
-- [ ] **API Keys** - Gestión para integrations third-party
-- [ ] **Rate Limiting por API Key**
+### 🧪 Tier 5 — Testing y QA
 
----
+| # | Mejora | Impacto |
+|---|--------|---------|
+| 32 | **E2E tests (Playwright)** — login, CRUD pacientes, mediciones, admin, dashboard | Sin cobertura de flujos completos |
+| 33 | **Load testing (k6)** — 100/500/1000 usuarios concurrentes, identificar bottlenecks | Sin perfil de rendimiento |
+| 34 | **Security scanning en CI** — `cargo audit` + `trivy` + `cargo deny` | Vulnerabilidades en dependencias no detectadas |
+| 35 | **Unit tests crypto** — encrypt/decrypt roundtrip, key derivation, edge cases | Código de cifrado no testeado |
+| 36 | **Unit tests auth middleware** — JWT validation, role checking, expired tokens | Middleware de seguridad no testeado |
+| 37 | **Unit tests auditoría** — log retrieval, cleanup, filtering | Audit log no testeado |
+| 38 | **Property-based testing (proptest)** — escalas clínicas con valores aleatorios dentro de rango | Casos borde no cubiertos |
+| 39 | **Fuzzing** — API endpoints con datos malformados (JSON inválido, campos faltantes, inyección) | Resistencia a entradas maliciosas |
 
-### 📊 Q4 2026 - Analytics y Machine Learning
+### 🚀 Tier 6 — DevOps e Infraestructura
 
-#### Dashboard Ejecutivo
-- [ ] **Gráfico Radar por Paciente**
-  - Visualización multi-dimensional: APACHE, GCS, SOFA, NEWS2, SAPS3
-  - Comparación con rangos normales
-  - Tendencias temporales superpuestas
-- [ ] **Heatmaps de UCI**
-  - Mapa de planta con estado de cada cama
-  - Alertas visuales de deterioro
-- [ ] **KPIs en Tiempo Real**
-  - Mortalidad predicted vs actual
-  - Estancia media por diagnóstico
-  - Ocupación de UCI
+| # | Mejora | Impacto |
+|---|--------|---------|
+| 40 | **GitHub Actions paralelo** — test + lint + security + build en jobs simultáneos | CI lento (~15 min secuencial) |
+| 41 | **Semantic versioning** — `git-cliff` para changelog automatizado desde conventional commits | Sin trazabilidad de releases |
+| 42 | **Docker multi-stage** — builder image con cache de capas, runtime image mínima (~50MB) | Imagen Docker hinchada |
+| 43 | **Backup automático SurrealKV** — cron diario + S3/MinIO compatible con rotación 30 días | Sin backups, pérdida de datos |
+| 44 | **`wasm-opt` en CI** — instalar binary en runner, optimizar WASM en build | WASM no optimizado (2.2MB→~600KB) |
+| 45 | **Docker Compose healthcheck** — dependencia entre servicios con `condition: service_healthy` | Arranque en orden incorrecto |
+| 46 | **Autoscaling** — `HORIZONTAL_SCALE` env para workers Tokio, bind a varios cores | CPU infrautilizada en multi-core |
 
-#### Machine Learning con Burn
-- [ ] **Predicción de Deterioro**
-  - Modelo LSTM para predicción 6-12 horas
-  - Features: tendencias de scores, labs, vitales
-- [ ] **Detección de Sepsis Temprana**
-  - Modelo Random Forest con alertas SOFA
-  - Integración con datos de laboratorio
-- [ ] **Mortality Risk Stratification**
-  - Ensemble de modelos (APACHE + ML)
-  - Calibración de probabilidades
+### ⚕️ Tier 7 — Funcionalidades Clínicas Avanzadas
 
-#### Explicabilidad de Modelos (XAI)
-- [ ] **SHAP Values** - Importancia de features
-- [ ] **LIME Explanations** - Justificación de predicciones
-- [ ] **Feature Attribution可视化** - Gráficos de contribución
-
----
-
-### 🎨 UX/UI Improvements
-
-#### Experience Premium
-- [ ] **Dark Mode persistente** con preferencia del sistema
-- [ ] **Gráficos 3D** con WebGL (Three.js/WASM)
-- [ ] **Animaciones fluidas** - Transiciones de estado
-- [ ] **PWA Offline** - Funciona sin conexión
-- [ ] **Notificaciones Push** - Alertas de deterioro
-
-#### Accesibilidad
-- [ ] **WCAG 2.1 AA** compliance
-- [ ] **Screen Reader** support
-- [ ] **Keyboard Navigation** completa
-- [ ] **Alto contraste** para UCI (luces bajas)
-
----
-
-### 🔧 Technical Debt & Infrastructure
-
-#### Optimizaciones
-- [x] **SurrealKV** - Storage nativo Rust ACID
-- [ ] **Connection Pooling** para base de datos
-- [ ] **Lazy Loading** de componentes WASM
-- [ ] **Service Worker** para caching offline
-
-#### Testing
-- [x] **Integration Tests** de API endpoints (3 tests)
-- [x] **Benchmarks** de escalas clínicas (8 criterion)
-- [ ] **E2E Tests** con Playwright
-- [ ] **Load Testing** con k6
-- [ ] **Security Scanning** automatizado
-
-#### DevOps
-- [x] **Docker Compose** para producción
-- [x] **CI/CD** con GitHub Actions
-- [ ] **Semantic Versioning** para releases
-- [ ] **Changelog** automatizado
+| # | Mejora | Impacto |
+|---|--------|---------|
+| 47 | **Activar FHIR R4 en router** — conectar endpoints /fhir/* (Patient, Observation, Condition) | Módulo FHIR existe pero inaccesible |
+| 48 | **HL7 V2 / MQTT** — conectar monitores de signos vitales (Mindray, Philips) con parser HL7 | Datos manuales vs automáticos |
+| 49 | **Dashboard ejecutivo** — heatmap de camas en tiempo real, KPIs (mortalidad predicted vs actual, LOS) | Sin vista de mando |
+| 50 | **Predicción de deterioro (ML)** — modelo LSTM con Burn framework, features: scores + tendencias + labs | Detección tardía de deterioro |
+| 51 | **Reportes clínicos PDF** — logo institución, FHIR DiagnosticReport, QR de validación | Reportes genéricos sin marca |
+| 52 | **WebSocket streaming** — scores en tiempo real al frontend cuando llegan nuevas mediciones | Datos stale hasta recargar |
+| 53 | **Glasgow coma scale animado** — input visual (ojos, verbal, motor) con imágenes interactivas | GCS lento de ingresar |
 
 ---
 
@@ -1118,125 +1061,6 @@ let stats_resource = LocalResource::new(|| {
 | ✅ **CSP headers** | wasm-unsafe-eval, Google Fonts, Font Awesome |
 | ✅ **CI/CD listo** | GitHub Actions, Docker Compose producción |
 | ✅ **4 sprints completados** | 28/28 tareas, 100% roadmap Junio 2026 |
-
----
-
-## 🔬 Auditoría de Seguridad y Rendimiento
-
-### 🔴 Vulnerabilidades
-
-| Severidad | Cantidad |
-|-----------|----------|
-| CRÍTICO | 4 |
-| ALTO | 6 |
-| MEDIO | 10 |
-
-#### CRÍTICOS
-
-| # | Hallazgo | Archivo | Impacto |
-|---|----------|---------|---------|
-| 1 | **Login frontend no contacta al backend** — solo valida campos no vacíos en cliente y guarda `"true"` en localStorage; cualquiera abre la consola y escribe `localStorage.setItem("dmart_auth","true")` para acceder | `login.rs:26-31` | Bypass total de autenticación |
-| 2 | **Frontend nunca envía JWT** — todas las llamadas API carecen del header `Authorization`, el servidor responde 401 en toda petición del UI | `api.rs` | UI inutilizable |
-| 3 | **RBAC definido pero nunca ejecutado** — `require_role()` y `require_auth()` están marcados `#[allow(dead_code)]`; cualquier usuario autenticado tiene acceso total a todo | `auth_mod.rs:91-106` | Sin control de acceso |
-| 4 | **Cifrado en reposo es código muerto** — `CryptoService` implementa ChaCha20-Poly1305 pero jamás se invoca; toda PHI (nombres, cédulas, direcciones) viaja en texto plano en el archivo `.db` | `crypto.rs` | Exposición total de datos sensibles |
-
-#### ALTOS
-
-| # | Hallazgo | Archivo |
-|---|----------|---------|
-| 5 | `/auth/register` es público — cualquiera crea cuentas sin autenticación | `auth_mod.rs:33` |
-| 6 | Contraseña admin por defecto `admin123` si no se configura `DMART_ADMIN_PASSWORD` | `auth.rs:322-325` |
-| 7 | Password hash expuesto en endpoints staff — `User` incluye `password_hash`, el CRUD lo acepta y devuelve | `admin.rs:258-271` |
-| 8 | Rate limiter vulnerable a spoofing de `X-Forwarded-For`; si se omite, todas las IPs comparten la clave `"unknown"` | `security.rs:171` |
-| 9 | Sin HSTS ni TLS — todo el tráfico es HTTP plano; servidor bindea a `0.0.0.0` | `main.rs:285` |
-| 10 | MFA declarado en structs pero hardcodeado a `false`; refresh tokens sin revocación | `auth.rs:204` |
-
-#### MEDIOS
-
-| # | Hallazgo |
-|---|----------|
-| 11 | CSP permite `'unsafe-inline'` en scripts — debilita protección XSS |
-| 12 | CORS permite todos los headers (`Any`) |
-| 13 | Errores de BD expuestos al cliente (`e.to_string()`) — fuga de información interna |
-| 14 | Sin validación de longitud en campos string (nombre, dirección, etc.) |
-| 15 | JWT_SECRET placeholder en `.env.example` (`change-me-to-a-random-64-char-string`) |
-| 16 | Auditoría almacenada en la misma BD que datos operativos |
-| 17 | Admin CRUD sin registro de auditoría |
-| 18 | `cleanup_old_logs` nunca se ejecuta automáticamente |
-| 19 | Sandbox `clear` carga hasta 50k pacientes en memoria para borrar |
-| 20 | Cliente controla `patient_id` y `created_at` en creación |
-
----
-
-### 🟠 Rendimiento
-
-| Severidad | Cantidad |
-|-----------|----------|
-| BLOQUEANTE | 5 |
-| ALTO | 8 |
-| MEDIO | 9 |
-
-#### BLOQUEANTES
-
-| # | Hallazgo | Archivo | Impacto |
-|---|----------|---------|---------|
-| 1 | **Auditoría carga TODOS los registros en memoria** — `query()`, `get_recent()`, `get_failed_logins()` hacen `db.select("audit_logs")` sin WHERE. Con 1M registros → ~300 MB por consulta | `audit.rs:304-395` | OOM del servidor |
-| 2 | **`/api/stats` carga 50,000 pacientes** — `list_patients(&db, 50000, 0)` trae 50k filas, las itera 4 veces, las mapea y las devuelve como JSON. Respuesta de 5–20 MB, latencia de segundos | `stats.rs:51` | Tiempo de respuesta extremo |
-| 3 | **Audit cleanup N+1** — carga todos los logs, luego los borra uno por uno con N queries individuales | `audit.rs:395-414` | Timeout en limpieza |
-| 4 | **Múltiples table scans** — `get_cama_libre_por_tipo`, `get_user_by_username`, `count_camas_por_tipo`, etc. hacen `db.select("tabla")` y filtran en Rust vs usar WHERE | `db.rs:206,216,252,366,399,404,450,468` | Degradación O(n) |
-| 5 | **Dashboard N+1 en frontend** — cada `PatientPokemonCard` lanza su propia llamada a `get_measurements()` | `dashboard.rs:196-200` | Múltiples requests por paciente |
-
-#### ALTOS
-
-| # | Hallazgo | Archivo |
-|---|----------|---------|
-| 6 | Argon2id usa **64 MB por login** (m_cost=65536 KiB). Recomendado: 19 MB. 4 logins simultáneos = 256 MB de RAM | `auth.rs:114` |
-| 7 | `spa_handler()` usa `std::fs::read_to_string()` bloqueante en contexto async | `main.rs:83` |
-| 8 | Caché Redis con `Mutex` global serializa todo acceso | `cache.rs:23-40` |
-| 9 | Sin índices en SurrealDB — cada `ORDER BY` requiere full sort | `db.rs` |
-| 10 | `wasm-opt` no instalado en el sistema — `Trunk.toml` lo requiere pero no se ejecuta | `Trunk.toml:4` |
-| 11 | `liberar_equipos_de_cama()` tiene patrón N+1 | `db.rs:423-428` |
-| 12 | Búsqueda de pacientes usa `~=` (fuzzy match) en 4 campos — full scan siempre | `db.rs:71` |
-| 13 | `get_user` escanea toda la tabla users | `auth.rs:231-237` |
-
-#### MEDIOS
-
-| # | Hallazgo |
-|---|----------|
-| 14 | `list_patients` y `count_patients` son queries separadas en cada request |
-| 15 | Clones innecesarios en `db.rs:98-99,182-185` y `patients.rs:62-76` |
-| 16 | Structs grandes: Patient ~500B, Measurement ~800B, ApacheIIData ~400B |
-| 17 | Sin transacciones en creación de paciente + asignación cama/equipos |
-| 18 | Payload de medición incluye ApacheIIData completo (42 campos) |
-
-#### Benchmarks (lo bueno)
-
-| Escala | Tiempo |
-|--------|--------|
-| GCS | **0.94 ns** |
-| Mortalidad | **1.3 ns** |
-| NEWS2 | **5.9 ns** |
-| SOFA | **6.8 ns** |
-| SAPS III score | **29.7 ns** |
-
-Los cálculos clínicos son óptimos — tablas `match` sin allocations, lógica entera/float pura.
-
----
-
-### 🎯 Recomendaciones Prioritarias
-
-| # | Acción | Severidad |
-|---|--------|-----------|
-| 1 | Conectar frontend al backend: enviar JWT en header `Authorization` en todas las requests (`api.rs`) | 🔴 CRÍTICO |
-| 2 | Ejecutar `require_role()` en cada endpoint (admin, patients, measurements) | 🔴 CRÍTICO |
-| 3 | Proteger `/auth/register` o requerir token admin para crear usuarios | 🔴 ALTO |
-| 4 | Reemplazar `db.select()` con queries WHERE en auditoría y db.rs | 🟠 BLOQUEANTE |
-| 5 | Usar agregaciones `GROUP BY` en `/api/stats` en vez de cargar 50k filas | 🟠 BLOQUEANTE |
-| 6 | Bajar Argon2id de 64MB a 19MB (`m_cost=19456`) | 🟠 ALTO |
-| 7 | Reemplazar `std::fs` con `tokio::fs` en `spa_handler()` | 🟠 ALTO |
-| 8 | Agregar `DEFINE INDEX` en SurrealDB para `created_at`, `username`, `cama_id`, `estado` | 🟠 ALTO |
-| 9 | Instalar `wasm-opt` en el sistema o CI/CD | 🟡 MEDIO |
-| 10 | Agregar transacciones en creación de paciente + asignación de recursos | 🟡 MEDIO |
 
 ---
 
