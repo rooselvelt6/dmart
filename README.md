@@ -1114,7 +1114,124 @@ let stats_resource = LocalResource::new(|| {
 
 ---
 
-## 🚀 Uso Hospitalario
+## 🔬 Auditoría de Seguridad y Rendimiento
+
+### 🔴 Vulnerabilidades
+
+| Severidad | Cantidad |
+|-----------|----------|
+| CRÍTICO | 4 |
+| ALTO | 6 |
+| MEDIO | 10 |
+
+#### CRÍTICOS
+
+| # | Hallazgo | Archivo | Impacto |
+|---|----------|---------|---------|
+| 1 | **Login frontend no contacta al backend** — solo valida campos no vacíos en cliente y guarda `"true"` en localStorage; cualquiera abre la consola y escribe `localStorage.setItem("dmart_auth","true")` para acceder | `login.rs:26-31` | Bypass total de autenticación |
+| 2 | **Frontend nunca envía JWT** — todas las llamadas API carecen del header `Authorization`, el servidor responde 401 en toda petición del UI | `api.rs` | UI inutilizable |
+| 3 | **RBAC definido pero nunca ejecutado** — `require_role()` y `require_auth()` están marcados `#[allow(dead_code)]`; cualquier usuario autenticado tiene acceso total a todo | `auth_mod.rs:91-106` | Sin control de acceso |
+| 4 | **Cifrado en reposo es código muerto** — `CryptoService` implementa ChaCha20-Poly1305 pero jamás se invoca; toda PHI (nombres, cédulas, direcciones) viaja en texto plano en el archivo `.db` | `crypto.rs` | Exposición total de datos sensibles |
+
+#### ALTOS
+
+| # | Hallazgo | Archivo |
+|---|----------|---------|
+| 5 | `/auth/register` es público — cualquiera crea cuentas sin autenticación | `auth_mod.rs:33` |
+| 6 | Contraseña admin por defecto `admin123` si no se configura `DMART_ADMIN_PASSWORD` | `auth.rs:322-325` |
+| 7 | Password hash expuesto en endpoints staff — `User` incluye `password_hash`, el CRUD lo acepta y devuelve | `admin.rs:258-271` |
+| 8 | Rate limiter vulnerable a spoofing de `X-Forwarded-For`; si se omite, todas las IPs comparten la clave `"unknown"` | `security.rs:171` |
+| 9 | Sin HSTS ni TLS — todo el tráfico es HTTP plano; servidor bindea a `0.0.0.0` | `main.rs:285` |
+| 10 | MFA declarado en structs pero hardcodeado a `false`; refresh tokens sin revocación | `auth.rs:204` |
+
+#### MEDIOS
+
+| # | Hallazgo |
+|---|----------|
+| 11 | CSP permite `'unsafe-inline'` en scripts — debilita protección XSS |
+| 12 | CORS permite todos los headers (`Any`) |
+| 13 | Errores de BD expuestos al cliente (`e.to_string()`) — fuga de información interna |
+| 14 | Sin validación de longitud en campos string (nombre, dirección, etc.) |
+| 15 | JWT_SECRET placeholder en `.env.example` (`change-me-to-a-random-64-char-string`) |
+| 16 | Auditoría almacenada en la misma BD que datos operativos |
+| 17 | Admin CRUD sin registro de auditoría |
+| 18 | `cleanup_old_logs` nunca se ejecuta automáticamente |
+| 19 | Sandbox `clear` carga hasta 50k pacientes en memoria para borrar |
+| 20 | Cliente controla `patient_id` y `created_at` en creación |
+
+---
+
+### 🟠 Rendimiento
+
+| Severidad | Cantidad |
+|-----------|----------|
+| BLOQUEANTE | 5 |
+| ALTO | 8 |
+| MEDIO | 9 |
+
+#### BLOQUEANTES
+
+| # | Hallazgo | Archivo | Impacto |
+|---|----------|---------|---------|
+| 1 | **Auditoría carga TODOS los registros en memoria** — `query()`, `get_recent()`, `get_failed_logins()` hacen `db.select("audit_logs")` sin WHERE. Con 1M registros → ~300 MB por consulta | `audit.rs:304-395` | OOM del servidor |
+| 2 | **`/api/stats` carga 50,000 pacientes** — `list_patients(&db, 50000, 0)` trae 50k filas, las itera 4 veces, las mapea y las devuelve como JSON. Respuesta de 5–20 MB, latencia de segundos | `stats.rs:51` | Tiempo de respuesta extremo |
+| 3 | **Audit cleanup N+1** — carga todos los logs, luego los borra uno por uno con N queries individuales | `audit.rs:395-414` | Timeout en limpieza |
+| 4 | **Múltiples table scans** — `get_cama_libre_por_tipo`, `get_user_by_username`, `count_camas_por_tipo`, etc. hacen `db.select("tabla")` y filtran en Rust vs usar WHERE | `db.rs:206,216,252,366,399,404,450,468` | Degradación O(n) |
+| 5 | **Dashboard N+1 en frontend** — cada `PatientPokemonCard` lanza su propia llamada a `get_measurements()` | `dashboard.rs:196-200` | Múltiples requests por paciente |
+
+#### ALTOS
+
+| # | Hallazgo | Archivo |
+|---|----------|---------|
+| 6 | Argon2id usa **64 MB por login** (m_cost=65536 KiB). Recomendado: 19 MB. 4 logins simultáneos = 256 MB de RAM | `auth.rs:114` |
+| 7 | `spa_handler()` usa `std::fs::read_to_string()` bloqueante en contexto async | `main.rs:83` |
+| 8 | Caché Redis con `Mutex` global serializa todo acceso | `cache.rs:23-40` |
+| 9 | Sin índices en SurrealDB — cada `ORDER BY` requiere full sort | `db.rs` |
+| 10 | `wasm-opt` no instalado en el sistema — `Trunk.toml` lo requiere pero no se ejecuta | `Trunk.toml:4` |
+| 11 | `liberar_equipos_de_cama()` tiene patrón N+1 | `db.rs:423-428` |
+| 12 | Búsqueda de pacientes usa `~=` (fuzzy match) en 4 campos — full scan siempre | `db.rs:71` |
+| 13 | `get_user` escanea toda la tabla users | `auth.rs:231-237` |
+
+#### MEDIOS
+
+| # | Hallazgo |
+|---|----------|
+| 14 | `list_patients` y `count_patients` son queries separadas en cada request |
+| 15 | Clones innecesarios en `db.rs:98-99,182-185` y `patients.rs:62-76` |
+| 16 | Structs grandes: Patient ~500B, Measurement ~800B, ApacheIIData ~400B |
+| 17 | Sin transacciones en creación de paciente + asignación cama/equipos |
+| 18 | Payload de medición incluye ApacheIIData completo (42 campos) |
+
+#### Benchmarks (lo bueno)
+
+| Escala | Tiempo |
+|--------|--------|
+| GCS | **0.94 ns** |
+| Mortalidad | **1.3 ns** |
+| NEWS2 | **5.9 ns** |
+| SOFA | **6.8 ns** |
+| SAPS III score | **29.7 ns** |
+
+Los cálculos clínicos son óptimos — tablas `match` sin allocations, lógica entera/float pura.
+
+---
+
+### 🎯 Recomendaciones Prioritarias
+
+| # | Acción | Severidad |
+|---|--------|-----------|
+| 1 | Conectar frontend al backend: enviar JWT en header `Authorization` en todas las requests (`api.rs`) | 🔴 CRÍTICO |
+| 2 | Ejecutar `require_role()` en cada endpoint (admin, patients, measurements) | 🔴 CRÍTICO |
+| 3 | Proteger `/auth/register` o requerir token admin para crear usuarios | 🔴 ALTO |
+| 4 | Reemplazar `db.select()` con queries WHERE en auditoría y db.rs | 🟠 BLOQUEANTE |
+| 5 | Usar agregaciones `GROUP BY` en `/api/stats` en vez de cargar 50k filas | 🟠 BLOQUEANTE |
+| 6 | Bajar Argon2id de 64MB a 19MB (`m_cost=19456`) | 🟠 ALTO |
+| 7 | Reemplazar `std::fs` con `tokio::fs` en `spa_handler()` | 🟠 ALTO |
+| 8 | Agregar `DEFINE INDEX` en SurrealDB para `created_at`, `username`, `cama_id`, `estado` | 🟠 ALTO |
+| 9 | Instalar `wasm-opt` en el sistema o CI/CD | 🟡 MEDIO |
+| 10 | Agregar transacciones en creación de paciente + asignación de recursos | 🟡 MEDIO |
+
+---
 
 Este sistema está diseñado para usarse en **Unidades de Cuidados Intensivos** de hospitales:
 
