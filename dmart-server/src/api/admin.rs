@@ -1,11 +1,11 @@
+use crate::db::Database;
+use anyhow::Error;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
 use dmart_shared::models::*;
-use crate::db::Database;
-use anyhow::Error;
 
 type ApiResult<T> = Result<Json<ApiResponse<T>>, (StatusCode, String)>;
 
@@ -16,28 +16,59 @@ fn err_to_str(e: Error) -> (StatusCode, String) {
 // ─── Admin Stats ───────────────────────────────────────────────────
 
 pub async fn get_admin_stats(State(db): State<Database>) -> ApiResult<AdminStats> {
-    let _pacientes = crate::db::list_patients(&db, 1, 0).await.map_err(err_to_str)?;
+    let _pacientes = crate::db::list_patients(&db, 1, 0)
+        .await
+        .map_err(err_to_str)?;
     let camas = crate::db::list_camas(&db).await.map_err(err_to_str)?;
     let equipos = crate::db::list_equipos(&db).await.map_err(err_to_str)?;
     let users = crate::db::list_users(&db).await.map_err(err_to_str)?;
-    let camas_por_tipo = crate::db::count_camas_por_tipo(&db).await.map_err(err_to_str)?;
-    let equipos_por_tipo = crate::db::count_equipos_por_tipo(&db).await.map_err(err_to_str)?;
-    let disponibles = crate::db::list_equipos_disponibles(&db).await.map_err(err_to_str)?;
+    let camas_por_tipo = crate::db::count_camas_por_tipo(&db)
+        .await
+        .map_err(err_to_str)?;
+    let equipos_por_tipo = crate::db::count_equipos_por_tipo(&db)
+        .await
+        .map_err(err_to_str)?;
+    let disponibles = crate::db::list_equipos_disponibles(&db)
+        .await
+        .map_err(err_to_str)?;
 
     let stats = AdminStats {
         total_camas: camas.len() as u8,
-        camas_libres: camas.iter().filter(|c| c.estado == EstadoCama::Libre).count() as u8,
-        camas_ocupadas: camas.iter().filter(|c| c.estado == EstadoCama::Ocupada).count() as u8,
-        camas_mantenimiento: camas.iter().filter(|c| c.estado == EstadoCama::Mantenimiento || c.estado == EstadoCama::Limpieza).count() as u8,
+        camas_libres: camas
+            .iter()
+            .filter(|c| c.estado == EstadoCama::Libre)
+            .count() as u8,
+        camas_ocupadas: camas
+            .iter()
+            .filter(|c| c.estado == EstadoCama::Ocupada)
+            .count() as u8,
+        camas_mantenimiento: camas
+            .iter()
+            .filter(|c| c.estado == EstadoCama::Mantenimiento || c.estado == EstadoCama::Limpieza)
+            .count() as u8,
         camas_por_tipo,
         total_equipos: equipos.len() as u32,
-        equipos_activos: equipos.iter().filter(|e| e.estado == EstadoEquipo::Activo).count() as u32,
-        equipos_mantenimiento: equipos.iter().filter(|e| e.estado == EstadoEquipo::Mantenimiento || e.estado == EstadoEquipo::Reparacion).count() as u32,
+        equipos_activos: equipos
+            .iter()
+            .filter(|e| e.estado == EstadoEquipo::Activo)
+            .count() as u32,
+        equipos_mantenimiento: equipos
+            .iter()
+            .filter(|e| {
+                e.estado == EstadoEquipo::Mantenimiento || e.estado == EstadoEquipo::Reparacion
+            })
+            .count() as u32,
         equipos_disponibles: disponibles.len() as u32,
         equipos_por_tipo,
         total_staff: users.len() as u32,
-        medicos_activos: users.iter().filter(|u| u.rol == UserRole::Medico && u.activo).count() as u32,
-        enfermeros_activos: users.iter().filter(|u| u.rol == UserRole::Enfermero && u.activo).count() as u32,
+        medicos_activos: users
+            .iter()
+            .filter(|u| u.rol == UserRole::Medico && u.activo)
+            .count() as u32,
+        enfermeros_activos: users
+            .iter()
+            .filter(|u| u.rol == UserRole::Enfermero && u.activo)
+            .count() as u32,
     };
 
     Ok(Json(ApiResponse::ok(stats)))
@@ -58,7 +89,9 @@ pub async fn init_camas_api(
         _ => TipoCama::General,
     };
 
-    let camas = crate::db::init_camas(&db, req.cantidad, tipo).await.map_err(err_to_str)?;
+    let camas = crate::db::init_camas(&db, req.cantidad, tipo)
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(camas)))
 }
 
@@ -74,9 +107,16 @@ pub async fn list_camas_api(
 ) -> ApiResult<PaginatedResponse<Cama>> {
     let limit = params.limit();
     let offset = params.offset();
-    let camas = crate::db::list_camas_paginated(&db, limit, offset).await.map_err(err_to_str)?;
+    let camas = crate::db::list_camas_paginated(&db, limit, offset)
+        .await
+        .map_err(err_to_str)?;
     let total = crate::db::count_camas(&db).await.map_err(err_to_str)?;
-    Ok(Json(ApiResponse::ok(PaginatedResponse { items: camas, total, limit, offset })))
+    Ok(Json(ApiResponse::ok(PaginatedResponse {
+        items: camas,
+        total,
+        limit,
+        offset,
+    })))
 }
 
 #[derive(serde::Deserialize)]
@@ -108,14 +148,13 @@ pub async fn create_cama_api(
             cama.estado = dmart_shared::models::EstadoCama::Limpieza;
         }
     }
-    let created = crate::db::create_cama(&db, cama).await.map_err(err_to_str)?;
+    let created = crate::db::create_cama(&db, cama)
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(created)))
 }
 
-pub async fn get_cama_api(
-    State(db): State<Database>,
-    Path(id): Path<String>,
-) -> ApiResult<Cama> {
+pub async fn get_cama_api(State(db): State<Database>, Path(id): Path<String>) -> ApiResult<Cama> {
     let cama = crate::db::get_cama(&db, &id).await.map_err(err_to_str)?;
     match cama {
         Some(c) => Ok(Json(ApiResponse::ok(c))),
@@ -128,31 +167,33 @@ pub async fn update_cama_api(
     Path(id): Path<String>,
     Json(cama): Json<Cama>,
 ) -> ApiResult<Cama> {
-    let updated = crate::db::update_cama(&db, &id, cama).await.map_err(err_to_str)?;
+    let updated = crate::db::update_cama(&db, &id, cama)
+        .await
+        .map_err(err_to_str)?;
     match updated {
         Some(c) => Ok(Json(ApiResponse::ok(c))),
         None => Ok(Json(ApiResponse::err("Cama no encontrada"))),
     }
 }
 
-pub async fn delete_cama_api(
-    State(db): State<Database>,
-    Path(id): Path<String>,
-) -> ApiResult<()> {
+pub async fn delete_cama_api(State(db): State<Database>, Path(id): Path<String>) -> ApiResult<()> {
     crate::db::delete_cama(&db, &id).await.map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(())))
 }
 
 pub async fn get_camas_disponibles(State(db): State<Database>) -> ApiResult<Vec<Cama>> {
     let todas = crate::db::list_camas(&db).await.map_err(err_to_str)?;
-    let disponibles: Vec<Cama> = todas.into_iter()
+    let disponibles: Vec<Cama> = todas
+        .into_iter()
         .filter(|c| c.estado == EstadoCama::Libre)
         .collect();
     Ok(Json(ApiResponse::ok(disponibles)))
 }
 
 pub async fn get_equipos_disponibles_api(State(db): State<Database>) -> ApiResult<Vec<Equipo>> {
-    let disponibles = crate::db::list_equipos_disponibles(&db).await.map_err(err_to_str)?;
+    let disponibles = crate::db::list_equipos_disponibles(&db)
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(disponibles)))
 }
 
@@ -164,16 +205,25 @@ pub async fn list_equipos_api(
 ) -> ApiResult<PaginatedResponse<Equipo>> {
     let limit = params.limit();
     let offset = params.offset();
-    let equipos = crate::db::list_equipos_paginated(&db, limit, offset).await.map_err(err_to_str)?;
+    let equipos = crate::db::list_equipos_paginated(&db, limit, offset)
+        .await
+        .map_err(err_to_str)?;
     let total = crate::db::count_equipos(&db).await.map_err(err_to_str)?;
-    Ok(Json(ApiResponse::ok(PaginatedResponse { items: equipos, total, limit, offset })))
+    Ok(Json(ApiResponse::ok(PaginatedResponse {
+        items: equipos,
+        total,
+        limit,
+        offset,
+    })))
 }
 
 pub async fn create_equipo_api(
     State(db): State<Database>,
     Json(equipo): Json<Equipo>,
 ) -> ApiResult<Equipo> {
-    let created = crate::db::create_equipo(&db, equipo).await.map_err(err_to_str)?;
+    let created = crate::db::create_equipo(&db, equipo)
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(created)))
 }
 
@@ -193,7 +243,9 @@ pub async fn update_equipo_api(
     Path(id): Path<String>,
     Json(equipo): Json<Equipo>,
 ) -> ApiResult<Equipo> {
-    let updated = crate::db::update_equipo(&db, &id, equipo).await.map_err(err_to_str)?;
+    let updated = crate::db::update_equipo(&db, &id, equipo)
+        .await
+        .map_err(err_to_str)?;
     match updated {
         Some(e) => Ok(Json(ApiResponse::ok(e))),
         None => Ok(Json(ApiResponse::err("Equipo no encontrado"))),
@@ -204,7 +256,9 @@ pub async fn delete_equipo_api(
     State(db): State<Database>,
     Path(id): Path<String>,
 ) -> ApiResult<()> {
-    crate::db::delete_equipo(&db, &id).await.map_err(err_to_str)?;
+    crate::db::delete_equipo(&db, &id)
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(())))
 }
 
@@ -212,7 +266,9 @@ pub async fn list_equipos_por_cama_api(
     State(db): State<Database>,
     Path(cama_id): Path<String>,
 ) -> ApiResult<Vec<Equipo>> {
-    let equipos = crate::db::list_equipos_por_cama(&db, &cama_id).await.map_err(err_to_str)?;
+    let equipos = crate::db::list_equipos_por_cama(&db, &cama_id)
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(equipos)))
 }
 
@@ -221,7 +277,8 @@ pub async fn asignar_equipo_cama_api(
     Json(req): Json<AsignarEquipoCamaRequest>,
 ) -> ApiResult<Option<Equipo>> {
     let updated = crate::db::asignar_equipo_cama(&db, &req.equipo_id, &req.cama_id)
-        .await.map_err(err_to_str)?;
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(updated)))
 }
 
@@ -236,7 +293,8 @@ pub async fn desvincular_equipo_api(
     Path(equipo_id): Path<String>,
 ) -> ApiResult<Option<Equipo>> {
     let updated = crate::db::desvincular_equipo_cama(&db, &equipo_id)
-        .await.map_err(err_to_str)?;
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(updated)))
 }
 
@@ -248,23 +306,29 @@ pub async fn list_staff_api(
 ) -> ApiResult<PaginatedResponse<User>> {
     let limit = params.limit();
     let offset = params.offset();
-    let staff = crate::db::list_staff_paginated(&db, limit, offset).await.map_err(err_to_str)?;
+    let staff = crate::db::list_staff_paginated(&db, limit, offset)
+        .await
+        .map_err(err_to_str)?;
     let total = crate::db::count_staff(&db).await.map_err(err_to_str)?;
-    Ok(Json(ApiResponse::ok(PaginatedResponse { items: staff, total, limit, offset })))
+    Ok(Json(ApiResponse::ok(PaginatedResponse {
+        items: staff,
+        total,
+        limit,
+        offset,
+    })))
 }
 
 pub async fn create_staff_api(
     State(db): State<Database>,
     Json(user): Json<User>,
 ) -> ApiResult<User> {
-    let created = crate::db::create_user(&db, user).await.map_err(err_to_str)?;
+    let created = crate::db::create_user(&db, user)
+        .await
+        .map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(created)))
 }
 
-pub async fn get_staff_api(
-    State(db): State<Database>,
-    Path(id): Path<String>,
-) -> ApiResult<User> {
+pub async fn get_staff_api(State(db): State<Database>, Path(id): Path<String>) -> ApiResult<User> {
     let user = crate::db::get_user(&db, &id).await.map_err(err_to_str)?;
     match user {
         Some(u) => Ok(Json(ApiResponse::ok(u))),
@@ -277,17 +341,16 @@ pub async fn update_staff_api(
     Path(id): Path<String>,
     Json(user): Json<User>,
 ) -> ApiResult<User> {
-    let updated = crate::db::update_user(&db, &id, user).await.map_err(err_to_str)?;
+    let updated = crate::db::update_user(&db, &id, user)
+        .await
+        .map_err(err_to_str)?;
     match updated {
         Some(u) => Ok(Json(ApiResponse::ok(u))),
         None => Ok(Json(ApiResponse::err("Usuario no encontrado"))),
     }
 }
 
-pub async fn delete_staff_api(
-    State(db): State<Database>,
-    Path(id): Path<String>,
-) -> ApiResult<()> {
+pub async fn delete_staff_api(State(db): State<Database>, Path(id): Path<String>) -> ApiResult<()> {
     crate::db::delete_user(&db, &id).await.map_err(err_to_str)?;
     Ok(Json(ApiResponse::ok(())))
 }
@@ -299,7 +362,9 @@ pub async fn toggle_user_active(
     let user = crate::db::get_user(&db, &id).await.map_err(err_to_str)?;
     if let Some(mut u) = user {
         u.activo = !u.activo;
-        let updated = crate::db::update_user(&db, &id, u).await.map_err(err_to_str)?;
+        let updated = crate::db::update_user(&db, &id, u)
+            .await
+            .map_err(err_to_str)?;
         match updated {
             Some(user) => Ok(Json(ApiResponse::ok(user))),
             None => Ok(Json(ApiResponse::err("Usuario no encontrado"))),
@@ -313,7 +378,7 @@ pub async fn toggle_user_active(
 
 pub async fn check_camas_disponibles(State(db): State<Database>) -> ApiResult<CheckCamasResponse> {
     let cama_libre = crate::db::get_cama_libre(&db).await.map_err(err_to_str)?;
-    
+
     match cama_libre {
         Some(c) => Ok(Json(ApiResponse::ok(CheckCamasResponse {
             disponible: true,

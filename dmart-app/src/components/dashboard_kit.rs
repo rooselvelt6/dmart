@@ -41,8 +41,18 @@ pub fn DonutChart(data: GravedadStats, total: usize) -> impl IntoView {
 
 #[component]
 pub fn ScoreBar(label: &'static str, value: f32, max: f32) -> impl IntoView {
-    let pct = if max > 0.0 { (value / max * 100.0).min(100.0) } else { 0.0 };
-    let color = if pct >= 70.0 { "#EF4444" } else if pct >= 40.0 { "#F97316" } else { "#10B981" };
+    let pct = if max > 0.0 {
+        (value / max * 100.0).min(100.0)
+    } else {
+        0.0
+    };
+    let color = if pct >= 70.0 {
+        "#EF4444"
+    } else if pct >= 40.0 {
+        "#F97316"
+    } else {
+        "#10B981"
+    };
 
     view! {
         <div>

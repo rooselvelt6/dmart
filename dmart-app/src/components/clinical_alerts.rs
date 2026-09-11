@@ -79,14 +79,14 @@ pub fn analyze_patient(m: &Measurement) -> Vec<ClinicalAlert> {
     }
 
     // SOFA alerts
-    if let Some(sofa) = m.sofa_score {
-        if sofa >= 12 {
-            alerts.push(ClinicalAlert {
-                level: AlertLevel::Critical,
-                message: format!("SOFA {} indicates multi-organ dysfunction", sofa),
-                recommendation: "Intensive monitoring and support required".to_string(),
-            });
-        }
+    if let Some(sofa) = m.sofa_score
+        && sofa >= 12
+    {
+        alerts.push(ClinicalAlert {
+            level: AlertLevel::Critical,
+            message: format!("SOFA {} indicates multi-organ dysfunction", sofa),
+            recommendation: "Intensive monitoring and support required".to_string(),
+        });
     }
 
     // Mortality risk
@@ -137,16 +137,16 @@ pub fn get_prediction_summary(m: &Measurement) -> String {
         m.apache_score, m.mortality_risk
     ));
 
-    if let Some(saps) = m.saps3_score {
-        if let Some(mort) = m.saps3_mortality {
-            parts.push(format!("SAPS III: {} ({:.0}% riesgo)", saps, mort));
-        }
+    if let Some(saps) = m.saps3_score
+        && let Some(mort) = m.saps3_mortality
+    {
+        parts.push(format!("SAPS III: {} ({:.0}% riesgo)", saps, mort));
     }
 
-    if let Some(sofa) = m.sofa_score {
-        if let Some(mort) = m.sofa_mortality {
-            parts.push(format!("SOFA: {} ({:.0}% riesgo)", sofa, mort));
-        }
+    if let Some(sofa) = m.sofa_score
+        && let Some(mort) = m.sofa_mortality
+    {
+        parts.push(format!("SOFA: {} ({:.0}% riesgo)", sofa, mort));
     }
 
     parts.join(" | ")
@@ -157,10 +157,7 @@ pub fn ClinicalAlerts(alerts: Vec<ClinicalAlert>) -> impl IntoView {
     view! {
         <div style="display:flex; flex-direction:column; gap:8px;">
             {alerts.iter().map(|a| view! {
-                <div style={format!("padding:12px; background:{}; border-radius:8px; border-left:4px solid {}; opacity:0.9;",
-                    format!("{0}20", a.level.color()),
-                    a.level.color()
-                )}>
+                <div style={format!("padding:12px; background:{0}20; border-radius:8px; border-left:4px solid {0}; opacity:0.9;", a.level.color())}>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="font-size:16px;">
                             {if matches!(a.level, AlertLevel::Info) { "ℹ️" } else if matches!(a.level, AlertLevel::Warning) { "⚠️" } else { "🚨" }}

@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, OsRng},
     ChaCha20Poly1305, Nonce,
+    aead::{Aead, KeyInit, OsRng},
 };
 use rand::RngCore;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -67,9 +67,12 @@ pub struct CryptoService {
 
 impl CryptoService {
     pub fn new(key: MasterKey) -> Self {
-        let chacha = ChaCha20Poly1305::new_from_slice(key.as_bytes())
-            .expect("Valid key for ChaCha20");
-        Self { master_key: key, chacha }
+        let chacha =
+            ChaCha20Poly1305::new_from_slice(key.as_bytes()).expect("Valid key for ChaCha20");
+        Self {
+            master_key: key,
+            chacha,
+        }
     }
 
     pub fn new_from_password(password: &str) -> Self {
@@ -91,9 +94,7 @@ impl CryptoService {
             .encrypt(nonce, plaintext)
             .map_err(|_| CryptoError::EncryptionFailed)?;
 
-        let mut result = Vec::with_capacity(
-            ENCRYPTED_MAGIC.len() + NONCE_SIZE + ciphertext.len(),
-        );
+        let mut result = Vec::with_capacity(ENCRYPTED_MAGIC.len() + NONCE_SIZE + ciphertext.len());
         result.extend_from_slice(ENCRYPTED_MAGIC);
         result.extend_from_slice(&nonce_bytes);
         result.extend_from_slice(&ciphertext);
@@ -137,19 +138,22 @@ impl CryptoService {
         self.encrypt_str(&String::from_utf8_lossy(&json))
     }
 
-    pub fn decrypt_json<T: serde::de::DeserializeOwned>(&self, encrypted: &str) -> Result<T, CryptoError> {
+    pub fn decrypt_json<T: serde::de::DeserializeOwned>(
+        &self,
+        encrypted: &str,
+    ) -> Result<T, CryptoError> {
         let decrypted = self.decrypt_str(encrypted)?;
         serde_json::from_str(&decrypted).map_err(|_| CryptoError::DecryptionFailed)
     }
 }
 
 fn base64_encode(data: &[u8]) -> String {
-    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
     BASE64.encode(data)
 }
 
 fn base64_decode(data: &str) -> Result<Vec<u8>, base64::DecodeError> {
-    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
     BASE64.decode(data)
 }
 

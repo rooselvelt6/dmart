@@ -1,22 +1,18 @@
-use leptos::prelude::*;
 use dmart_shared::models::*;
 use dmart_shared::scales::*;
+use leptos::prelude::*;
 
 #[component]
-pub fn News2Scale(
-    data: RwSignal<ApacheIIData>,
-) -> impl IntoView {
+pub fn News2Scale(data: RwSignal<ApacheIIData>) -> impl IntoView {
     let breakdown = Memo::new(move |_| news2_breakdown(&data.get()));
     let score = Memo::new(move |_| breakdown.get().total);
     let level = Memo::new(move |_| News2Level::from_score(score.get()));
 
-    let level_color = move || {
-        match level.get() {
-            News2Level::Bajo => "#10B981",
-            News2Level::Medio => "#F59E0B",
-            News2Level::Alto => "#EF4444",
-            News2Level::Emergent => "#DC2626",
-        }
+    let level_color = move || match level.get() {
+        News2Level::Bajo => "#10B981",
+        News2Level::Medio => "#F59E0B",
+        News2Level::Alto => "#EF4444",
+        News2Level::Emergent => "#DC2626",
     };
 
     view! {
@@ -24,7 +20,7 @@ pub fn News2Scale(
             <div class="flex flex-col xl:flex-row gap-4 xl:gap-8">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-3 sm:gap-5 mb-4 sm:mb-6">
-                        <div class="w-10 h-10 sm:w-14 sm:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl lg:text-3xl shadow-lg" 
+                        <div class="w-10 h-10 sm:w-14 sm:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl lg:text-3xl shadow-lg"
                              style="background:linear-gradient(135deg,#F59E0B,#D97706); color:white;">
                             <i class="fa-solid fa-bell"></i>
                         </div>
@@ -59,28 +55,28 @@ pub fn News2Scale(
                             value=Signal::derive(move || data.get().temperatura)
                             min=33.0 max=42.0 step=0.1
                             on_change=Callback::new(move |v| data.update(|d| d.temperatura = v)) />
-                        
+
                         <div class="p-3 sm:p-4 rounded-xl border col-span-1 sm:col-span-2" style="background:var(--uci-surface); border-color:rgba(245,158,11,0.2);">
                             <label class="text-sm sm:block" style="color:var(--uci-muted);">"Oxígeno Suplementario"</label>
                             <div class="flex gap-2 sm:gap-3 mt-2">
-                                <button 
+                                <button
                                     type="button"
                                     class="flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all"
-                                    style=move || if data.get().o2_suplementario { 
-                                        "background:#F59E0B; color:white; box-shadow:0 4px 12px rgba(245,158,11,0.3);" 
-                                    } else { 
-                                        "background:var(--uci-surface); border:1px solid var(--uci-border); color:var(--uci-text);" 
+                                    style=move || if data.get().o2_suplementario {
+                                        "background:#F59E0B; color:white; box-shadow:0 4px 12px rgba(245,158,11,0.3);"
+                                    } else {
+                                        "background:var(--uci-surface); border:1px solid var(--uci-border); color:var(--uci-text);"
                                     }
                                     on:click=move |_| data.update(|d| d.o2_suplementario = true)>
                                     <i class="fa-solid fa-check-circle mr-1 sm:mr-2"></i>"Sí (+2)"
                                 </button>
-                                <button 
+                                <button
                                     type="button"
                                     class="flex-1 py-2 sm:py-3 px-2 sm:px-4 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all"
-                                    style=move || if !data.get().o2_suplementario { 
-                                        "background:var(--uci-muted); color:white; box-shadow:0 4px 12px rgba(100,116,139,0.3);" 
-                                    } else { 
-                                        "background:var(--uci-surface); border:1px solid var(--uci-border); color:var(--uci-text);" 
+                                    style=move || if !data.get().o2_suplementario {
+                                        "background:var(--uci-muted); color:white; box-shadow:0 4px 12px rgba(100,116,139,0.3);"
+                                    } else {
+                                        "background:var(--uci-surface); border:1px solid var(--uci-border); color:var(--uci-text);"
                                     }
                                     on:click=move |_| data.update(|d| d.o2_suplementario = false)>
                                     "Aire Ambiente"
@@ -144,7 +140,7 @@ fn NewsMetric(
                     </span>
                 </div>
             </div>
-            <input 
+            <input
                 type="range" class="w-full h-2"
                 min=min max=max step=step
                 prop:value=move || value.get()

@@ -1,11 +1,11 @@
-use leptos::prelude::*;
-use leptos::either::Either;
-use dmart_shared::models::*;
 use crate::api;
-use crate::api::{UciStatsResponse, GravedadStats, PromedioScores};
+use crate::api::{GravedadStats, PromedioScores, UciStatsResponse};
+use crate::components::chart::EvolutionChart;
 use crate::components::dashboard_kit::{DonutChart, PromedioScoresCard};
 use crate::components::severity_badge::SeverityBadge;
-use crate::components::chart::EvolutionChart;
+use dmart_shared::models::*;
+use leptos::either::Either;
+use leptos::prelude::*;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -13,19 +13,27 @@ pub fn DashboardPage() -> impl IntoView {
         api::get_stats().await.unwrap_or_else(|_| UciStatsResponse {
             total_pacientes: 0,
             pacientes_activos: 0,
-            por_gravedad: GravedadStats { criticos: 0, severos: 0, moderados: 0, bajos: 0 },
-            promedios: PromedioScores { apache_promedio: 0.0, gcs_promedio: 0.0, sofa_promedio: 0.0, saps3_promedio: 0.0, news2_promedio: 0.0 },
+            por_gravedad: GravedadStats {
+                criticos: 0,
+                severos: 0,
+                moderados: 0,
+                bajos: 0,
+            },
+            promedios: PromedioScores {
+                apache_promedio: 0.0,
+                gcs_promedio: 0.0,
+                sofa_promedio: 0.0,
+                saps3_promedio: 0.0,
+                news2_promedio: 0.0,
+            },
             reciente: vec![],
         })
     });
 
-    let patients = LocalResource::new(|| async move {
-        api::list_patients(None).await.unwrap_or_default()
-    });
+    let patients =
+        LocalResource::new(|| async move { api::list_patients(None).await.unwrap_or_default() });
 
-    let admin_stats = LocalResource::new(|| async move {
-        api::get_admin_stats().await.ok()
-    });
+    let admin_stats = LocalResource::new(|| async move { api::get_admin_stats().await.ok() });
 
     view! {
         <div class="page-enter">
@@ -141,7 +149,11 @@ fn RecentPatientsSection(reciente: Vec<PatientListItem>) -> impl IntoView {
         return Either::Right(view! { <span></span> });
     }
 
-    let mostrar = if reciente.len() > 10 { &reciente[..10] } else { &reciente[..] };
+    let mostrar = if reciente.len() > 10 {
+        &reciente[..10]
+    } else {
+        &reciente[..]
+    };
 
     let content = view! {
         <div class="mb-6 md:mb-7">
@@ -195,9 +207,7 @@ fn PatientPokemonCard(patient: PatientListItem) -> impl IntoView {
 
     let measurements = LocalResource::new(move || {
         let pid = id_for_chart.clone();
-        async move {
-            api::get_measurements(&pid).await.unwrap_or_default()
-        }
+        async move { api::get_measurements(&pid).await.unwrap_or_default() }
     });
 
     let severity_config = match &patient.estado_gravedad {
@@ -305,7 +315,12 @@ fn PatientPokemonCard(patient: PatientListItem) -> impl IntoView {
 }
 
 #[component]
-fn ScoreCircle(value: String, icon: &'static str, color: String, label: &'static str) -> impl IntoView {
+fn ScoreCircle(
+    value: String,
+    icon: &'static str,
+    color: String,
+    label: &'static str,
+) -> impl IntoView {
     view! {
         <div class="flex flex-col items-center">
             <div class="w-14 h-14 rounded-full flex items-center justify-center" style=format!("background:{}; color:white; border:2px solid {};", color, color)>
@@ -327,7 +342,7 @@ fn InfoBadge(icon: &'static str, value: String, color: String) -> impl IntoView 
     }
 }
 
-fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView {
+fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView + use<> {
     let title = title.to_string();
     let value = value.to_string();
     let color = color.to_string();
@@ -342,7 +357,7 @@ fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView
     }
 }
 
-fn resource_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView {
+fn resource_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView + use<> {
     let title = title.to_string();
     let value = value.to_string();
     let color = color.to_string();

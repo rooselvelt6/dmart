@@ -1,16 +1,16 @@
+use crate::db as db_ops;
+use crate::db::Database;
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use chrono::Utc;
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
 use dmart_shared::models::*;
 use dmart_shared::scales::*;
-use crate::db::Database;
-use crate::db as db_ops;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 // ─── Request DTOs ───────────────────────────────────────────────────────────
 
@@ -219,7 +219,8 @@ pub async fn calc_apache(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<ApacheResult>::err(e.to_string())),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -239,11 +240,13 @@ pub async fn calc_gcs(
     let mid = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
 
-    let mut apache_data = ApacheIIData::default();
-    apache_data.gcs_total = total;
-    apache_data.gcs_ojos = gcs.apertura_ocular;
-    apache_data.gcs_verbal = gcs.respuesta_verbal;
-    apache_data.gcs_motor = gcs.respuesta_motora;
+    let apache_data = ApacheIIData {
+        gcs_total: total,
+        gcs_ojos: gcs.apertura_ocular,
+        gcs_verbal: gcs.respuesta_verbal,
+        gcs_motor: gcs.respuesta_motora,
+        ..ApacheIIData::default()
+    };
 
     let apache_score = calculate_apache_ii_score(&apache_data);
     let severity = SeverityLevel::from_score(apache_score);
@@ -291,7 +294,8 @@ pub async fn calc_gcs(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<GcsResult>::err(e.to_string())),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -301,14 +305,16 @@ pub async fn calc_news2(
     Path(patient_id): Path<String>,
     Json(body): Json<News2Request>,
 ) -> impl IntoResponse {
-    let mut apache_data = ApacheIIData::default();
-    apache_data.frecuencia_respiratoria = body.frecuencia_respiratoria;
-    apache_data.spo2 = body.spo2;
-    apache_data.o2_suplementario = body.o2_suplementario;
-    apache_data.presion_sistolica = body.presion_sistolica;
-    apache_data.frecuencia_cardiaca = body.frecuencia_cardiaca;
-    apache_data.temperatura = body.temperatura;
-    apache_data.alerta = body.alerta;
+    let apache_data = ApacheIIData {
+        frecuencia_respiratoria: body.frecuencia_respiratoria,
+        spo2: body.spo2,
+        o2_suplementario: body.o2_suplementario,
+        presion_sistolica: body.presion_sistolica,
+        frecuencia_cardiaca: body.frecuencia_cardiaca,
+        temperatura: body.temperatura,
+        alerta: body.alerta,
+        ..ApacheIIData::default()
+    };
 
     let score = calculate_news2_score(&apache_data);
     let level = News2Level::from_score(score);
@@ -354,7 +360,8 @@ pub async fn calc_news2(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<News2Result>::err(e.to_string())),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -364,17 +371,19 @@ pub async fn calc_sofa(
     Path(patient_id): Path<String>,
     Json(body): Json<SofaRequest>,
 ) -> impl IntoResponse {
-    let mut apache_data = ApacheIIData::default();
-    apache_data.pao2 = Some(body.pao2);
-    apache_data.fio2 = body.fio2;
-    apache_data.plaquetas = body.plaquetas;
-    apache_data.bilirrubina = body.bilirrubina;
-    apache_data.presion_arterial_media = body.presion_arterial_media;
-    apache_data.vasopresores = body.vasopresores;
-    apache_data.dosis_vasopresor = body.dosis_vasopresor;
-    apache_data.gcs_total = body.gcs_total;
-    apache_data.creatinina = body.creatinina;
-    apache_data.diuresis_diaria = body.diuresis_diaria;
+    let apache_data = ApacheIIData {
+        pao2: Some(body.pao2),
+        fio2: body.fio2,
+        plaquetas: body.plaquetas,
+        bilirrubina: body.bilirrubina,
+        presion_arterial_media: body.presion_arterial_media,
+        vasopresores: body.vasopresores,
+        dosis_vasopresor: body.dosis_vasopresor,
+        gcs_total: body.gcs_total,
+        creatinina: body.creatinina,
+        diuresis_diaria: body.diuresis_diaria,
+        ..ApacheIIData::default()
+    };
 
     let score = calculate_sofa_score(&apache_data);
     let level = SofaLevel::from_score(score);
@@ -420,7 +429,8 @@ pub async fn calc_sofa(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<SofaResult>::err(e.to_string())),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -430,22 +440,24 @@ pub async fn calc_saps3(
     Path(patient_id): Path<String>,
     Json(body): Json<Saps3Request>,
 ) -> impl IntoResponse {
-    let mut apache_data = ApacheIIData::default();
-    apache_data.edad = body.edad;
-    apache_data.dias_pre_uci = body.dias_pre_uci;
-    apache_data.tipo_admision = body.tipo_admision.clone();
-    apache_data.fuente_admision = body.fuente_admision.clone();
-    apache_data.infeccion_admision = body.infeccion_admision.clone();
-    apache_data.sistema_anatomico = body.sistema_anatomico.clone();
-    apache_data.presion_sistolica = body.presion_sistolica;
-    apache_data.frecuencia_cardiaca = body.frecuencia_cardiaca;
-    apache_data.gcs_total = body.gcs_total;
-    apache_data.bilirrubina = body.bilirrubina;
-    apache_data.creatinina = body.creatinina;
-    apache_data.plaquetas = body.plaquetas;
-    apache_data.ph_arterial = body.ph_arterial;
-    apache_data.ventilacion_mecanica = body.ventilacion_mecanica;
-    apache_data.vasopresores = body.vasopresores;
+    let apache_data = ApacheIIData {
+        edad: body.edad,
+        dias_pre_uci: body.dias_pre_uci,
+        tipo_admision: body.tipo_admision.clone(),
+        fuente_admision: body.fuente_admision.clone(),
+        infeccion_admision: body.infeccion_admision.clone(),
+        sistema_anatomico: body.sistema_anatomico.clone(),
+        presion_sistolica: body.presion_sistolica,
+        frecuencia_cardiaca: body.frecuencia_cardiaca,
+        gcs_total: body.gcs_total,
+        bilirrubina: body.bilirrubina,
+        creatinina: body.creatinina,
+        plaquetas: body.plaquetas,
+        ph_arterial: body.ph_arterial,
+        ventilacion_mecanica: body.ventilacion_mecanica,
+        vasopresores: body.vasopresores,
+        ..ApacheIIData::default()
+    };
 
     let score = calculate_saps_iii_score(&apache_data);
     let mort = saps_iii_mortality_prediction(score);
@@ -491,7 +503,8 @@ pub async fn calc_saps3(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<Saps3Result>::err(e.to_string())),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -502,23 +515,35 @@ pub async fn scale_history(
 ) -> impl IntoResponse {
     match db_ops::get_measurements_for_patient(&db, &patient_id).await {
         Ok(ms) => {
-            let history: Vec<ScaleHistoryEntry> = ms.into_iter().map(|m| ScaleHistoryEntry {
-                measurement_id: m.measurement_id,
-                timestamp: m.timestamp,
-                apache_score: if m.apache_score > 0 { Some(m.apache_score) } else { None },
-                gcs_score: if m.gcs_score > 0 { Some(m.gcs_score) } else { None },
-                news2_score: m.news2_score,
-                sofa_score: m.sofa_score,
-                saps3_score: m.saps3_score,
-                severity: m.severity,
-                mortality_risk: m.mortality_risk,
-                notas: m.notas,
-            }).collect();
+            let history: Vec<ScaleHistoryEntry> = ms
+                .into_iter()
+                .map(|m| ScaleHistoryEntry {
+                    measurement_id: m.measurement_id,
+                    timestamp: m.timestamp,
+                    apache_score: if m.apache_score > 0 {
+                        Some(m.apache_score)
+                    } else {
+                        None
+                    },
+                    gcs_score: if m.gcs_score > 0 {
+                        Some(m.gcs_score)
+                    } else {
+                        None
+                    },
+                    news2_score: m.news2_score,
+                    sofa_score: m.sofa_score,
+                    saps3_score: m.saps3_score,
+                    severity: m.severity,
+                    mortality_risk: m.mortality_risk,
+                    notas: m.notas,
+                })
+                .collect();
             (StatusCode::OK, Json(ApiResponse::ok(history))).into_response()
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<Vec<ScaleHistoryEntry>>::err(e.to_string())),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }

@@ -1,5 +1,5 @@
 //! Security Middleware - Rate Limiting & Protection
-//! 
+//!
 //! Implements protection against:
 //! - DDoS attacks (rate limiting)
 //! - Brute force (login throttling)
@@ -11,10 +11,10 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use std::collections::HashMap;
 
 /// Combined security state for middleware
 #[derive(Clone)]
@@ -43,27 +43,27 @@ impl RateLimiter {
         let now = Instant::now();
         let window = Duration::from_secs(self.window_secs);
         let mut requests = self.requests.write().await;
-        
-        requests.retain(|_, times| {
-            times.iter().any(|t| now.duration_since(*t) < window)
-        });
-        
+
+        requests.retain(|_, times| times.iter().any(|t| now.duration_since(*t) < window));
+
         let entry = requests.entry(key.to_string()).or_insert_with(Vec::new);
-        
+
         entry.retain(|t| now.duration_since(*t) < window);
-        
+
         if entry.len() >= self.max_requests as usize {
             return false;
         }
-        
+
         entry.push(now);
         true
     }
 }
 
 /// Login throttle tracker (brute force protection)
+type AttemptMap = HashMap<String, (u32, Option<Instant>)>;
+
 pub struct LoginThrottle {
-    attempts: Arc<RwLock<HashMap<String, (u32, Option<Instant>)>>>,
+    attempts: Arc<RwLock<AttemptMap>>,
     max_attempts: u32,
     lockout_secs: u64,
 }
@@ -79,9 +79,11 @@ impl LoginThrottle {
 
     pub async fn record_failure(&self, key: &str) -> bool {
         let mut attempts = self.attempts.write().await;
-        let count = attempts.entry(key.to_string()).or_insert_with(|| (0u32, None));
+        let count = attempts
+            .entry(key.to_string())
+            .or_insert_with(|| (0u32, None));
         count.0 += 1;
-        
+
         if count.0 >= self.max_attempts {
             count.1 = Some(Instant::now());
             return true;
@@ -111,7 +113,10 @@ impl LoginThrottle {
 pub fn security_headers() -> Vec<(header::HeaderName, HeaderValue)> {
     vec![
         (header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY")),
-        (header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")),
+        (
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ),
         (
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
@@ -121,21 +126,30 @@ pub fn security_headers() -> Vec<(header::HeaderName, HeaderValue)> {
                 font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; \
                 img-src 'self' data:; \
                 connect-src 'self' https://fonts.googleapis.com; \
-                frame-ancestors 'none';"
+                frame-ancestors 'none';",
             ),
         ),
-        (header::HeaderName::from_static("x-xss-protection"), HeaderValue::from_static("1; mode=block")),
-        (header::HeaderName::from_static("referrer-policy"), HeaderValue::from_static("strict-origin-when-cross-origin")),
-        (header::HeaderName::from_static("permissions-policy"), HeaderValue::from_static("camera=(), microphone=(), geolocation=()")),
-        (header::HeaderName::from_static("cross-origin-opener-policy"), HeaderValue::from_static("same-origin")),
+        (
+            header::HeaderName::from_static("x-xss-protection"),
+            HeaderValue::from_static("1; mode=block"),
+        ),
+        (
+            header::HeaderName::from_static("referrer-policy"),
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ),
+        (
+            header::HeaderName::from_static("permissions-policy"),
+            HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
+        ),
+        (
+            header::HeaderName::from_static("cross-origin-opener-policy"),
+            HeaderValue::from_static("same-origin"),
+        ),
     ]
 }
 
 /// Middleware that applies all security headers to every response
-pub async fn security_headers_middleware(
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn security_headers_middleware(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
     let headers = security_headers();
     for (name, value) in headers {
@@ -151,7 +165,7 @@ pub async fn rate_limit_middleware(
     next: Next,
 ) -> Response {
     let key = get_client_key(&req);
-    
+
     if state.rate_limiter.check(&key).await {
         let mut res = next.run(req).await;
         res.headers_mut().insert(
@@ -164,7 +178,8 @@ pub async fn rate_limit_middleware(
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, "60")],
             "Rate limit exceeded. Try again later.",
-        ).into_response()
+        )
+            .into_response()
     }
 }
 
@@ -189,28 +204,31 @@ pub async fn login_throttle_middleware(
     next: Next,
 ) -> Response {
     let key = get_client_key(&req);
-    
+
     if let Some(remaining) = state.login_throttle.is_locked(&key).await {
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, &remaining.to_string())],
-            format!("Account temporarily locked. Try again in {} seconds.", remaining),
-        ).into_response();
+            format!(
+                "Account temporarily locked. Try again in {} seconds.",
+                remaining
+            ),
+        )
+            .into_response();
     }
-    
+
     let res = next.run(req).await;
-    
-    if res.status() == StatusCode::UNAUTHORIZED {
-        if state.login_throttle.record_failure(&key).await {
-            tracing::warn!("Login throttle triggered for IP: {}", key);
-            return (
-                StatusCode::TOO_MANY_REQUESTS,
-                [(header::RETRY_AFTER, "300")],
-                "Too many failed attempts. Account locked for 5 minutes.",
-            ).into_response();
-        }
+
+    if res.status() == StatusCode::UNAUTHORIZED && state.login_throttle.record_failure(&key).await {
+        tracing::warn!("Login throttle triggered for IP: {}", key);
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, "300")],
+            "Too many failed attempts. Account locked for 5 minutes.",
+        )
+            .into_response();
     }
-    
+
     res
 }
 
@@ -220,9 +238,9 @@ pub fn sanitize_input(input: &str) -> String {
     input
         .chars()
         .filter(|c| {
-            c.is_alphanumeric() 
-            || c.is_whitespace() 
-            || matches!(c, '.' | ',' | '-' | '_' | '@' | '/' | ':')
+            c.is_alphanumeric()
+                || c.is_whitespace()
+                || matches!(c, '.' | ',' | '-' | '_' | '@' | '/' | ':')
         })
         .collect()
 }
@@ -233,8 +251,7 @@ pub fn sanitize_for_query(input: &str) -> String {
     input
         .replace('\'', "\\'")
         .replace('"', "\\\"")
-        .replace(';', "")
-        .replace('\\', "")
+        .replace([';', '\\'], "")
 }
 
 /// Escape HTML entities to prevent XSS in user-provided strings
@@ -254,8 +271,11 @@ pub fn create_security_state() -> SecurityState {
     let rate_limiter = Arc::new(RateLimiter::new(100, 60));
     // 5 failed logins before 5 minute lockout
     let login_throttle = Arc::new(LoginThrottle::new(5, 300));
-    
-    SecurityState { rate_limiter, login_throttle }
+
+    SecurityState {
+        rate_limiter,
+        login_throttle,
+    }
 }
 
 #[cfg(test)]
@@ -271,22 +291,25 @@ mod tests {
 
     #[test]
     fn test_escape_html() {
-        assert_eq!(escape_html("<script>alert(1)</script>"), "&lt;script&gt;alert(1)&lt;/script&gt;");
+        assert_eq!(
+            escape_html("<script>alert(1)</script>"),
+            "&lt;script&gt;alert(1)&lt;/script&gt;"
+        );
         assert_eq!(escape_html("A & B"), "A &amp; B");
     }
 
     #[tokio::test]
     async fn test_rate_limiter() {
         let limiter = RateLimiter::new(3, 60);
-        
+
         // First 3 should pass
         assert!(limiter.check("test_ip").await);
         assert!(limiter.check("test_ip").await);
         assert!(limiter.check("test_ip").await);
-        
+
         // 4th should fail
         assert!(!limiter.check("test_ip").await);
-        
+
         // Different IP should pass
         assert!(limiter.check("other_ip").await);
     }
@@ -294,15 +317,15 @@ mod tests {
     #[tokio::test]
     async fn test_login_throttle() {
         let throttle = LoginThrottle::new(3, 60);
-        
+
         // Record 2 failures
         assert!(!throttle.record_failure("user1").await);
         assert!(!throttle.record_failure("user1").await);
-        
+
         // 3rd should trigger lockout
         assert!(throttle.record_failure("user1").await);
         assert!(throttle.is_locked("user1").await.is_some());
-        
+
         // Success clears
         throttle.record_success("user1").await;
         assert!(throttle.is_locked("user1").await.is_none());

@@ -1,18 +1,18 @@
 use anyhow::Result;
 use argon2::{
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2, Params,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
 };
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
-use surrealdb::engine::local::Db;
 use surrealdb::Surreal;
+use surrealdb::engine::local::Db;
 use tracing;
 use uuid::Uuid;
 
@@ -22,7 +22,11 @@ impl<S: Send + Sync> FromRequestParts<S> for Claims {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        parts.extensions.get::<Claims>().cloned().ok_or((StatusCode::UNAUTHORIZED, "Not authenticated"))
+        parts
+            .extensions
+            .get::<Claims>()
+            .cloned()
+            .ok_or((StatusCode::UNAUTHORIZED, "Not authenticated"))
     }
 }
 
@@ -33,8 +37,7 @@ fn jwt_expiry_hours() -> i64 {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(1)
-            .max(1)
-            .min(24)
+            .clamp(1, 24)
     })
 }
 
@@ -151,7 +154,11 @@ impl AuthService {
         created.ok_or_else(|| "Failed to create user".to_string())
     }
 
-    pub async fn authenticate(&self, username: &str, password: &str) -> Result<LoginResponse, String> {
+    pub async fn authenticate(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<LoginResponse, String> {
         let user: Option<User> = self
             .db
             .select(("users", username))
@@ -164,8 +171,8 @@ impl AuthService {
             return Err("Usuario inactivo".to_string());
         }
 
-        let parsed_hash =
-            PasswordHash::new(&user.password_hash).map_err(|_| "Invalid password hash".to_string())?;
+        let parsed_hash = PasswordHash::new(&user.password_hash)
+            .map_err(|_| "Invalid password hash".to_string())?;
 
         self.argon2
             .verify_password(password.as_bytes(), &parsed_hash)
@@ -173,11 +180,15 @@ impl AuthService {
 
         let permissions = match user.rol {
             UserRole::Admin => vec!["*".to_string()],
-            UserRole::Medico => vec!["patients:read".to_string(), "patients:create".to_string(), "measurements:*".to_string()],
+            UserRole::Medico => vec![
+                "patients:read".to_string(),
+                "patients:create".to_string(),
+                "measurements:*".to_string(),
+            ],
             UserRole::Enfermero => vec!["patients:read".to_string(), "measurements:*".to_string()],
             UserRole::Viewer => vec!["patients:read".to_string()],
         };
-        
+
         let exp_hours = jwt_expiry_hours();
         let exp = chrono::Utc::now().timestamp() + exp_hours * 3600;
         let iat = chrono::Utc::now().timestamp();
@@ -228,11 +239,7 @@ impl AuthService {
     }
 
     pub async fn get_user(&self, user_id: &str) -> Result<Option<User>, String> {
-        let users: Vec<User> = self
-            .db
-            .select("users")
-            .await
-            .map_err(|e| e.to_string())?;
+        let users: Vec<User> = self.db.select("users").await.map_err(|e| e.to_string())?;
 
         Ok(users.into_iter().find(|u| u.user_id == user_id))
     }
@@ -252,7 +259,11 @@ impl AuthService {
 
         let permissions = match user.rol {
             UserRole::Admin => vec!["*".to_string()],
-            UserRole::Medico => vec!["patients:read".to_string(), "patients:create".to_string(), "measurements:*".to_string()],
+            UserRole::Medico => vec![
+                "patients:read".to_string(),
+                "patients:create".to_string(),
+                "measurements:*".to_string(),
+            ],
             UserRole::Enfermero => vec!["patients:read".to_string(), "measurements:*".to_string()],
             UserRole::Viewer => vec!["patients:read".to_string()],
         };
@@ -285,22 +296,14 @@ impl AuthService {
     }
 
     pub async fn list_users(&self) -> Result<Vec<UserInfo>, String> {
-        let users: Vec<User> = self
-            .db
-            .select("users")
-            .await
-            .map_err(|e| e.to_string())?;
+        let users: Vec<User> = self.db.select("users").await.map_err(|e| e.to_string())?;
 
         Ok(users.iter().map(UserInfo::from).collect())
     }
 }
 
 pub fn extract_token_from_header(header: &str) -> Option<&str> {
-    if header.starts_with("Bearer ") {
-        Some(&header[7..])
-    } else {
-        None
-    }
+    header.strip_prefix("Bearer ")
 }
 
 /// Seed default admin user if no users exist
@@ -309,26 +312,26 @@ pub async fn seed_default_admin(db: &Surreal<Db>) -> Result<bool> {
         .select("users")
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    
+
     if !users.is_empty() {
         tracing::info!("👥 Found {} users, skipping seed", users.len());
         return Ok(false);
     }
-    
+
     tracing::info!("🌱 Seeding default admin user...");
     let params = Params::new(65536, 3, 4, Some(32)).unwrap();
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
-    
+
     let admin_password = std::env::var("DMART_ADMIN_PASSWORD").unwrap_or_else(|_| {
         tracing::warn!("⚠️ DMART_ADMIN_PASSWORD not set! Using default password 'admin123'. Set this in .env for production!");
         "admin123".to_string()
     });
-    
+
     let salt = SaltString::generate(&mut rand::thread_rng());
     let password_hash = argon2
         .hash_password(admin_password.as_bytes(), &salt)
         .map_err(|e| anyhow::anyhow!("Hash error: {}", e))?;
-    
+
     let user = User {
         user_id: Uuid::new_v4().to_string(),
         username: "admin".to_string(),
@@ -338,13 +341,13 @@ pub async fn seed_default_admin(db: &Surreal<Db>) -> Result<bool> {
         activo: true,
         created_at: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     let created: Option<User> = db
         .create(("users", "admin"))
         .content(user)
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    
+
     match created {
         Some(_) => {
             tracing::info!("✅ Admin user created with password from DMART_ADMIN_PASSWORD env var");

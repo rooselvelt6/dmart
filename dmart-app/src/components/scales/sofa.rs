@@ -1,23 +1,19 @@
-use leptos::prelude::*;
 use dmart_shared::models::*;
 use dmart_shared::scales::*;
+use leptos::prelude::*;
 
 #[component]
-pub fn SofaScale(
-    data: RwSignal<ApacheIIData>,
-) -> impl IntoView {
+pub fn SofaScale(data: RwSignal<ApacheIIData>) -> impl IntoView {
     let breakdown = Memo::new(move |_| sofa_breakdown(&data.get()));
     let score = Memo::new(move |_| breakdown.get().total);
     let level = Memo::new(move |_| SofaLevel::from_score(score.get()));
     let mortality = Memo::new(move |_| sofa_mortality_estimate(score.get()));
 
-    let level_color = move || {
-        match level.get() {
-            SofaLevel::Normal => "#10B981",
-            SofaLevel::Disfuncion => "#F59E0B",
-            SofaLevel::Falla => "#EF4444",
-            SofaLevel::FallaMultiorganica => "#DC2626",
-        }
+    let level_color = move || match level.get() {
+        SofaLevel::Normal => "#10B981",
+        SofaLevel::Disfuncion => "#F59E0B",
+        SofaLevel::Falla => "#EF4444",
+        SofaLevel::FallaMultiorganica => "#DC2626",
     };
 
     view! {
@@ -25,7 +21,7 @@ pub fn SofaScale(
             <div class="flex flex-col xl:flex-row gap-4 xl:gap-8">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-3 sm:gap-5 mb-4 sm:mb-6">
-                        <div class="w-10 h-10 sm:w-14 sm:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl lg:text-3xl shadow-lg" 
+                        <div class="w-10 h-10 sm:w-14 sm:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl lg:text-3xl shadow-lg"
                              style="background:linear-gradient(135deg,#10B981,#059669); color:white;">
                             <i class="fa-solid fa-lungs"></i>
                         </div>
@@ -92,7 +88,7 @@ pub fn SofaScale(
                             </div>
                         </div>
                         <div class="h-2 sm:h-3 rounded-full overflow-hidden" style="background:var(--uci-border);">
-                            <div class="h-full transition-all duration-500" 
+                            <div class="h-full transition-all duration-500"
                                  style=move || format!("width: {}%; background:linear-gradient(90deg,#10B981,#059669);", mortality.get())></div>
                         </div>
                     </div>
@@ -128,7 +124,7 @@ fn SofaMetric(
                     </span>
                 </div>
             </div>
-            <input 
+            <input
                 type="range" class="w-full h-2"
                 min=min max=max step=step
                 prop:value=move || value.get()

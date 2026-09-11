@@ -1,18 +1,18 @@
-use leptos::prelude::*;
+use crate::api;
+use crate::components::chart::EvolutionChart;
+use crate::components::severity_badge::SeverityBadge;
 use leptos::either::Either;
+use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
-use crate::api;
-use crate::components::severity_badge::SeverityBadge;
-use crate::components::chart::EvolutionChart;
 
 fn show_alert(msg: &str) {
-    web_sys::window()
-        .and_then(|w| w.alert_with_message(msg).ok());
+    web_sys::window().and_then(|w| w.alert_with_message(msg).ok());
 }
 
 fn get_initials(nombre: &str) -> String {
-    nombre.split_whitespace()
+    nombre
+        .split_whitespace()
         .filter_map(|w| w.chars().next())
         .take(2)
         .collect::<String>()
@@ -47,7 +47,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                 Ok(_) => {
                     deleting.set(false);
                     nav("/patients", Default::default());
-                },
+                }
                 Err(e) => {
                     deleting.set(false);
                     show_delete_modal.set(false);
@@ -202,7 +202,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                     </h3>
                                     <Suspense fallback=move || view! { <div class="h-48 flex items-center justify-center text-uci-muted"><i class="fa-solid fa-spinner fa-spin text-xl"></i>" Cargando..."</div> }>
                                         {move || measurements_res.get().map(|res_wrapper| match res_wrapper {
-                                            Ok(ms) if ms.is_empty() => Either::Left(view! { 
+                                            Ok(ms) if ms.is_empty() => Either::Left(view! {
                                                 <div class="h-48 flex flex-col items-center justify-center text-uci-muted bg-uci-bg/30 rounded-xl">
                                                     <i class="fa-solid fa-chart-simple text-3xl mb-3 opacity-50"></i>
                                                     "No hay suficientes datos para la gráfica"
@@ -278,14 +278,14 @@ pub fn PatientDetailPage() -> impl IntoView {
                         </h3>
                         <p class="text-uci-muted mb-6">"¿Está seguro de eliminar este paciente? Esta acción no se puede deshacer y se eliminarán todas las mediciones asociadas."</p>
                         <div class="flex gap-3 justify-end">
-                            <button 
+                            <button
                                 on:click=move |_| show_delete_modal.set(false)
                                 class="btn-outline"
                                 disabled=deleting
                             >
                                 "Cancelar"
                             </button>
-                            <button 
+                            <button
                                 on:click=move |_| do_delete.with_value(|f| f())
                                 class="btn-danger"
                                 disabled=deleting

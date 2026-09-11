@@ -46,8 +46,8 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 
 | Capa | Tecnología | Versión | Descripción |
 |------|------------|---------|-------------|
-| **Lenguaje** | Rust | 1.70+ | Sistema de tipos seguros, sin GC |
-| **Backend** | Axum | 0.7 | Framework web async, alto rendimiento |
+| **Lenguaje** | Rust | 1.98+ | Sistema de tipos seguros, sin GC |
+| **Backend** | Axum | 0.8 | Framework web async, alto rendimiento |
 | **Frontend** | Leptos | **0.8** | Framework reactivo WASM |
 | **WASM Build** | Trunk | 0.21 | Build tool para aplicaciones WASM |
 | **Estilos** | TailwindCSS | 3.x | CSS utilitario moderno |
@@ -462,7 +462,7 @@ dmart/
 │   │   ├── scales.rs         # Algoritmos clínicos
 │   │   └── validation.rs     # Validación de datos
 │   └── tests/
-│       └── scale_tests.rs    # Suite de pruebas (54 tests)
+│       └── scale_tests.rs    # Suite de pruebas (66 tests)
 │
 ├── dmart-server/             # Servidor backend
 │   ├── src/
@@ -683,102 +683,6 @@ validation.rs::validate_apache_measurement()
 
 ---
 
-## 📅 Roadmap 2026 - Plan de Mejoras del Sistema
-
-Plan integral de actualización organizado por tiers de criticidad para llevar dMart a un nivel de producción empresarial.
-
----
-
-### 🔴 Tier 1 — Seguridad (Producción Bloqueante)
-
-| # | Mejora | Impacto |
-|---|--------|---------|
-| 1 | **`DMART_MASTER_KEY` obligatorio** vía env con fail al arranque si es default | Cifrado reversible con clave hardcodeada |
-| 2 | **Revocación real de JWT** — blacklist en Redis/Valkey al hacer logout | Sesiones no terminables |
-| 3 | **CSRF Protection** — doble cookie + SameSite=Strict | Vulnerable en state-changing requests |
-| 4 | **`require_role()` en todos los handlers** — admin, patients, measurements | RBAC existe pero no se ejecuta |
-| 5 | **Argon2id configurable** — bajar m_cost de 64MB→19MB por defecto | 4 logins simultáneos = 256MB RAM |
-| 6 | **Ocultar `password_hash`** en respuestas de staff CRUD | Exposición de hashes de usuarios |
-| 7 | **Proteger `/auth/register`** — solo admin puede crear cuentas | Cualquiera crea usuarios hoy |
-| 8 | **Rate limiter real** — fix spoofing X-Forwarded-For, key por IP real | Bypass del rate limiter |
-| 9 | **HSTS + TLS automático** — redirección HTTP→HTTPS, cert self-signed dev | Tráfico en texto plano |
-
-### 🟠 Tier 2 — Datos y Arquitectura
-
-| # | Mejora | Impacto |
-|---|--------|---------|
-| 10 | **Sistema de migraciones SurrealQL** — schema versionado en `migrations/` | Cambios de schema sin data loss |
-| 11 | **Persistencia de diagnósticos** — almacenar en SurrealDB en vez de HashMap en memoria | Diagnósticos se pierden al reiniciar |
-| 12 | **Transacciones atómicas** — creación paciente + asignación cama + equipos | Inconsistencia en fallo parcial |
-| 13 | **Índices en SurrealDB** — `DEFINE INDEX` en `created_at`, `username`, `cama_id`, `estado` | Full scans en cada consulta |
-| 14 | **Año dinámico** — reemplazar `let current_year = 2026` por `chrono::Utc::now()` | Edades incorrectas en 2027+ |
-| 15 | **WHERE queries** — reemplazar `db.select()` sin filtro en auditoría, db.rs, auth | Carga masiva en memoria |
-| 16 | **Stats con agregaciones** — `GROUP BY` en SurrealDB vs cargar 50k filas | OOM en datasets grandes |
-| 17 | **FHIR module activo** — conectar handlers al router (hoy dead code `#[allow(dead_code)]`) | Interoperabilidad no funcional |
-
-### 🟡 Tier 3 — Observabilidad y Operaciones
-
-| # | Mejora | Impacto |
-|---|--------|---------|
-| 18 | **Prometheus metrics** — contadores de requests, latencia p50/p95/p99, errores por endpoint | Sin monitoreo en producción |
-| 19 | **Logging estructurado** — JSON output + OpenTelemetry tracing (opentelemetry crate) | Debugging en producción imposible |
-| 20 | **`spa_handler()` async** — reemplazar `std::fs::read_to_string` por `tokio::fs` | Bloqueo del event loop |
-| 21 | **Health check enriquecido** — DB ping, cache ping, uptime, versión, conexiones activas | Health check actual mínimo |
-| 22 | **Graceful shutdown mejorado** — drenado de conexiones activas con timeout configurable | Conexiones cortadas en reinicio |
-| 23 | **Recuperación automática** — reconnect DB con backoff exponencial si SurrealKV falla | Caída del servidor por DB |
-| 24 | **Alertas de sistema** — webhook Slack/Email cuando CPU>80%, memoria>90%, disco>85% | Sin notificaciones operativas |
-
-### 🔵 Tier 4 — Frontend y UX
-
-| # | Mejora | Impacto |
-|---|--------|---------|
-| 25 | **Loading states + error handling** en todas las páginas (Suspense, fallback UI) | Pantallas en blanco mientras carga |
-| 26 | **PWA Offline** — Service Worker con cache-first para assets WASM | Inoperable sin internet |
-| 27 | **Notificaciones Push** — alertas de deterioro de paciente vía Service Worker API | Médicos no notificados en tiempo real |
-| 28 | **WCAG 2.1 AA** — roles ARIA, contraste mínimo 4.5:1, navegación por teclado completo | Exclusión de usuarios con discapacidad |
-| 29 | **Virtual scrolling** — renderizar solo filas visibles en listas de 1000+ pacientes | DOM inchable con muchos pacientes |
-| 30 | **Dark mode persistente** — guardar preferencia en localStorage + respetar `prefers-color-scheme` | Tema se resetea al recargar |
-| 31 | **Búsqueda reactiva** — debounce 300ms + resultados en tiempo real en listado pacientes | Búsqueda lenta y sin feedback |
-
-### 🧪 Tier 5 — Testing y QA
-
-| # | Mejora | Impacto |
-|---|--------|---------|
-| 32 | **E2E tests (Playwright)** — login, CRUD pacientes, mediciones, admin, dashboard | Sin cobertura de flujos completos |
-| 33 | **Load testing (k6)** — 100/500/1000 usuarios concurrentes, identificar bottlenecks | Sin perfil de rendimiento |
-| 34 | **Security scanning en CI** — `cargo audit` + `trivy` + `cargo deny` | Vulnerabilidades en dependencias no detectadas |
-| 35 | **Unit tests crypto** — encrypt/decrypt roundtrip, key derivation, edge cases | Código de cifrado no testeado |
-| 36 | **Unit tests auth middleware** — JWT validation, role checking, expired tokens | Middleware de seguridad no testeado |
-| 37 | **Unit tests auditoría** — log retrieval, cleanup, filtering | Audit log no testeado |
-| 38 | **Property-based testing (proptest)** — escalas clínicas con valores aleatorios dentro de rango | Casos borde no cubiertos |
-| 39 | **Fuzzing** — API endpoints con datos malformados (JSON inválido, campos faltantes, inyección) | Resistencia a entradas maliciosas |
-
-### 🚀 Tier 6 — DevOps e Infraestructura
-
-| # | Mejora | Impacto |
-|---|--------|---------|
-| 40 | **GitHub Actions paralelo** — test + lint + security + build en jobs simultáneos | CI lento (~15 min secuencial) |
-| 41 | **Semantic versioning** — `git-cliff` para changelog automatizado desde conventional commits | Sin trazabilidad de releases |
-| 42 | **Docker multi-stage** — builder image con cache de capas, runtime image mínima (~50MB) | Imagen Docker hinchada |
-| 43 | **Backup automático SurrealKV** — cron diario + S3/MinIO compatible con rotación 30 días | Sin backups, pérdida de datos |
-| 44 | **`wasm-opt` en CI** — instalar binary en runner, optimizar WASM en build | WASM no optimizado (2.2MB→~600KB) |
-| 45 | **Docker Compose healthcheck** — dependencia entre servicios con `condition: service_healthy` | Arranque en orden incorrecto |
-| 46 | **Autoscaling** — `HORIZONTAL_SCALE` env para workers Tokio, bind a varios cores | CPU infrautilizada en multi-core |
-
-### ⚕️ Tier 7 — Funcionalidades Clínicas Avanzadas
-
-| # | Mejora | Impacto |
-|---|--------|---------|
-| 47 | **Activar FHIR R4 en router** — conectar endpoints /fhir/* (Patient, Observation, Condition) | Módulo FHIR existe pero inaccesible |
-| 48 | **HL7 V2 / MQTT** — conectar monitores de signos vitales (Mindray, Philips) con parser HL7 | Datos manuales vs automáticos |
-| 49 | **Dashboard ejecutivo** — heatmap de camas en tiempo real, KPIs (mortalidad predicted vs actual, LOS) | Sin vista de mando |
-| 50 | **Predicción de deterioro (ML)** — modelo LSTM con Burn framework, features: scores + tendencias + labs | Detección tardía de deterioro |
-| 51 | **Reportes clínicos PDF** — logo institución, FHIR DiagnosticReport, QR de validación | Reportes genéricos sin marca |
-| 52 | **WebSocket streaming** — scores en tiempo real al frontend cuando llegan nuevas mediciones | Datos stale hasta recargar |
-| 53 | **Glasgow coma scale animado** — input visual (ojos, verbal, motor) con imágenes interactivas | GCS lento de ingresar |
-
----
-
 ## 📚 Referencias Clínicas
 
 ### APACHE II (Implementado)
@@ -787,14 +691,14 @@ Plan integral de actualización organizado por tiers de criticidad para llevar d
 ### Glasgow Coma Scale (Implementado)
 - **Teasdale GM**, Jennett B (1974). Assessment of coma and impaired consciousness. Lancet. 2(7872):81-4.
 
-### NEWS2 (Futuro)
+### NEWS2 (Implementado)
 - **Royal College of Physicians** (2017). National Early Warning Score (NEWS) 2. Updated Report of a Working Party. London: RCP.
 - **Smith GB**, et al. (2012). Validation of NEWS. BMJ 2012;345:e5717.
 
-### SAPS III (Futuro)
+### SAPS III (Implementado)
 - **Metnitz PGH**, et al. (2005). SAPS 3—From evaluation of the patient to evaluation of the intensive care unit. Intensive Care Med.
 
-### SOFA (Futuro)
+### SOFA (Implementado)
 - **Vincent JL**, et al. (1996). The SOFA (Sepsis-related Organ Failure Assessment) score to describe organ dysfunction/failure. Intensive Care Med.
 
 ### Seguridad (Futuro)
@@ -1040,7 +944,7 @@ let stats_resource = LocalResource::new(|| {
 |-------|-------------|
 | ✅ Sistema completo | Gestión total de UCI desde cero |
 | ✅ Estándar clínico | APACHE II según Knaus 1985 (71 puntos máx) |
-| ✅ **75+ tests** | Validación de cálculos médicos + integración API |
+| ✅ **69+ tests** | Validación de cálculos médicos + integración API |
 | ✅ **8 benchmarks** | Criterion para escalas clínicas (~1–32ns) |
 | ✅ Tipado seguro | Rust previene errores en compilación |
 | ✅ Documentación | Docs técnicas + rustdoc + ARQUITECTURA.md |

@@ -1,8 +1,15 @@
-use std::sync::OnceLock;
+//! Registro de auditoría PHI (HIPAA).
+//!
+//! El query/cleanup de logs (retención 6 años, detección de accesos denegados,
+//! exportaciones) aún no está expuesto vía API; se conecta en Fases 1-2 del
+//! roadmap (RBAC + observabilidad), por eso el `allow(dead_code)`.
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use surrealdb::engine::local::Db;
+use std::sync::OnceLock;
 use surrealdb::Surreal;
+use surrealdb::engine::local::Db;
 use uuid::Uuid;
 
 pub const AUDIT_RETENTION_YEARS: i64 = 6;
@@ -115,6 +122,7 @@ impl AuditService {
         Self { db }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn log(
         &self,
         action: AuditAction,
@@ -302,7 +310,9 @@ impl AuditService {
     }
 
     pub async fn query(&self, query: AuditQuery) -> Result<Vec<AuditLog>, String> {
-        let mut logs: Vec<AuditLog> = self.db.select("audit_logs")
+        let mut logs: Vec<AuditLog> = self
+            .db
+            .select("audit_logs")
             .await
             .map_err(|e| e.to_string())?;
 
@@ -336,7 +346,9 @@ impl AuditService {
     }
 
     pub async fn get_recent(&self, limit: usize) -> Result<Vec<AuditLog>, String> {
-        let logs: Vec<AuditLog> = self.db.select("audit_logs")
+        let logs: Vec<AuditLog> = self
+            .db
+            .select("audit_logs")
             .await
             .map_err(|e| e.to_string())?;
 
@@ -348,7 +360,9 @@ impl AuditService {
     }
 
     pub async fn get_failed_logins(&self, limit: usize) -> Result<Vec<AuditLog>, String> {
-        let logs: Vec<AuditLog> = self.db.select("audit_logs")
+        let logs: Vec<AuditLog> = self
+            .db
+            .select("audit_logs")
             .await
             .map_err(|e| e.to_string())?;
 
@@ -364,7 +378,9 @@ impl AuditService {
     }
 
     pub async fn get_critical_events(&self, limit: usize) -> Result<Vec<AuditLog>, String> {
-        let logs: Vec<AuditLog> = self.db.select("audit_logs")
+        let logs: Vec<AuditLog> = self
+            .db
+            .select("audit_logs")
             .await
             .map_err(|e| e.to_string())?;
 
@@ -393,7 +409,9 @@ impl AuditService {
     }
 
     pub async fn cleanup_old_logs(&self) -> Result<usize, String> {
-        let logs: Vec<AuditLog> = self.db.select("audit_logs")
+        let logs: Vec<AuditLog> = self
+            .db
+            .select("audit_logs")
             .await
             .map_err(|e| e.to_string())?;
 
@@ -401,15 +419,17 @@ impl AuditService {
         let mut deleted = 0;
 
         for log in logs {
-            if let Ok(dt) = DateTime::parse_from_rfc3339(&log.timestamp) {
-                if dt.with_timezone(&Utc) < cutoff {
-                    let _: Option<AuditLog> = self.db.delete(("audit_logs", log.id.clone()))
-                        .await
-                        .map_err(|e| e.to_string())
-                        .ok()
-                        .flatten();
-                    deleted += 1;
-                }
+            if let Ok(dt) = DateTime::parse_from_rfc3339(&log.timestamp)
+                && dt.with_timezone(&Utc) < cutoff
+            {
+                let _: Option<AuditLog> = self
+                    .db
+                    .delete(("audit_logs", log.id.clone()))
+                    .await
+                    .map_err(|e| e.to_string())
+                    .ok()
+                    .flatten();
+                deleted += 1;
             }
         }
 

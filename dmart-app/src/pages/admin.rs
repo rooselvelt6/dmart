@@ -8,9 +8,7 @@ use leptos::task::spawn_local;
 pub fn AdminPage() -> impl IntoView {
     let (active_tab, set_active_tab) = signal("camas".to_string());
 
-    let admin_stats = LocalResource::new(|| async move {
-        api::get_admin_stats().await.ok()
-    });
+    let admin_stats = LocalResource::new(|| async move { api::get_admin_stats().await.ok() });
 
     let tab_class = |tab: &str| {
         format!(
@@ -18,7 +16,8 @@ pub fn AdminPage() -> impl IntoView {
             if active_tab.get() == tab {
                 "bg-uci-accent text-white".to_string()
             } else {
-                "text-uci-muted hover:text-uci-text hover:bg-gray-100 dark:hover:bg-gray-800".to_string()
+                "text-uci-muted hover:text-uci-text hover:bg-gray-100 dark:hover:bg-gray-800"
+                    .to_string()
             }
         )
     };
@@ -96,7 +95,7 @@ pub fn AdminPage() -> impl IntoView {
     }
 }
 
-fn admin_stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView {
+fn admin_stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView + use<> {
     let title = title.to_string();
     let value = value.to_string();
     let c = color;
@@ -569,8 +568,15 @@ fn EquiposPanel() -> impl IntoView {
                 api::create_equipo(body).await.map(|_| ())
             };
             match result {
-                Ok(_) => { saving.set(false); reset_form(); fetch(); }
-                Err(e) => { saving.set(false); error_msg.set(Some(e)); }
+                Ok(_) => {
+                    saving.set(false);
+                    reset_form();
+                    fetch();
+                }
+                Err(e) => {
+                    saving.set(false);
+                    error_msg.set(Some(e));
+                }
             }
         });
     };
@@ -798,8 +804,15 @@ fn StaffPanel() -> impl IntoView {
                 api::create_staff(&user).await.map(|_| ())
             };
             match result {
-                Ok(_) => { saving.set(false); reset_form(); fetch(); }
-                Err(e) => { saving.set(false); error_msg.set(Some(e)); }
+                Ok(_) => {
+                    saving.set(false);
+                    reset_form();
+                    fetch();
+                }
+                Err(e) => {
+                    saving.set(false);
+                    error_msg.set(Some(e));
+                }
             }
         });
     };

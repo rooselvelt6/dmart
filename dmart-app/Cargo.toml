@@ -1,18 +1,10 @@
 [package]
 name = "dmart-app"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-
-[profile.dev]
-opt-level = 0
 
 [dependencies]
 dmart-shared = { path = "../dmart-shared" }

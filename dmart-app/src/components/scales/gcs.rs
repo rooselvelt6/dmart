@@ -1,20 +1,20 @@
-use leptos::prelude::*;
 use dmart_shared::models::*;
+use leptos::prelude::*;
 
 #[component]
-pub fn GcsScale(
-    data: RwSignal<GcsData>,
-) -> impl IntoView {
+pub fn GcsScale(data: RwSignal<GcsData>) -> impl IntoView {
     let eye_val = Signal::derive(move || data.get().apertura_ocular);
     let eye_set = Callback::new(move |v| data.update(|d| d.apertura_ocular = v));
-    
+
     let verbal_val = Signal::derive(move || data.get().respuesta_verbal);
     let verbal_set = Callback::new(move |v| data.update(|d| d.respuesta_verbal = v));
-    
+
     let motor_val = Signal::derive(move || data.get().respuesta_motora);
     let motor_set = Callback::new(move |v| data.update(|d| d.respuesta_motora = v));
-    
-    let total = Signal::derive(move || data.get().apertura_ocular + data.get().respuesta_verbal + data.get().respuesta_motora);
+
+    let total = Signal::derive(move || {
+        data.get().apertura_ocular + data.get().respuesta_verbal + data.get().respuesta_motora
+    });
 
     view! {
         <div class="glass-card p-4" style="background:var(--uci-card); border:1px solid var(--uci-border);">
@@ -73,7 +73,7 @@ fn GcsSlider(
                     {move || value.get()}
                 </span>
             </div>
-            <input 
+            <input
                 type="range" class="w-full h-2 rounded-lg appearance-none cursor-pointer"
                 min=min max=max step=1
                 prop:value=move || value.get()

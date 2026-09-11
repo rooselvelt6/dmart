@@ -1,14 +1,14 @@
 use crate::components::theme_toggle::ThemeToggle;
 use crate::pages::{
-    dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
+    admin::AdminPage, dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
     patient_detail::PatientDetailPage, patient_edit::PatientEditPage, patients::PatientsPage,
-    register::RegisterPage, admin::AdminPage,
+    register::RegisterPage,
 };
 use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos_router::components::{Redirect, Route, Router, Routes, A};
+use leptos_router::components::{A, Redirect, Route, Router, Routes};
 use leptos_router::hooks::*;
 use leptos_router::path;
 
@@ -125,9 +125,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
         }
     };
 
-    let is_active_exact = move |target: &str| {
-        path() == target
-    };
+    let is_active_exact = move |target: &str| path() == target;
 
     let _is_active_query = move |target: &str, query_str: &str| {
         path().starts_with(target) && location.search.get().contains(query_str)
@@ -234,7 +232,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                             <div style="font-size:10px; color:#EC4899; text-transform:uppercase; letter-spacing:1px; padding:4px 8px 8px; font-weight:900;">
                                 <i class="fa-solid fa-id-card-clip" style="margin-right:5px;"></i>PACIENTE ACTIVO
                             </div>
-                            
+
                             <A href=base.clone() attr:class="nav-link">
                                 <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%);">
                                     <i class="fa-solid fa-user-injured w-6 text-center text-lg" style="color:white;"></i>
@@ -259,7 +257,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                 </div>
                 <button
                     on:click=move |_| {
-                        let _ = LocalStorage::delete("dmart_auth");
+                        LocalStorage::delete("dmart_auth");
                         window().location().reload().unwrap_or_default();
                     }
                     style="

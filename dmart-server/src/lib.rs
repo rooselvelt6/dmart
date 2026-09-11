@@ -1,9 +1,9 @@
-pub mod db;
-pub mod cache;
 pub mod api;
-pub mod crypto;
-pub mod auth;
-pub mod rbac;
 pub mod audit;
-pub mod security;
+pub mod auth;
+pub mod cache;
+pub mod crypto;
+pub mod db;
 pub mod middleware;
+pub mod rbac;
+pub mod security;

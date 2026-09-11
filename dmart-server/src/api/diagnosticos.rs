@@ -1,8 +1,4 @@
-use axum::{
-    extract::Query,
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::Query, http::StatusCode, response::Json};
 use dmart_shared::models::*;
 
 type ApiResult<T> = Result<Json<ApiResponse<T>>, (StatusCode, String)>;
@@ -17,9 +13,7 @@ pub async fn list_diagnosticos() -> ApiResult<Vec<Diagnostico>> {
     Ok(Json(ApiResponse::ok(diagnosticos)))
 }
 
-pub async fn search_diagnosticos(
-    Query(params): Query<SearchQuery>,
-) -> ApiResult<Vec<Diagnostico>> {
+pub async fn search_diagnosticos(Query(params): Query<SearchQuery>) -> ApiResult<Vec<Diagnostico>> {
     let all = diagnosticos_uci();
     let query = params.q.unwrap_or_default().to_lowercase();
 

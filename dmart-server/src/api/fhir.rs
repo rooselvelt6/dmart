@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
+use crate::db::Database;
+use anyhow::Error;
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
 use dmart_shared::models::*;
-use crate::db::Database;
 use serde::Serialize;
-use anyhow::Error;
 
 type ApiResult<T> = Result<Json<ApiResponse<T>>, (StatusCode, String)>;
 
@@ -125,21 +125,26 @@ pub async fn fhir_patient_search(
     Query(params): Query<FhirSearchQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let fhir_count = params._count.unwrap_or(50).min(200) as u32;
-    let patients = crate::db::list_patients(&db, fhir_count, 0).await.map_err(err_to_str)?;
+    let patients = crate::db::list_patients(&db, fhir_count, 0)
+        .await
+        .map_err(err_to_str)?;
 
     let entries: Vec<FhirBundleEntry> = if let Some(name) = &params.name {
         let lower = name.to_lowercase();
-        patients.iter().filter(|p| {
-            p.nombre.to_lowercase().contains(&lower) ||
-            p.apellido.to_lowercase().contains(&lower)
-        })
-        .take(fhir_count as usize)
-        .map(|p| FhirBundleEntry {
-            resource: patient_to_fhir(p),
-        })
-        .collect()
+        patients
+            .iter()
+            .filter(|p| {
+                p.nombre.to_lowercase().contains(&lower)
+                    || p.apellido.to_lowercase().contains(&lower)
+            })
+            .take(fhir_count as usize)
+            .map(|p| FhirBundleEntry {
+                resource: patient_to_fhir(p),
+            })
+            .collect()
     } else {
-        patients.iter()
+        patients
+            .iter()
             .map(|p| FhirBundleEntry {
                 resource: patient_to_fhir(p),
             })
@@ -152,7 +157,9 @@ pub async fn fhir_patient_search(
         entry: entries,
     };
 
-    Ok(Json(serde_json::to_value(bundle).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?))
+    Ok(Json(serde_json::to_value(bundle).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?))
 }
 
 pub async fn fhir_patient_get(
@@ -164,6 +171,8 @@ pub async fn fhir_patient_get(
         .map_err(err_to_str)?
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
 
-    Ok(Json(serde_json::to_value(patient_to_fhir(&patient))
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?))
+    Ok(Json(
+        serde_json::to_value(patient_to_fhir(&patient))
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+    ))
 }

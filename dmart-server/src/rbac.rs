@@ -76,7 +76,11 @@ impl Role {
                 "scales:write".to_string(),
                 "export:csv".to_string(),
             ],
-            Role::Viewer => vec!["patients:read".to_string(), "measurements:read".to_string(), "scales:read".to_string()],
+            Role::Viewer => vec![
+                "patients:read".to_string(),
+                "measurements:read".to_string(),
+                "scales:read".to_string(),
+            ],
         }
     }
 

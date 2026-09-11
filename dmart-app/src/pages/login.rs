@@ -1,8 +1,8 @@
+use crate::api;
+use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
-use gloo_storage::{LocalStorage, Storage};
-use crate::api;
 
 #[component]
 pub fn LoginPage() -> impl IntoView {
@@ -10,7 +10,7 @@ pub fn LoginPage() -> impl IntoView {
     let (password, set_password) = signal(String::new());
     let (error, set_error) = signal(false);
     let (loading, set_loading) = signal(false);
-    
+
     let navigate = use_navigate();
     let set_is_auth = use_context::<WriteSignal<bool>>();
 
@@ -18,12 +18,12 @@ pub fn LoginPage() -> impl IntoView {
         ev.prevent_default();
         set_loading.set(true);
         set_error.set(false);
-        
+
         let u = username.get();
         let p = password.get();
         let nav = navigate.clone();
-        let set_auth = set_is_auth.clone();
-        
+        let set_auth = set_is_auth;
+
         spawn_local(async move {
             match api::login(&u, &p).await {
                 Ok(response) => {
@@ -47,7 +47,7 @@ pub fn LoginPage() -> impl IntoView {
             // Fondo decorativo con gradientes médicos
             <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-uci-accent/10 blur-[120px] rounded-full"></div>
             <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-uci-accent2/10 blur-[120px] rounded-full"></div>
-            
+
             <div class="glass-card w-full max-w-md p-10 relative z-10 animate-fade-in">
                 <div class="text-center mb-10">
                     <div class="w-20 h-20 bg-gradient-to-br from-[#e34a27] to-[#9b2a14] rounded-full mx-auto flex items-center justify-center shadow-lg shadow-[#e34a27]/40 mb-6 group transition-transform hover:scale-105 duration-300">
@@ -68,9 +68,9 @@ pub fn LoginPage() -> impl IntoView {
                 <form on:submit=on_submit class="space-y-6">
                     <div>
                         <label class="form-label">"Usuario / Identificación"</label>
-                        <input 
-                            type="text" 
-                            class="form-input py-3" 
+                        <input
+                            type="text"
+                            class="form-input py-3"
                             placeholder="admin_uci"
                             prop:value=username
                             on:input=move |ev| set_username.set(event_target_value(&ev))
@@ -82,9 +82,9 @@ pub fn LoginPage() -> impl IntoView {
                             <label class="form-label mb-0">"Contraseña"</label>
                             <a href="#" class="text-[10px] text-uci-accent hover:underline">"¿Olvido su clave?"</a>
                         </div>
-                        <input 
-                            type="password" 
-                            class="form-input py-3" 
+                        <input
+                            type="password"
+                            class="form-input py-3"
                             placeholder="••••••••"
                             prop:value=password
                             on:input=move |ev| set_password.set(event_target_value(&ev))
@@ -92,8 +92,8 @@ pub fn LoginPage() -> impl IntoView {
                         />
                     </div>
 
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         class="btn-primary w-full py-4 text-base font-bold tracking-wide mt-4 relative overflow-hidden group"
                         disabled=loading
                     >

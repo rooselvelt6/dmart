@@ -1,5 +1,5 @@
-use leptos::prelude::*;
 use dmart_shared::models::Measurement;
+use leptos::prelude::*;
 
 #[derive(Clone)]
 struct RowData {
@@ -15,26 +15,43 @@ pub fn MeasurementGroup(
     color: String,
     measurements: Vec<Measurement>,
 ) -> impl IntoView {
-    let rows: Vec<RowData> = measurements.iter().map(|m| {
-        let title_inner = title.clone();
-        let ts = m.timestamp.clone();
-        let fecha = if ts.len() >= 16 { ts[..16].to_string() } else { ts };
-        let score = if title_inner.contains("APACHE") {
-            m.apache_score.to_string()
-        } else if title_inner.contains("GCS") {
-            m.gcs_score.to_string()
-        } else if title_inner.contains("SOFA") {
-            m.sofa_score.map(|s| s.to_string()).unwrap_or_else(|| "—".to_string())
-        } else if title_inner.contains("SAPS") {
-            m.saps3_score.map(|s| s.to_string()).unwrap_or_else(|| "—".to_string())
-        } else if title_inner.contains("NEWS") {
-            m.news2_score.map(|s| s.to_string()).unwrap_or_else(|| "—".to_string())
-        } else {
-            "—".to_string()
-        };
-        let notas = m.notas.clone();
-        RowData { fecha, score, notas }
-    }).collect();
+    let rows: Vec<RowData> = measurements
+        .iter()
+        .map(|m| {
+            let title_inner = title.clone();
+            let ts = m.timestamp.clone();
+            let fecha = if ts.len() >= 16 {
+                ts[..16].to_string()
+            } else {
+                ts
+            };
+            let score = if title_inner.contains("APACHE") {
+                m.apache_score.to_string()
+            } else if title_inner.contains("GCS") {
+                m.gcs_score.to_string()
+            } else if title_inner.contains("SOFA") {
+                m.sofa_score
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "—".to_string())
+            } else if title_inner.contains("SAPS") {
+                m.saps3_score
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "—".to_string())
+            } else if title_inner.contains("NEWS") {
+                m.news2_score
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "—".to_string())
+            } else {
+                "—".to_string()
+            };
+            let notas = m.notas.clone();
+            RowData {
+                fecha,
+                score,
+                notas,
+            }
+        })
+        .collect();
 
     let count = rows.len();
     let color_clone = color.clone();

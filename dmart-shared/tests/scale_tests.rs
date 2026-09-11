@@ -5,8 +5,9 @@
 
 use dmart_shared::models::{ApacheIIData, GcsData};
 use dmart_shared::scales::{
-    apache_ii_breakdown, calculate_apache_ii_score, calculate_news2_score, calculate_saps_iii_score,
-    calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction, sofa_mortality_estimate,
+    apache_ii_breakdown, calculate_apache_ii_score, calculate_news2_score,
+    calculate_saps_iii_score, calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction,
+    sofa_mortality_estimate,
 };
 
 // Función helper para crear un paciente con todos los valores en rango normal (0 puntos)
@@ -35,9 +36,9 @@ fn paciente_base() -> ApacheIIData {
         plaquetas: 250.0,
         // GCS normal
         gcs_ojos: 4,
-            gcs_verbal: 5,
-            gcs_motor: 6,
-            gcs_total: 15,
+        gcs_verbal: 5,
+        gcs_motor: 6,
+        gcs_total: 15,
         // Edad media (sin puntos)
         edad: 40,
         // Sin enfermedades crónicas
@@ -510,30 +511,30 @@ mod apache_ii {
         assert!(breakdown.edad_pts <= 6, "Edad no puede exceder 6");
     }
 
-// Score exacto 71 puntos (máximo según Knaus 1985)
+    // Score exacto 71 puntos (máximo según Knaus 1985)
     // Este test verifica el score máximo
     #[test]
     fn test_score_max_verification() {
         // Paciente crítico real - verificar que el breakdown suma correcto
         let data = ApacheIIData {
             // Todas las variables en valor crítico = 60 pts APS
-            temperatura: 30.0,           // 4
+            temperatura: 30.0,             // 4
             presion_arterial_media: 180.0, // 4
             presion_sistolica: 220.0,
-            frecuencia_cardiaca: 200.0,     // 4
+            frecuencia_cardiaca: 200.0,    // 4
             frecuencia_respiratoria: 55.0, // 4
             fio2: 0.21,
-            pao2: Some(30.0),            // 4 (<55)
+            pao2: Some(30.0), // 4 (<55)
             a_ado2: None,
             spo2: 85.0,
-            ph_arterial: 7.10,           // 4
-            sodio_serico: 185.0,         // 4
-            potasio_serico: 7.5,        // 4
-            creatinina: 4.0,             // 4
+            ph_arterial: 7.10,   // 4
+            sodio_serico: 185.0, // 4
+            potasio_serico: 7.5, // 4
+            creatinina: 4.0,     // 4
             falla_renal_aguda: false,
             bilirrubina: 12.0,
-            hematocrito: 65.0,           // 4
-            leucocitos: 45.0,             // 4
+            hematocrito: 65.0, // 4
+            leucocitos: 45.0,  // 4
             plaquetas: 20.0,
             // GCS = 1 = 14 puntos (peor)
             gcs_ojos: 1,
@@ -566,17 +567,17 @@ mod apache_ii {
 
         let breakdown = apache_ii_breakdown(&data);
         let score = calculate_apache_ii_score(&data);
-        
+
         println!("APS: {}", breakdown.aps_total);
         println!("GCS pts: {}", breakdown.gcs_pts);
         println!("Edad pts: {}", breakdown.edad_pts);
         println!("Crónica pts: {}", breakdown.cronicas_pts);
         println!("Total: {}", score);
-        
+
         // APS máximo es 60, GCS max 12, Edad 6, Crónica 5 = 83 pero limitado a 71
         // Verificar que es un score muy alto (>=60)
         assert!(score >= 60, "Score debe ser muy alto (>=60)");
-        
+
         // Verificar mortalidad muy alta
         let mort = mortality_risk(score);
         println!("Mortalidad: {}%", mort);
@@ -893,7 +894,11 @@ mod saps3_tests {
         let score = calculate_saps_iii_score(&data);
         let mort = saps_iii_mortality_prediction(score);
         assert!(score < 30, "SAPS3 estable debe ser < 30, got: {}", score);
-        assert!(mort < 10.0, "Mortalidad estable debe ser < 10%, got: {}%", mort);
+        assert!(
+            mort < 10.0,
+            "Mortalidad estable debe ser < 10%, got: {}%",
+            mort
+        );
     }
 
     #[test]
@@ -912,7 +917,11 @@ mod saps3_tests {
         let score = calculate_saps_iii_score(&data);
         let mort = saps_iii_mortality_prediction(score);
         assert!(score >= 50, "SAPS3 crítico debe ser >= 50, got: {}", score);
-        assert!(mort >= 15.0, "Mortalidad crítica debe ser >= 15%, got: {}%", mort);
+        assert!(
+            mort >= 15.0,
+            "Mortalidad crítica debe ser >= 15%, got: {}%",
+            mort
+        );
     }
 
     #[test]
@@ -922,7 +931,10 @@ mod saps3_tests {
         let score_joven = calculate_saps_iii_score(&data);
         data.edad = 80;
         let score_anciano = calculate_saps_iii_score(&data);
-        assert!(score_anciano > score_joven, " mayor edad debe dar más puntos");
+        assert!(
+            score_anciano > score_joven,
+            " mayor edad debe dar más puntos"
+        );
     }
 }
 
@@ -944,7 +956,11 @@ mod sofa_tests {
         let score = calculate_sofa_score(&data);
         let mort = sofa_mortality_estimate(score);
         assert!(score < 5, "SOFA estable debe ser < 5, got: {}", score);
-        assert!(mort < 10.0, "Mortalidad estable debe ser < 10%, got: {}%", mort);
+        assert!(
+            mort < 10.0,
+            "Mortalidad estable debe ser < 10%, got: {}%",
+            mort
+        );
     }
 
     #[test]
@@ -962,8 +978,16 @@ mod sofa_tests {
 
         let score = calculate_sofa_score(&data);
         let mort = sofa_mortality_estimate(score);
-        assert!(score >= 10, "SOFA fallo múltiple debe ser >= 10, got: {}", score);
-        assert!(mort >= 30.0, "Mortalidad alta debe ser >= 30%, got: {}%", mort);
+        assert!(
+            score >= 10,
+            "SOFA fallo múltiple debe ser >= 10, got: {}",
+            score
+        );
+        assert!(
+            mort >= 30.0,
+            "Mortalidad alta debe ser >= 30%, got: {}%",
+            mort
+        );
     }
 
     #[test]

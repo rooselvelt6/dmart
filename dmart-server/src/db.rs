@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use std::sync::Arc;
 use anyhow::Result;
-use surrealdb::engine::local::{Db, SurrealKv};
-use surrealdb::Surreal;
-use uuid::Uuid;
 use dmart_shared::models::*;
+use std::sync::Arc;
+use surrealdb::Surreal;
+use surrealdb::engine::local::{Db, SurrealKv};
+use uuid::Uuid;
 
 pub type Database = Arc<Surreal<Db>>;
 
@@ -14,7 +14,7 @@ pub async fn connect(path: &str) -> Result<Database> {
     if let Some(parent) = std::path::Path::new(path).parent() {
         std::fs::create_dir_all(parent)?;
     }
-    
+
     let db = Surreal::new::<SurrealKv>(path).await?;
     db.use_ns("dmart").use_db("icu").await?;
     Ok(Arc::new(db))
@@ -39,11 +39,12 @@ pub async fn get_patient(db: &Surreal<Db>, id: &str) -> Result<Option<Patient>> 
     Ok(patient)
 }
 
-pub async fn update_patient(db: &Surreal<Db>, id: &str, patient: Patient) -> Result<Option<Patient>> {
-    let updated: Option<Patient> = db
-        .update(("patients", id))
-        .content(patient)
-        .await?;
+pub async fn update_patient(
+    db: &Surreal<Db>,
+    id: &str,
+    patient: Patient,
+) -> Result<Option<Patient>> {
+    let updated: Option<Patient> = db.update(("patients", id)).content(patient).await?;
     Ok(updated)
 }
 
@@ -65,7 +66,12 @@ pub async fn count_patients(db: &Surreal<Db>) -> Result<u64> {
     Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 
-pub async fn search_patients(db: &Surreal<Db>, query: &str, limit: u32, offset: u32) -> Result<Vec<Patient>> {
+pub async fn search_patients(
+    db: &Surreal<Db>,
+    query: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Patient>> {
     let q = format!("%{}%", query);
     let patients: Vec<Patient> = db
         .query("SELECT * FROM patients WHERE nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q ORDER BY created_at DESC LIMIT $limit START $offset")
@@ -118,12 +124,11 @@ pub async fn get_measurements_for_patient(
     patient_id: &str,
 ) -> Result<Vec<Measurement>> {
     let cache_key = format!("measurements:{}", patient_id);
-    if crate::cache::cache_available() {
-        if let Some(cached) = crate::cache::cache_get(&cache_key).await {
-            if let Ok(measurements) = serde_json::from_str::<Vec<Measurement>>(&cached) {
-                return Ok(measurements);
-            }
-        }
+    if crate::cache::cache_available()
+        && let Some(cached) = crate::cache::cache_get(&cache_key).await
+        && let Ok(measurements) = serde_json::from_str::<Vec<Measurement>>(&cached)
+    {
+        return Ok(measurements);
     }
 
     let pid = patient_id.to_string();
@@ -133,10 +138,10 @@ pub async fn get_measurements_for_patient(
         .await?
         .take(0)?;
 
-    if crate::cache::cache_available() {
-        if let Ok(json) = serde_json::to_string(&measurements) {
-            crate::cache::cache_set(&cache_key, &json, 60).await;
-        }
+    if crate::cache::cache_available()
+        && let Ok(json) = serde_json::to_string(&measurements)
+    {
+        crate::cache::cache_set(&cache_key, &json, 60).await;
     }
 
     Ok(measurements)
@@ -147,12 +152,11 @@ pub async fn get_last_measurement(
     patient_id: &str,
 ) -> Result<Option<Measurement>> {
     let cache_key = format!("last_measurement:{}", patient_id);
-    if crate::cache::cache_available() {
-        if let Some(cached) = crate::cache::cache_get(&cache_key).await {
-            if let Ok(m) = serde_json::from_str::<Option<Measurement>>(&cached) {
-                return Ok(m);
-            }
-        }
+    if crate::cache::cache_available()
+        && let Some(cached) = crate::cache::cache_get(&cache_key).await
+        && let Ok(m) = serde_json::from_str::<Option<Measurement>>(&cached)
+    {
+        return Ok(m);
     }
 
     let pid = patient_id.to_string();
@@ -163,10 +167,10 @@ pub async fn get_last_measurement(
         .take(0)?;
     let result = measurements.into_iter().next();
 
-    if crate::cache::cache_available() {
-        if let Ok(json) = serde_json::to_string(&result) {
-            crate::cache::cache_set(&cache_key, &json, 60).await;
-        }
+    if crate::cache::cache_available()
+        && let Ok(json) = serde_json::to_string(&result)
+    {
+        crate::cache::cache_set(&cache_key, &json, 60).await;
     }
 
     Ok(result)
@@ -204,7 +208,9 @@ pub async fn create_cama(db: &Surreal<Db>, mut cama: Cama) -> Result<Cama> {
 
 pub async fn get_cama_libre_por_tipo(db: &Surreal<Db>, tipo: &TipoCama) -> Result<Option<Cama>> {
     let todas: Vec<Cama> = db.select("camas").await?;
-    Ok(todas.into_iter().find(|c| c.estado == EstadoCama::Libre && c.tipo == *tipo))
+    Ok(todas
+        .into_iter()
+        .find(|c| c.estado == EstadoCama::Libre && c.tipo == *tipo))
 }
 
 pub async fn get_cama(db: &Surreal<Db>, id: &str) -> Result<Option<Cama>> {
@@ -218,10 +224,7 @@ pub async fn get_cama_by_numero(db: &Surreal<Db>, numero: u8) -> Result<Option<C
 }
 
 pub async fn update_cama(db: &Surreal<Db>, id: &str, cama: Cama) -> Result<Option<Cama>> {
-    let updated: Option<Cama> = db
-        .update(("camas", id))
-        .content(cama)
-        .await?;
+    let updated: Option<Cama> = db.update(("camas", id)).content(cama).await?;
     Ok(updated)
 }
 
@@ -253,7 +256,9 @@ pub async fn get_cama_libre(db: &Surreal<Db>) -> Result<Option<Cama>> {
     Ok(todas.into_iter().find(|c| c.estado == EstadoCama::Libre))
 }
 
-pub async fn count_camas_por_tipo(db: &Surreal<Db>) -> Result<Vec<dmart_shared::models::TipoCamaCount>> {
+pub async fn count_camas_por_tipo(
+    db: &Surreal<Db>,
+) -> Result<Vec<dmart_shared::models::TipoCamaCount>> {
     use std::collections::HashMap;
     let todas: Vec<Cama> = db.select("camas").await?;
     let mut map: HashMap<String, (u8, u8)> = HashMap::new();
@@ -265,7 +270,16 @@ pub async fn count_camas_por_tipo(db: &Surreal<Db>) -> Result<Vec<dmart_shared::
             entry.1 += 1;
         }
     }
-    Ok(map.into_iter().map(|(tipo, (total, libres))| dmart_shared::models::TipoCamaCount { tipo, total, libres }).collect())
+    Ok(map
+        .into_iter()
+        .map(
+            |(tipo, (total, libres))| dmart_shared::models::TipoCamaCount {
+                tipo,
+                total,
+                libres,
+            },
+        )
+        .collect())
 }
 
 pub async fn asignar_cama_paciente(
@@ -282,10 +296,7 @@ pub async fn asignar_cama_paciente(
         c.estado = EstadoCama::Ocupada;
         c.paciente_id = Some(paciente_id.to_string());
         c.paciente_nombre = Some(paciente_nombre.to_string());
-        let updated: Option<Cama> = db
-            .update(("camas", cama_id))
-            .content(c)
-            .await?;
+        let updated: Option<Cama> = db.update(("camas", cama_id)).content(c).await?;
         Ok(updated)
     } else {
         Err(anyhow::anyhow!("Cama not found"))
@@ -298,10 +309,7 @@ pub async fn liberar_cama(db: &Surreal<Db>, cama_id: &str) -> Result<Option<Cama
         c.estado = EstadoCama::Libre;
         c.paciente_id = None;
         c.paciente_nombre = None;
-        let updated: Option<Cama> = db
-            .update(("camas", cama_id))
-            .content(c)
-            .await?;
+        let updated: Option<Cama> = db.update(("camas", cama_id)).content(c).await?;
         Ok(updated)
     } else {
         Err(anyhow::anyhow!("Cama not found"))
@@ -332,10 +340,7 @@ pub async fn get_equipo(db: &Surreal<Db>, id: &str) -> Result<Option<Equipo>> {
 }
 
 pub async fn update_equipo(db: &Surreal<Db>, id: &str, equipo: Equipo) -> Result<Option<Equipo>> {
-    let updated: Option<Equipo> = db
-        .update(("equipos", id))
-        .content(equipo)
-        .await?;
+    let updated: Option<Equipo> = db.update(("equipos", id)).content(equipo).await?;
     Ok(updated)
 }
 
@@ -344,7 +349,11 @@ pub async fn list_equipos(db: &Surreal<Db>) -> Result<Vec<Equipo>> {
     Ok(equipos)
 }
 
-pub async fn list_equipos_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Equipo>> {
+pub async fn list_equipos_paginated(
+    db: &Surreal<Db>,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Equipo>> {
     let equipos: Vec<Equipo> = db
         .query("SELECT * FROM equipos ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("limit", limit as i64))
@@ -364,17 +373,21 @@ pub async fn count_equipos(db: &Surreal<Db>) -> Result<u64> {
 
 pub async fn list_equipos_por_cama(db: &Surreal<Db>, cama_id: &str) -> Result<Vec<Equipo>> {
     let todas: Vec<Equipo> = db.select("equipos").await?;
-    Ok(todas.into_iter().filter(|e| e.cama_id.as_deref() == Some(cama_id)).collect())
+    Ok(todas
+        .into_iter()
+        .filter(|e| e.cama_id.as_deref() == Some(cama_id))
+        .collect())
 }
 
-pub async fn asignar_equipo_cama(db: &Surreal<Db>, equipo_id: &str, cama_id: &str) -> Result<Option<Equipo>> {
+pub async fn asignar_equipo_cama(
+    db: &Surreal<Db>,
+    equipo_id: &str,
+    cama_id: &str,
+) -> Result<Option<Equipo>> {
     let equipo: Option<Equipo> = db.select(("equipos", equipo_id)).await?;
     if let Some(mut e) = equipo {
         e.cama_id = Some(cama_id.to_string());
-        let updated: Option<Equipo> = db
-            .update(("equipos", equipo_id))
-            .content(e)
-            .await?;
+        let updated: Option<Equipo> = db.update(("equipos", equipo_id)).content(e).await?;
         Ok(updated)
     } else {
         Err(anyhow::anyhow!("Equipo not found"))
@@ -385,10 +398,7 @@ pub async fn desvincular_equipo_cama(db: &Surreal<Db>, equipo_id: &str) -> Resul
     let equipo: Option<Equipo> = db.select(("equipos", equipo_id)).await?;
     if let Some(mut e) = equipo {
         e.cama_id = None;
-        let updated: Option<Equipo> = db
-            .update(("equipos", equipo_id))
-            .content(e)
-            .await?;
+        let updated: Option<Equipo> = db.update(("equipos", equipo_id)).content(e).await?;
         Ok(updated)
     } else {
         Err(anyhow::anyhow!("Equipo not found"))
@@ -397,10 +407,15 @@ pub async fn desvincular_equipo_cama(db: &Surreal<Db>, equipo_id: &str) -> Resul
 
 pub async fn list_equipos_disponibles(db: &Surreal<Db>) -> Result<Vec<Equipo>> {
     let todas: Vec<Equipo> = db.select("equipos").await?;
-    Ok(todas.into_iter().filter(|e| e.estado == EstadoEquipo::Activo && e.cama_id.is_none()).collect())
+    Ok(todas
+        .into_iter()
+        .filter(|e| e.estado == EstadoEquipo::Activo && e.cama_id.is_none())
+        .collect())
 }
 
-pub async fn count_equipos_por_tipo(db: &Surreal<Db>) -> Result<Vec<dmart_shared::models::EquipoTipoCount>> {
+pub async fn count_equipos_por_tipo(
+    db: &Surreal<Db>,
+) -> Result<Vec<dmart_shared::models::EquipoTipoCount>> {
     use std::collections::HashMap;
     let todas: Vec<Equipo> = db.select("equipos").await?;
     let mut map: HashMap<String, (u32, u32)> = HashMap::new();
@@ -412,7 +427,16 @@ pub async fn count_equipos_por_tipo(db: &Surreal<Db>) -> Result<Vec<dmart_shared
             entry.1 += 1;
         }
     }
-    Ok(map.into_iter().map(|(tipo, (total, disponibles))| dmart_shared::models::EquipoTipoCount { tipo, total, disponibles }).collect())
+    Ok(map
+        .into_iter()
+        .map(
+            |(tipo, (total, disponibles))| dmart_shared::models::EquipoTipoCount {
+                tipo,
+                total,
+                disponibles,
+            },
+        )
+        .collect())
 }
 
 pub async fn delete_equipo(db: &Surreal<Db>, id: &str) -> Result<()> {
@@ -452,10 +476,7 @@ pub async fn get_user_by_username(db: &Surreal<Db>, username: &str) -> Result<Op
 }
 
 pub async fn update_user(db: &Surreal<Db>, id: &str, user: User) -> Result<Option<User>> {
-    let updated: Option<User> = db
-        .update(("users", id))
-        .content(user)
-        .await?;
+    let updated: Option<User> = db.update(("users", id)).content(user).await?;
     Ok(updated)
 }
 
@@ -466,7 +487,8 @@ pub async fn list_users(db: &Surreal<Db>) -> Result<Vec<User>> {
 
 pub async fn list_staff(db: &Surreal<Db>) -> Result<Vec<User>> {
     let todos: Vec<User> = db.select("users").await?;
-    Ok(todos.into_iter()
+    Ok(todos
+        .into_iter()
         .filter(|u| matches!(u.rol, UserRole::Medico | UserRole::Enfermero))
         .collect())
 }

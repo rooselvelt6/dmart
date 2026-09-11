@@ -1,11 +1,9 @@
-use leptos::prelude::*;
 use dmart_shared::models::*;
 use dmart_shared::scales::*;
+use leptos::prelude::*;
 
 #[component]
-pub fn Saps3Scale(
-    data: RwSignal<ApacheIIData>,
-) -> impl IntoView {
+pub fn Saps3Scale(data: RwSignal<ApacheIIData>) -> impl IntoView {
     let breakdown = Memo::new(move |_| calculate_saps3_breakdown(&data.get()));
     let score = Memo::new(move |_| breakdown.get().total);
     let level = Memo::new(move |_| Saps3Level::from_score(score.get()));
@@ -15,7 +13,7 @@ pub fn Saps3Scale(
             <div class="flex flex-col xl:flex-row gap-4 xl:gap-8">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-3 sm:gap-5 mb-4 sm:mb-6">
-                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl sm:text-2xl" 
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl sm:text-2xl"
                              style="background:linear-gradient(135deg,#6366F1,#8B5CF6); color:white;">
                             <i class="fa-solid fa-chart-line"></i>
                         </div>
@@ -44,32 +42,32 @@ pub fn Saps3Scale(
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-                        <SapsMetric label="GCS" icon="fa-brain" 
+                        <SapsMetric label="GCS" icon="fa-brain"
                             value=Signal::derive(move || data.get().gcs_total as f32)
                             min=3.0 max=15.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.gcs_total = v as u8)) />
 
-                        <SapsMetric label="FC" icon="fa-heartbeat" 
+                        <SapsMetric label="FC" icon="fa-heartbeat"
                             value=Signal::derive(move || data.get().frecuencia_cardiaca)
                             min=30.0 max=200.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.frecuencia_cardiaca = v)) />
 
-                        <SapsMetric label="PAS" icon="fa-gauge-high" 
+                        <SapsMetric label="PAS" icon="fa-gauge-high"
                             value=Signal::derive(move || data.get().presion_sistolica)
                             min=40.0 max=250.0 step=1.0
                             on_change=Callback::new(move |v| data.update(|d| d.presion_sistolica = v)) />
 
-                        <SapsMetric label="Temp" icon="fa-thermometer" 
+                        <SapsMetric label="Temp" icon="fa-thermometer"
                             value=Signal::derive(move || data.get().temperatura)
                             min=33.0 max=42.0 step=0.1
                             on_change=Callback::new(move |v| data.update(|d| d.temperatura = v)) />
 
-                        <SapsMetric label="Creatinina" icon="fa-vial" 
+                        <SapsMetric label="Creatinina" icon="fa-vial"
                             value=Signal::derive(move || data.get().creatinina)
                             min=0.1 max=10.0 step=0.1
                             on_change=Callback::new(move |v| data.update(|d| d.creatinina = v)) />
 
-                        <SapsMetric label="Bilirrubina" icon="fa-vial-circle-check" 
+                        <SapsMetric label="Bilirrubina" icon="fa-vial-circle-check"
                             value=Signal::derive(move || data.get().bilirrubina)
                             min=0.1 max=20.0 step=0.1
                             on_change=Callback::new(move |v| data.update(|d| d.bilirrubina = v)) />
@@ -121,7 +119,7 @@ fn SapsMetric(
                     {move || if step < 1.0 { format!("{:.1}", value.get()) } else { format!("{:.0}", value.get()) }}
                 </span>
             </div>
-            <input 
+            <input
                 type="range" class="w-full h-2"
                 min=min max=max step=step
                 prop:value=move || value.get()

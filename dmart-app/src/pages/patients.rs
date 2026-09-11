@@ -1,7 +1,7 @@
-use leptos::prelude::*;
 use crate::api;
 use crate::components::severity_badge::SeverityBadge;
 use dmart_shared::models::Sexo;
+use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 #[component]
@@ -75,9 +75,9 @@ pub fn PatientsPage() -> impl IntoView {
                                                 </td>
                                                 <td class="p-3 md:p-4 hidden sm:table-cell font-semibold" style="color:var(--uci-text);">{p.edad}" años"</td>
                                                 <td class="p-3 md:p-4">
-                                                    {match p.sexo.clone() { 
-                                                        Sexo::Masculino => view!{ <span style="color:#60A5FA;">M</span> }, 
-                                                        Sexo::Femenino => view!{ <span style="color:#F472B6;">F</span> } 
+                                                    {match p.sexo.clone() {
+                                                        Sexo::Masculino => view!{ <span style="color:#60A5FA;">M</span> },
+                                                        Sexo::Femenino => view!{ <span style="color:#F472B6;">F</span> }
                                                     }}
                                                 </td>
                                                 <td class="p-3 md:p-4 text-center font-extrabold text-lg" style="color:var(--uci-text);">
@@ -88,12 +88,12 @@ pub fn PatientsPage() -> impl IntoView {
                                                     <div class="flex flex-wrap justify-end gap-1 sm:gap-2">
                                                         <a href=format!("/patients/{}", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(59,130,246,0.1); color:var(--uci-accent);">"Ver"</a>
                                                         <a href=format!("/patients/{}/edit", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(16,185,129,0.1); color:var(--uci-low);">"Editar"</a>
-                                                        <button 
+                                                        <button
                                                             on:click=move |_| {
-                                                                if let Some(w) = web_sys::window() {
-                                                                    if let Ok(true) = w.confirm_with_message("¿Está seguro de eliminar este paciente? Esta acción no se puede deshacer.") {
-                                                                        delete_patient(delete_id.clone());
-                                                                    }
+                                                                if let Some(w) = web_sys::window()
+                                                                    && let Ok(true) = w.confirm_with_message("¿Está seguro de eliminar este paciente? Esta acción no se puede deshacer.")
+                                                                {
+                                                                    delete_patient(delete_id.clone());
                                                                 }
                                                             }
                                                             class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline"

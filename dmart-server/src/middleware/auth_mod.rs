@@ -1,12 +1,12 @@
 use axum::{
+    Json,
     body::Body,
     extract::{Request, State},
     middleware::Next,
     response::{IntoResponse, Response},
-    Json,
 };
 
-use crate::auth::{extract_token_from_header, AuthService, Claims};
+use crate::auth::{AuthService, Claims, extract_token_from_header};
 use dmart_shared::models::ApiResponse;
 
 #[derive(Clone)]
@@ -63,7 +63,9 @@ pub async fn auth_middleware(
     let token = match auth_header.and_then(extract_token_from_header) {
         Some(t) => t,
         None => {
-            let response = Json(ApiResponse::<String>::err("Authentication required".to_string()));
+            let response = Json(ApiResponse::<String>::err(
+                "Authentication required".to_string(),
+            ));
             return Response::builder()
                 .status(401)
                 .body(response.into_response().into_body())
@@ -88,7 +90,7 @@ pub async fn auth_middleware(
 }
 
 #[allow(dead_code)]
-pub fn require_auth<T: std::fmt::Display>(claims: &Claims, permission: &str) -> Result<(), String> {
+pub fn require_auth(claims: &Claims, permission: &str) -> Result<(), String> {
     if claims.has_permission(permission) || claims.has_permission("*") {
         Ok(())
     } else {
@@ -98,10 +100,16 @@ pub fn require_auth<T: std::fmt::Display>(claims: &Claims, permission: &str) -> 
 
 #[allow(dead_code)]
 pub fn require_role(claims: &Claims, roles: &[&str]) -> Result<(), String> {
-    if roles.iter().any(|r| *r == claims.rol || claims.has_permission("*")) {
+    if roles
+        .iter()
+        .any(|r| *r == claims.rol || claims.has_permission("*"))
+    {
         Ok(())
     } else {
-        Err(format!("Role not authorized. Required: {}", roles.join(" or ")))
+        Err(format!(
+            "Role not authorized. Required: {}",
+            roles.join(" or ")
+        ))
     }
 }
 

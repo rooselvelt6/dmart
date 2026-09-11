@@ -1,3 +1,4 @@
+use crate::models::{ApacheIIData, GcsData};
 /// Apache II scoring algorithm — fully implemented per KNAUS et al. (1985)
 /// Reference: Knaus WA, Draper EA, Wagner DP, Zimmerman JE (1985).
 /// APACHE II: a severity of disease classification system.
@@ -16,8 +17,7 @@
 /// Reference: Vincent JL, Moreno R, Takala J, et al. The SOFA (Sepsis-related
 /// Organ Failure Assessment) score to describe organ dysfunction/failure.
 /// Intensive Care Med 1996; 22(6):707-10.
-use serde::{Serialize, Deserialize};
-use crate::models::{ApacheIIData, GcsData};
+use serde::{Deserialize, Serialize};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APS — Acute Physiology Score (12 variables, max 60 points)
@@ -148,11 +148,7 @@ fn points_creatinina(cr: f32, falla_aguda: bool) -> u32 {
         cr if cr >= 0.6 => 0,
         _ => 2,
     };
-    if falla_aguda {
-        pts * 2
-    } else {
-        pts
-    }
+    if falla_aguda { pts * 2 } else { pts }
 }
 
 /// Hematocrito (%)
@@ -213,11 +209,7 @@ fn points_cronicas(data: &ApacheIIData) -> u32 {
         return 0;
     }
     // No quirúrgico o cirugía de emergencia → 5 pts; electiva → 2 pts
-    if data.cirugia_no_operado {
-        5
-    } else {
-        2
-    }
+    if data.cirugia_no_operado { 5 } else { 2 }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,9 +217,11 @@ fn points_cronicas(data: &ApacheIIData) -> u32 {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Calculates total APACHE II score (max 71 points).
+///
 /// - Acute Physiology Score (APS): 0-60 points from vital signs + lab values
 /// - Age: 0-6 points
 /// - Chronic health points: 0-5 points
+///
 /// Follows Knaus 1985 standard.
 pub fn calculate_apache_ii_score(data: &ApacheIIData) -> u32 {
     let aps = points_temperatura(data.temperatura)
@@ -355,7 +349,7 @@ pub fn calculate_gcs_score_from_total(total: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-use crate::models::*;
+    use crate::models::*;
 
     fn normal_patient() -> ApacheIIData {
         ApacheIIData {
@@ -592,19 +586,11 @@ fn points_saps_edad(edad: u8) -> u32 {
 }
 
 fn points_saps_comorbilidad(inmunocomprometido: bool) -> u32 {
-    if inmunocomprometido {
-        9
-    } else {
-        0
-    }
+    if inmunocomprometido { 9 } else { 0 }
 }
 
 fn points_saps_vasoactivos(vasoactivos: bool) -> u32 {
-    if vasoactivos {
-        8
-    } else {
-        0
-    }
+    if vasoactivos { 8 } else { 0 }
 }
 
 fn points_saps_fuente(fuente: Option<&str>) -> u32 {
@@ -785,7 +771,7 @@ pub fn calculate_saps_iii_score(data: &ApacheIIData) -> u32 {
 pub fn saps_iii_mortality_prediction(score: u32) -> f32 {
     let logit = -7.7631 + 0.0847 * score as f32;
     let probability = 1.0 / (1.0 + (-logit).exp());
-    (probability * 100.0).min(100.0).max(0.0)
+    (probability * 100.0).clamp(0.0, 100.0)
 }
 
 // Saps3Breakdown and saps_iii_breakdown moved to consolidated section below
@@ -914,17 +900,33 @@ pub struct Saps3Breakdown {
 
 pub fn sofa_breakdown(data: &ApacheIIData) -> SofaBreakdown {
     let pao2 = data.pao2.unwrap_or(80.0);
-    let pao2fio2 = if data.fio2 > 0.0 { pao2 / data.fio2 } else { 400.0 };
-    
+    let pao2fio2 = if data.fio2 > 0.0 {
+        pao2 / data.fio2
+    } else {
+        400.0
+    };
+
     let r = points_sofa_respiratorio(pao2fio2);
     let c = points_sofa_coagulacion(data.plaquetas);
     let h = points_sofa_hepatico(data.bilirrubina);
-    let cv = points_sofa_cardiovascular(data.presion_arterial_media, data.vasopresores, data.dosis_vasopresor);
+    let cv = points_sofa_cardiovascular(
+        data.presion_arterial_media,
+        data.vasopresores,
+        data.dosis_vasopresor,
+    );
     let n = points_sofa_neurologico(data.gcs_total);
     let ren = points_sofa_renal(data.creatinina, data.diuresis_diaria);
     let total = r + c + h + cv + n + ren;
-    
-    SofaBreakdown { respiratorio: r, coagulacion: c, hepatico: h, cardiovascular: cv, neurologico: n, renal: ren, total }
+
+    SofaBreakdown {
+        respiratorio: r,
+        coagulacion: c,
+        hepatico: h,
+        cardiovascular: cv,
+        neurologico: n,
+        renal: ren,
+        total,
+    }
 }
 
 pub fn calculate_saps3_breakdown(data: &ApacheIIData) -> Saps3Breakdown {
@@ -956,10 +958,24 @@ pub fn calculate_saps3_breakdown(data: &ApacheIIData) -> Saps3Breakdown {
 
     let box1 = edad_pts + comorb_pts + vaso_pts + fuente_pts + dias_pts;
     let box2 = tipo_pts + inf_pts;
-    let box3 = gcs_pts + fc_pts + pas_pts + temp_pts + bili_pts + creat_pts + wbc_pts + ph_pts + plq_pts + ox_pts;
+    let box3 = gcs_pts
+        + fc_pts
+        + pas_pts
+        + temp_pts
+        + bili_pts
+        + creat_pts
+        + wbc_pts
+        + ph_pts
+        + plq_pts
+        + ox_pts;
     let total = box1 + box2 + box3;
 
-    Saps3Breakdown { box1, box2, box3, total }
+    Saps3Breakdown {
+        box1,
+        box2,
+        box3,
+        total,
+    }
 }
 
 pub fn news2_breakdown(data: &ApacheIIData) -> News2Breakdown {

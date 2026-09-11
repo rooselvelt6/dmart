@@ -1,13 +1,8 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
-use serde::Serialize;
-use dmart_shared::models::*;
-use crate::db::Database;
 use crate::db as db_ops;
+use crate::db::Database;
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use dmart_shared::models::*;
+use serde::Serialize;
 
 fn calculate_age(fecha_nacimiento: &str) -> u8 {
     if fecha_nacimiento.is_empty() || fecha_nacimiento.len() < 4 {
@@ -44,20 +39,30 @@ pub struct PromedioScores {
     pub news2_promedio: f32,
 }
 
-pub async fn get_stats(
-    State(db): State<Database>,
-) -> impl IntoResponse {
+pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
     // Load up to 50000 patients for stats computation
     let result = db_ops::list_patients(&db, 50000, 0).await;
 
     match result {
         Ok(patients) => {
             let total = patients.len();
-            
-            let criticos = patients.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Critico)).count();
-            let severos = patients.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Severo)).count();
-            let moderados = patients.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Moderado)).count();
-            let bajos = patients.iter().filter(|p| matches!(p.estado_gravedad, SeverityLevel::Bajo)).count();
+
+            let criticos = patients
+                .iter()
+                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Critico))
+                .count();
+            let severos = patients
+                .iter()
+                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Severo))
+                .count();
+            let moderados = patients
+                .iter()
+                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Moderado))
+                .count();
+            let bajos = patients
+                .iter()
+                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Bajo))
+                .count();
 
             let mut apache_sum = 0u32;
             let mut gcs_sum = 0u32;
@@ -87,8 +92,12 @@ pub async fn get_stats(
                 }
             }
 
-            let count = if count_with_scores > 0 { count_with_scores } else { 1 };
-            
+            let count = if count_with_scores > 0 {
+                count_with_scores
+            } else {
+                1
+            };
+
             let promedios = PromedioScores {
                 apache_promedio: apache_sum as f32 / count as f32,
                 gcs_promedio: gcs_sum as f32 / count as f32,
@@ -104,25 +113,28 @@ pub async fn get_stats(
                 bajos,
             };
 
-            let items: Vec<PatientListItem> = patients.iter().map(|p| {
-                let edad = calculate_age(&p.fecha_nacimiento);
-                PatientListItem {
-                    id: p.patient_id.clone(),
-                    nombre_completo: p.nombre_completo(),
-                    cedula: p.cedula.clone(),
-                    historia_clinica: p.historia_clinica.clone(),
-                    edad,
-                    sexo: p.sexo.clone(),
-                    fecha_ingreso_uci: p.fecha_ingreso_uci.clone(),
-                    estado_gravedad: p.estado_gravedad.clone(),
-                    ultimo_apache_score: p.ultimo_apache_score,
-                    ultimo_gcs_score: p.ultimo_gcs_score,
-                    ultimo_sofa_score: p.ultimo_sofa_score,
-                    ultimo_saps3_score: p.ultimo_saps3_score,
-                    ultimo_news2_score: p.ultimo_news2_score,
-                    mortality_risk: p.mortality_risk,
-                }
-            }).collect();
+            let items: Vec<PatientListItem> = patients
+                .iter()
+                .map(|p| {
+                    let edad = calculate_age(&p.fecha_nacimiento);
+                    PatientListItem {
+                        id: p.patient_id.clone(),
+                        nombre_completo: p.nombre_completo(),
+                        cedula: p.cedula.clone(),
+                        historia_clinica: p.historia_clinica.clone(),
+                        edad,
+                        sexo: p.sexo.clone(),
+                        fecha_ingreso_uci: p.fecha_ingreso_uci.clone(),
+                        estado_gravedad: p.estado_gravedad.clone(),
+                        ultimo_apache_score: p.ultimo_apache_score,
+                        ultimo_gcs_score: p.ultimo_gcs_score,
+                        ultimo_sofa_score: p.ultimo_sofa_score,
+                        ultimo_saps3_score: p.ultimo_saps3_score,
+                        ultimo_news2_score: p.ultimo_news2_score,
+                        mortality_risk: p.mortality_risk,
+                    }
+                })
+                .collect();
 
             let stats = UciStats {
                 total_pacientes: total,
@@ -137,6 +149,7 @@ pub async fn get_stats(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<UciStats>::err(e.to_string())),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }

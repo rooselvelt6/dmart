@@ -1,16 +1,16 @@
-use leptos::prelude::*;
+use crate::api;
+use crate::components::{location_picker::LocationPicker, skin_picker::SkinPicker, toggle::Toggle};
+use dmart_shared::models::*;
 use leptos::either::Either;
+use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
-use dmart_shared::models::*;
-use crate::api;
-use crate::components::{skin_picker::SkinPicker, toggle::Toggle, location_picker::LocationPicker};
 
 #[component]
 pub fn RegisterPage() -> impl IntoView {
     let patient = RwSignal::new(Patient::new());
-    let saving   = RwSignal::new(false);
-    let error    = RwSignal::new(None::<String>);
+    let saving = RwSignal::new(false);
+    let error = RwSignal::new(None::<String>);
     let navigate = use_navigate();
     let cama_disponible = RwSignal::new(None::<(String, u8, String)>);
     let sin_camas = RwSignal::new(false);
@@ -19,15 +19,19 @@ pub fn RegisterPage() -> impl IntoView {
 
     spawn_local(async move {
         let resp: Result<serde_json::Value, _> = api::get("/admin/check-camas").await;
-        if let Ok(data) = resp {
-            if let Some(disponible) = data.get("disponible").and_then(|v| v.as_bool()) {
-                if disponible {
-                    let cama_id = data.get("cama_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let numero = data.get("numero").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
-                    cama_disponible.set(Some((cama_id, numero, "General".to_string())));
-                } else {
-                    sin_camas.set(true);
-                }
+        if let Ok(data) = resp
+            && let Some(disponible) = data.get("disponible").and_then(|v| v.as_bool())
+        {
+            if disponible {
+                let cama_id = data
+                    .get("cama_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let numero = data.get("numero").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+                cama_disponible.set(Some((cama_id, numero, "General".to_string())));
+            } else {
+                sin_camas.set(true);
             }
         }
         // Cargar equipos disponibles
@@ -38,11 +42,15 @@ pub fn RegisterPage() -> impl IntoView {
 
     let edad_calculada = Memo::new(move |_| {
         let p = patient.get();
-        if p.fecha_nacimiento.is_empty() { return 0u8; }
+        if p.fecha_nacimiento.is_empty() {
+            return 0u8;
+        }
         if let Ok(dob) = chrono::NaiveDate::parse_from_str(&p.fecha_nacimiento, "%Y-%m-%d") {
             let today = chrono::Utc::now().date_naive();
             today.years_since(dob).unwrap_or(0).min(150) as u8
-        } else { 0 }
+        } else {
+            0
+        }
     });
 
     let tiempo_estadia = Memo::new(move |_| {
@@ -58,34 +66,41 @@ pub fn RegisterPage() -> impl IntoView {
             let d = diff.num_days();
             let h2 = diff.num_hours() % 24;
             format!("{} días, {} horas", d, h2)
-        } else { "—".into() }
+        } else {
+            "—".into()
+        }
     });
 
     let on_submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();
-        
+
         let sin = sin_camas.get();
         if sin {
-            error.set(Some("No hay camas disponibles. No se puede registrar el paciente.".to_string()));
+            error.set(Some(
+                "No hay camas disponibles. No se puede registrar el paciente.".to_string(),
+            ));
             return;
         }
-        
+
         saving.set(true);
         error.set(None);
         let p = patient.get();
         let nav = navigate.clone();
         let equipos_ids = equipos_seleccionados.get();
-        
+
         if let Some((cama_id, cama_num, _tipo)) = cama_disponible.get() {
             let mut paciente_con_cama = p;
             paciente_con_cama.cama_id = Some(cama_id);
             paciente_con_cama.cama_numero = Some(cama_num);
-        
+
             spawn_local(async move {
                 match api::create_patient_with_equipos(&paciente_con_cama, equipos_ids).await {
                     Ok(created) => {
                         saving.set(false);
-                        nav(&format!("/patients/{}", created.patient_id), Default::default());
+                        nav(
+                            &format!("/patients/{}", created.patient_id),
+                            Default::default(),
+                        );
                     }
                     Err(e) => {
                         saving.set(false);
@@ -95,7 +110,9 @@ pub fn RegisterPage() -> impl IntoView {
             });
         } else {
             saving.set(false);
-            error.set(Some("Debe esperar a que una cama esté disponible.".to_string()));
+            error.set(Some(
+                "Debe esperar a que una cama esté disponible.".to_string(),
+            ));
         }
     };
 
@@ -103,7 +120,7 @@ pub fn RegisterPage() -> impl IntoView {
         let re = regex::Regex::new(r"^[VEJvej]-[0-9]{5,8}$").unwrap();
         re.is_match(v)
     };
-    
+
     let validate_hc = move |v: &str| {
         let re = regex::Regex::new(r"^HC-[0-9]{3,6}$").unwrap();
         re.is_match(v)
@@ -157,12 +174,12 @@ pub fn RegisterPage() -> impl IntoView {
                                 prop:value=move || patient.get().apellido
                                 on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.apellido = v); } />
                         </FormField>
-                        
+
                         <FormField label="Cédula de Identidad *" icon=move || view! { <i class="fa-solid fa-address-card"></i> }>
                             <input class=move || format!("form-input transition-all {}", if cedula_valid.get() { "border-emerald-500/50 bg-emerald-500/5" } else if !patient.get().cedula.is_empty() { "border-rose-500/50 bg-rose-500/5" } else { "" })
                                 type="text" placeholder="V-00000000" required maxlength="10"
                                 prop:value=move || patient.get().cedula
-                                on:input=move |ev| { 
+                                on:input=move |ev| {
                                     let mut v = event_target_value(&ev).to_uppercase();
                                     if !v.is_empty() && !v.starts_with('V') && !v.starts_with('E') {
                                         v = format!("V-{}", v);
@@ -187,7 +204,7 @@ pub fn RegisterPage() -> impl IntoView {
                             <input class=move || format!("form-input transition-all {}", if hc_valid.get() { "border-emerald-500/50 bg-emerald-500/5" } else if !patient.get().historia_clinica.is_empty() { "border-rose-500/50 bg-rose-500/5" } else { "" })
                                 type="text" placeholder="HC-00000" required maxlength="9"
                                 prop:value=move || patient.get().historia_clinica
-                                on:input=move |ev| { 
+                                on:input=move |ev| {
                                     let mut v = event_target_value(&ev).to_uppercase();
                                     if !v.is_empty() && !v.starts_with("HC") {
                                         v = format!("HC-{}", v);
@@ -391,7 +408,7 @@ pub fn RegisterPage() -> impl IntoView {
                                 prop:value=move || patient.get().descripcion_ingreso
                                 on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.descripcion_ingreso = v); }></textarea>
                         </FormField>
-                        
+
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                             <FormField label="Diagnóstico de Ingreso" icon=move || view! { <i class="fa-solid fa-notes-medical"></i> }>
                                 <textarea class="form-input" placeholder="Diagnóstico presuntivo de hospitalización..." rows="4"
@@ -464,14 +481,14 @@ pub fn RegisterPage() -> impl IntoView {
                     <button type="submit" class="btn-primary flex items-center justify-center gap-2 px-8 md:px-10 lg:px-12 h-11 md:h-12 lg:h-14 text-base md:text-lg" disabled=move || saving.get()>
                         {move || {
                             if saving.get() {
-                                Either::Left(view! { 
+                                Either::Left(view! {
                                     <span class="flex items-center gap-2">
                                         <i class="fa-solid fa-circle-notch animate-spin"></i>
                                         "Procesando..."
                                     </span>
                                 })
                             } else {
-                                Either::Right(view! { 
+                                Either::Right(view! {
                                     <span class="flex items-center gap-2">
                                         <i class="fa-solid fa-floppy-disk"></i>
                                         "Registrar Paciente"
@@ -487,7 +504,7 @@ pub fn RegisterPage() -> impl IntoView {
 }
 
 #[component]
-fn FormSection<F, IV>(title: &'static str, icon: F, children: Children) -> impl IntoView 
+fn FormSection<F, IV>(title: &'static str, icon: F, children: Children) -> impl IntoView
 where
     F: Fn() -> IV + 'static,
     IV: IntoView + 'static,
@@ -509,7 +526,7 @@ where
 }
 
 #[component]
-fn FormField<F, IV>(label: &'static str, icon: F, children: Children) -> impl IntoView 
+fn FormField<F, IV>(label: &'static str, icon: F, children: Children) -> impl IntoView
 where
     F: Fn() -> IV + 'static,
     IV: IntoView + 'static,

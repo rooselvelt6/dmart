@@ -1,12 +1,18 @@
 /// Helper: create a temporary SurrealKV database for testing
-async fn test_db() -> (surrealdb::Surreal<surrealdb::engine::local::Db>, tempfile::TempDir) {
+async fn test_db() -> (
+    surrealdb::Surreal<surrealdb::engine::local::Db>,
+    tempfile::TempDir,
+) {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     let path = dir.path().join("test.db");
     let path_str = path.to_str().expect("invalid path");
     let db = surrealdb::Surreal::new::<surrealdb::engine::local::SurrealKv>(path_str)
         .await
         .expect("failed to connect to SurrealKV");
-    db.use_ns("dmart").use_db("icu").await.expect("failed to use namespace");
+    db.use_ns("dmart")
+        .use_db("icu")
+        .await
+        .expect("failed to use namespace");
     (db, dir)
 }
 

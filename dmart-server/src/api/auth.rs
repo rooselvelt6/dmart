@@ -1,13 +1,14 @@
+use crate::auth::{
+    AuthService, LoginRequest, LoginResponse, RegisterRequest, extract_token_from_header,
+};
+use crate::db::Database;
 use axum::{
-    Router,
-    routing::{post, get},
+    Json, Router,
     extract::State,
-    http::{StatusCode, HeaderMap},
-    Json,
+    http::{HeaderMap, StatusCode},
+    routing::{get, post},
 };
 use dmart_shared::models::*;
-use crate::db::Database;
-use crate::auth::{AuthService, LoginRequest, LoginResponse, RegisterRequest, extract_token_from_header};
 
 pub fn router() -> Router<Database> {
     Router::new()
@@ -24,10 +25,15 @@ async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<ApiResponse<LoginResponse>>, StatusCode> {
     let auth_service = AuthService::new((*db).clone());
-    match auth_service.authenticate(&req.username, &req.password).await {
+    match auth_service
+        .authenticate(&req.username, &req.password)
+        .await
+    {
         Ok(response) => {
             if let Some(audit) = crate::audit::audit() {
-                let _ = audit.log_login_success(&response.user.user_id, &response.user.username, None).await;
+                let _ = audit
+                    .log_login_success(&response.user.user_id, &response.user.username, None)
+                    .await;
             }
             Ok(Json(ApiResponse::ok(response)))
         }

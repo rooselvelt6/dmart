@@ -1,8 +1,8 @@
+use anyhow::Result;
+use redis::AsyncCommands;
+use redis::aio::MultiplexedConnection;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use anyhow::Result;
-use redis::aio::MultiplexedConnection;
-use redis::AsyncCommands;
 use tokio::sync::Mutex;
 
 static GLOBAL_CACHE: OnceLock<Mutex<Cache>> = OnceLock::new();

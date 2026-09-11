@@ -1,11 +1,11 @@
+use crate::api;
+use crate::components::skin_picker::SkinPicker;
+use crate::components::toggle::Toggle;
+use dmart_shared::models::*;
+use leptos::either::Either;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos::either::Either;
 use leptos_router::hooks::*;
-use dmart_shared::models::*;
-use crate::api;
-use crate::components::toggle::Toggle;
-use crate::components::skin_picker::SkinPicker;
 
 #[component]
 pub fn PatientEditPage() -> impl IntoView {
@@ -34,8 +34,6 @@ pub fn PatientEditPage() -> impl IntoView {
                     Ok(p) => {
                         let patient = RwSignal::new(p.clone());
                         let pid_val = patient_id();
-                        let saving = saving;
-                        let error_msg = error_msg;
                         let navigate = navigate.clone();
                         let do_submit = move |ev: leptos::ev::SubmitEvent| {
                             ev.prevent_default();
@@ -61,7 +59,7 @@ pub fn PatientEditPage() -> impl IntoView {
                                 <a href=format!("/patients/{}", pid_val) style="color:var(--uci-muted); font-size:14px; text-decoration:none; display:inline-block; margin-bottom:16px;">
                                     "<- Volver al detalle"
                                 </a>
-                                
+
                                 <h1 style="font-size:28px; font-weight:800; color:var(--uci-text); margin:0 0 8px;">"Editar Paciente"</h1>
                                 <p style="color:var(--uci-muted); font-size:14px; margin:0 0 24px;">"Actualice todos los datos del paciente"</p>
 
@@ -102,7 +100,7 @@ pub fn PatientEditPage() -> impl IntoView {
                                                 </div>
                                                 <div>
                                                     <label style="font-size:11px; color:var(--uci-muted); display:block; margin-bottom:4px;">"COLOR DE PIEL"</label>
-                                                    <SkinPicker 
+                                                    <SkinPicker
                                                         value=Signal::derive(move || patient.get().color_piel.clone())
                                                         on_change=move |v| patient.update(|x| x.color_piel = v)
                                                     />
@@ -192,7 +190,7 @@ pub fn PatientEditPage() -> impl IntoView {
                                                 </div>
                                                 <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
                                                     <div class="text-xs text-uci-muted">"Migración de otro centro"</div>
-                                                    <Toggle 
+                                                    <Toggle
                                                         value=Signal::derive(move || patient.get().migracion_otro_centro)
                                                         on_change=move |v| patient.update(|x| x.migracion_otro_centro = v) />
                                                 </div>
@@ -204,7 +202,7 @@ pub fn PatientEditPage() -> impl IntoView {
                                                 </Show>
                                                 <div class="flex items-center justify-between p-3 bg-uci-surface rounded-xl border border-uci-border">
                                                     <div class="text-xs text-uci-muted">"Ventilación Mecánica"</div>
-                                                    <Toggle 
+                                                    <Toggle
                                                         value=Signal::derive(move || patient.get().ventilacion_mecanica)
                                                         on_change=move |v| patient.update(|x| x.ventilacion_mecanica = v) />
                                                 </div>
@@ -269,9 +267,9 @@ pub fn PatientEditPage() -> impl IntoView {
                                             <h3 style="font-size:12px; color:#3B82F6; text-transform:uppercase; margin:0 0 16px;">"Procesos Invasivos"</h3>
                                             <p style="font-size:11px; color:var(--uci-muted); margin-bottom:12px;">"Ingrese los procesos invasivos separados por coma"</p>
                                             <div>
-                                                <textarea 
-                                                    rows=8 
-                                                    prop:value=patient.get().procesos_invasivos.join(", ") 
+                                                <textarea
+                                                    rows=8
+                                                    prop:value=patient.get().procesos_invasivos.join(", ")
                                                     on:input=move |ev| {
                                                         let val = event_target_value(&ev);
                                                         let vec: Vec<String> = val.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();

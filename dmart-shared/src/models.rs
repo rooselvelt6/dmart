@@ -84,9 +84,9 @@ pub enum News2Level {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum SofaLevel {
     #[default]
-    Normal,     // 0-1
-    Disfuncion, // 2-6
-    Falla,      // 7-9
+    Normal, // 0-1
+    Disfuncion,         // 2-6
+    Falla,              // 7-9
     FallaMultiorganica, // >=10
 }
 
@@ -717,7 +717,7 @@ pub struct PatientListItem {
     pub sexo: Sexo,
     pub fecha_ingreso_uci: String,
     pub estado_gravedad: SeverityLevel,
-    
+
     // Todas las escalas clínicas
     pub ultimo_apache_score: Option<u32>,
     pub ultimo_gcs_score: Option<u8>,
@@ -803,7 +803,7 @@ impl UserRole {
 pub struct User {
     pub user_id: String,
     pub username: String,
-    pub password_hash: String,  // Needed for DB storage
+    pub password_hash: String, // Needed for DB storage
     pub rol: UserRole,
     pub nombre: String,
     pub activo: bool,
@@ -981,7 +981,7 @@ pub enum TipoEquipo {
     Monitor,
     Computador,
     BombaInfusion,
-   Otro,
+    Otro,
 }
 
 impl TipoEquipo {
@@ -1264,34 +1264,106 @@ pub fn diagnosticos_uci() -> Vec<Diagnostico> {
         Diagnostico::new("A41.9", "Sepsis, no especificada", "Infecciosas"),
         Diagnostico::new("A41.0", "Sepsis por Staphylococcus aureus", "Infecciosas"),
         Diagnostico::new("A41.1", "Sepsis por otros estafilococos", "Infecciosas"),
-        Diagnostico::new("A41.5", "Sepsis por otros organismos gramnegativos", "Infecciosas"),
-        Diagnostico::new("B34.2", "Infección por coronavirus, no especificada", "Infecciosas"),
-        Diagnostico::new("J15.9", "Neumonía bacteriana, no especificada", "Respiratorias"),
+        Diagnostico::new(
+            "A41.5",
+            "Sepsis por otros organismos gramnegativos",
+            "Infecciosas",
+        ),
+        Diagnostico::new(
+            "B34.2",
+            "Infección por coronavirus, no especificada",
+            "Infecciosas",
+        ),
+        Diagnostico::new(
+            "J15.9",
+            "Neumonía bacteriana, no especificada",
+            "Respiratorias",
+        ),
         Diagnostico::new("J18.9", "Neumonía, no especificada", "Respiratorias"),
         Diagnostico::new("J96.0", "Insuficiencia respiratoria aguda", "Respiratorias"),
-        Diagnostico::new("J96.9", "Insuficiencia respiratoria, no especificada", "Respiratorias"),
-        Diagnostico::new("J80", "Síndrome de dificultad respiratoria del adulto", "Respiratorias"),
-        Diagnostico::new("J44.9", "Enfermedad pulmonar obstructiva crónica, no especificada", "Respiratorias"),
-        Diagnostico::new("I21.9", "Infarto agudo de miocardio, no especificado", "Cardiovasculares"),
-        Diagnostico::new("I50.9", "Insuficiencia cardíaca, no especificada", "Cardiovasculares"),
-        Diagnostico::new("I46.9", "Paro cardíaco, no especificado", "Cardiovasculares"),
-        Diagnostico::new("I10", "Hipertensión esencial (primaria)", "Cardiovasculares"),
+        Diagnostico::new(
+            "J96.9",
+            "Insuficiencia respiratoria, no especificada",
+            "Respiratorias",
+        ),
+        Diagnostico::new(
+            "J80",
+            "Síndrome de dificultad respiratoria del adulto",
+            "Respiratorias",
+        ),
+        Diagnostico::new(
+            "J44.9",
+            "Enfermedad pulmonar obstructiva crónica, no especificada",
+            "Respiratorias",
+        ),
+        Diagnostico::new(
+            "I21.9",
+            "Infarto agudo de miocardio, no especificado",
+            "Cardiovasculares",
+        ),
+        Diagnostico::new(
+            "I50.9",
+            "Insuficiencia cardíaca, no especificada",
+            "Cardiovasculares",
+        ),
+        Diagnostico::new(
+            "I46.9",
+            "Paro cardíaco, no especificado",
+            "Cardiovasculares",
+        ),
+        Diagnostico::new(
+            "I10",
+            "Hipertensión esencial (primaria)",
+            "Cardiovasculares",
+        ),
         Diagnostico::new("I48", "Fibrilación y aleteo auricular", "Cardiovasculares"),
-        Diagnostico::new("I61.9", "Hemorragia intracerebral, no especificada", "Neurológicas"),
+        Diagnostico::new(
+            "I61.9",
+            "Hemorragia intracerebral, no especificada",
+            "Neurológicas",
+        ),
         Diagnostico::new("I63.9", "Infarto cerebral, no especificado", "Neurológicas"),
         Diagnostico::new("G93.4", "Encefalopatía, no especificada", "Neurológicas"),
         Diagnostico::new("G40.9", "Epilepsia, no especificada", "Neurológicas"),
-        Diagnostico::new("N17.9", "Insuficiencia renal aguda, no especificada", "Renales"),
-        Diagnostico::new("N18.9", "Enfermedad renal crónica, no especificada", "Renales"),
-        Diagnostico::new("K72.9", "Insuficiencia hepática, no especificada", "Hepáticas"),
+        Diagnostico::new(
+            "N17.9",
+            "Insuficiencia renal aguda, no especificada",
+            "Renales",
+        ),
+        Diagnostico::new(
+            "N18.9",
+            "Enfermedad renal crónica, no especificada",
+            "Renales",
+        ),
+        Diagnostico::new(
+            "K72.9",
+            "Insuficiencia hepática, no especificada",
+            "Hepáticas",
+        ),
         Diagnostico::new("K70.3", "Cirrosis alcohólica del hígado", "Hepáticas"),
-        Diagnostico::new("E10.9", "Diabetes mellitus tipo 1, sin complicaciones", "Endócrinas"),
-        Diagnostico::new("E11.9", "Diabetes mellitus tipo 2, sin complicaciones", "Endócrinas"),
+        Diagnostico::new(
+            "E10.9",
+            "Diabetes mellitus tipo 1, sin complicaciones",
+            "Endócrinas",
+        ),
+        Diagnostico::new(
+            "E11.9",
+            "Diabetes mellitus tipo 2, sin complicaciones",
+            "Endócrinas",
+        ),
         Diagnostico::new("E86", "Deshidratación", "Endócrinas"),
         Diagnostico::new("E87.1", "Hipoosmolaridad e hiponatremia", "Endócrinas"),
-        Diagnostico::new("D65", "Coagulación intravascular diseminada", "Hematológicas"),
+        Diagnostico::new(
+            "D65",
+            "Coagulación intravascular diseminada",
+            "Hematológicas",
+        ),
         Diagnostico::new("D69.6", "Trombocitopenia, no especificada", "Hematológicas"),
-        Diagnostico::new("S06.9", "Traumatismo intracraneal, no especificado", "Traumatismos"),
+        Diagnostico::new(
+            "S06.9",
+            "Traumatismo intracraneal, no especificado",
+            "Traumatismos",
+        ),
         Diagnostico::new("S36.0", "Traumatismo del bazo", "Traumatismos"),
         Diagnostico::new("T79.4", "Shock traumático", "Traumatismos"),
         Diagnostico::new("T81.1", "Shock postquirúrgico", "Complicaciones"),

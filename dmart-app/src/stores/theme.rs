@@ -41,13 +41,13 @@ impl From<String> for Theme {
     }
 }
 
-pub fn create_theme_store() -> (RwSignal<Theme>, impl Fn(Theme) -> ()) {
+pub fn create_theme_store() -> (RwSignal<Theme>, impl Fn(Theme)) {
     let initial = Theme::default();
     let signal = RwSignal::new(initial.clone());
 
     apply_theme(&initial);
 
-    let signal_clone = signal.clone();
+    let signal_clone = signal;
     let setter = move |theme: Theme| {
         apply_theme(&theme);
         let _ = LocalStorage::set(THEME_KEY, theme.as_str());
@@ -58,18 +58,17 @@ pub fn create_theme_store() -> (RwSignal<Theme>, impl Fn(Theme) -> ()) {
 }
 
 fn apply_theme(theme: &Theme) {
-    if let Some(window) = web_sys::window() {
-        if let Some(doc) = window.document() {
-            if let Some(html) = doc.document_element() {
-                let class_list = html.class_list();
-                if theme.is_dark() {
-                    let _ = class_list.add_1("dark");
-                    let _ = class_list.remove_1("light");
-                } else {
-                    let _ = class_list.remove_1("dark");
-                    let _ = class_list.add_1("light");
-                }
-            }
+    if let Some(window) = web_sys::window()
+        && let Some(doc) = window.document()
+        && let Some(html) = doc.document_element()
+    {
+        let class_list = html.class_list();
+        if theme.is_dark() {
+            let _ = class_list.add_1("dark");
+            let _ = class_list.remove_1("light");
+        } else {
+            let _ = class_list.remove_1("dark");
+            let _ = class_list.add_1("light");
         }
     }
 }

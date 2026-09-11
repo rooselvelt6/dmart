@@ -1,11 +1,11 @@
+use crate::db as db_ops;
+use crate::db::Database;
 use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use dmart_shared::models::*;
-use crate::db::Database;
-use crate::db as db_ops;
 
 // GET /api/patients/:id/export/csv
 pub async fn export_csv(
@@ -15,11 +15,11 @@ pub async fn export_csv(
     let patient = match db_ops::get_patient(&db, &patient_id).await {
         Ok(Some(p)) => p,
         Ok(None) => return error_response("Paciente no encontrado"),
-        Err(e)    => return error_response(&e.to_string()),
+        Err(e) => return error_response(&e.to_string()),
     };
 
     let measurements = match db_ops::get_measurements_for_patient(&db, &patient_id).await {
-        Ok(m)  => m,
+        Ok(m) => m,
         Err(e) => return error_response(&e.to_string()),
     };
 
@@ -28,18 +28,32 @@ pub async fn export_csv(
         .from_writer(vec![]);
 
     // Header row
-    wtr.write_record(&[
-        "Fecha/Hora", "Apache II Score", "GCS Total",
-        "Severidad", "Mortalidad Estimada (%)",
-        "Temperatura (°C)", "PAM (mmHg)", "FC (lpm)", "FR (rpm)",
-        "FiO2", "pH Arterial", "Na (mEq/L)", "K (mEq/L)",
-        "Creatinina (mg/dL)", "Hematocrito (%)", "Leucocitos (x10³)",
-        "GCS Ocular", "GCS Verbal", "GCS Motor",
+    wtr.write_record([
+        "Fecha/Hora",
+        "Apache II Score",
+        "GCS Total",
+        "Severidad",
+        "Mortalidad Estimada (%)",
+        "Temperatura (°C)",
+        "PAM (mmHg)",
+        "FC (lpm)",
+        "FR (rpm)",
+        "FiO2",
+        "pH Arterial",
+        "Na (mEq/L)",
+        "K (mEq/L)",
+        "Creatinina (mg/dL)",
+        "Hematocrito (%)",
+        "Leucocitos (x10³)",
+        "GCS Ocular",
+        "GCS Verbal",
+        "GCS Motor",
         "Notas",
-    ]).ok();
+    ])
+    .ok();
 
     for m in &measurements {
-        wtr.write_record(&[
+        wtr.write_record([
             &m.timestamp,
             &m.apache_score.to_string(),
             &m.gcs_score.to_string(),
@@ -60,11 +74,13 @@ pub async fn export_csv(
             &m.gcs_data.respuesta_verbal.to_string(),
             &m.gcs_data.respuesta_motora.to_string(),
             &m.notas,
-        ]).ok();
+        ])
+        .ok();
     }
 
     let data = wtr.into_inner().unwrap_or_default();
-    let filename = format!("UCI_{}_{}.csv",
+    let filename = format!(
+        "UCI_{}_{}.csv",
         patient.apellido.replace(' ', "_"),
         patient.cedula
     );
@@ -87,18 +103,19 @@ pub async fn export_pdf(
 ) -> impl IntoResponse {
     let patient = match db_ops::get_patient(&db, &patient_id).await {
         Ok(Some(p)) => p,
-        Ok(None)    => return error_response("Paciente no encontrado"),
-        Err(e)      => return error_response(&e.to_string()),
+        Ok(None) => return error_response("Paciente no encontrado"),
+        Err(e) => return error_response(&e.to_string()),
     };
 
     let measurements = match db_ops::get_measurements_for_patient(&db, &patient_id).await {
-        Ok(m)  => m,
+        Ok(m) => m,
         Err(e) => return error_response(&e.to_string()),
     };
 
     match generate_pdf(&patient, &measurements) {
         Ok(bytes) => {
-            let filename = format!("UCI_{}_{}.pdf",
+            let filename = format!(
+                "UCI_{}_{}.pdf",
                 patient.apellido.replace(' ', "_"),
                 patient.cedula
             );
@@ -120,8 +137,10 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     use printpdf::*;
 
     let (doc, page1, layer1) = PdfDocument::new(
-        &format!("UCI — {} {}", patient.nombre, patient.apellido),
-        Mm(210.0), Mm(297.0), "Datos del Paciente",
+        format!("UCI — {} {}", patient.nombre, patient.apellido),
+        Mm(210.0),
+        Mm(297.0),
+        "Datos del Paciente",
     );
 
     let page_ref = doc.get_page(page1);
@@ -140,26 +159,72 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     // Header
     write_line("SISTEMA UCI — REGISTRO DE PACIENTE", true, 14.0, y);
     y -= 8.0;
-    write_line(&format!("Historia Clínica: {}   Cédula: {}", patient.historia_clinica, patient.cedula), false, 10.0, y);
+    write_line(
+        &format!(
+            "Historia Clínica: {}   Cédula: {}",
+            patient.historia_clinica, patient.cedula
+        ),
+        false,
+        10.0,
+        y,
+    );
     y -= 6.0;
-    write_line(&format!("Paciente: {} {}", patient.nombre, patient.apellido), true, 12.0, y);
+    write_line(
+        &format!("Paciente: {} {}", patient.nombre, patient.apellido),
+        true,
+        12.0,
+        y,
+    );
     y -= 6.0;
-    write_line(&format!("Sexo: {:?}   Color de Piel: {}", patient.sexo, patient.color_piel.label()), false, 9.0, y);
+    write_line(
+        &format!(
+            "Sexo: {:?}   Color de Piel: {}",
+            patient.sexo,
+            patient.color_piel.label()
+        ),
+        false,
+        9.0,
+        y,
+    );
     y -= 5.0;
-    write_line(&format!("Fecha Nacimiento: {}   Ingreso UCI: {}", patient.fecha_nacimiento, patient.fecha_ingreso_uci), false, 9.0, y);
+    write_line(
+        &format!(
+            "Fecha Nacimiento: {}   Ingreso UCI: {}",
+            patient.fecha_nacimiento, patient.fecha_ingreso_uci
+        ),
+        false,
+        9.0,
+        y,
+    );
     y -= 5.0;
-    write_line(&format!("Diagnóstico UCI: {}", patient.diagnostico_uci), false, 9.0, y);
+    write_line(
+        &format!("Diagnóstico UCI: {}", patient.diagnostico_uci),
+        false,
+        9.0,
+        y,
+    );
     y -= 5.0;
-    write_line(&format!("Tipo Admisión: {:?}   VM: {}   Procesos Invasivos: {}", 
-        patient.tipo_admision, 
-        patient.ventilacion_mecanica,
-        patient.procesos_invasivos.join(", ")
-    ), false, 9.0, y);
+    write_line(
+        &format!(
+            "Tipo Admisión: {:?}   VM: {}   Procesos Invasivos: {}",
+            patient.tipo_admision,
+            patient.ventilacion_mecanica,
+            patient.procesos_invasivos.join(", ")
+        ),
+        false,
+        9.0,
+        y,
+    );
 
     y -= 8.0;
     write_line("─── EVOLUCIÓN APACHE II ───", true, 11.0, y);
     y -= 6.0;
-    write_line("  Fecha/Hora              Apache II   GCS   Severidad       Mortalidad", true, 9.0, y);
+    write_line(
+        "  Fecha/Hora              Apache II   GCS   Severidad       Mortalidad",
+        true,
+        9.0,
+        y,
+    );
     y -= 5.0;
 
     for m in measurements {
@@ -169,7 +234,8 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
             let _ll = _pl.get_layer(new_layer);
             y = 270.0;
         }
-        let line = format!("  {:<25} {:>8}    {:>3}   {:<12}    {:>6.1}%",
+        let line = format!(
+            "  {:<25} {:>8}    {:>3}   {:<12}    {:>6.1}%",
             &m.timestamp[..19],
             m.apache_score,
             m.gcs_score,
@@ -181,9 +247,25 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     }
 
     y -= 5.0;
-    write_line(&format!("Estado actual de gravedad: {}", patient.estado_gravedad.label()), true, 10.0, y);
+    write_line(
+        &format!(
+            "Estado actual de gravedad: {}",
+            patient.estado_gravedad.label()
+        ),
+        true,
+        10.0,
+        y,
+    );
     y -= 4.0;
-    write_line(&format!("Mortalidad estimada: {}", patient.estado_gravedad.mortality_estimate()), false, 9.0, y);
+    write_line(
+        &format!(
+            "Mortalidad estimada: {}",
+            patient.estado_gravedad.mortality_estimate()
+        ),
+        false,
+        9.0,
+        y,
+    );
 
     let bytes = doc.save_to_bytes()?;
     Ok(bytes)
@@ -193,8 +275,9 @@ fn error_response(msg: &str) -> Response {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .header(header::CONTENT_TYPE, "application/json")
-        .body(axum::body::Body::from(
-            format!("{{\"success\":false,\"error\":\"{}\"}}", msg)
-        ))
+        .body(axum::body::Body::from(format!(
+            "{{\"success\":false,\"error\":\"{}\"}}",
+            msg
+        )))
         .unwrap()
 }

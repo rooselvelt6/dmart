@@ -360,7 +360,7 @@ pub fn validate_gcs_measurement(gcs: &GcsData) -> ValidationResult {
 
     // Verificar que el total coincida
     let total = gcs.total();
-    if total < 3 || total > 15 {
+    if !(3..=15).contains(&total) {
         errors.push(ValidationError {
             field: "gcs_total".to_string(),
             message: "GCS total debe estar entre 3 y 15".to_string(),
@@ -375,6 +375,7 @@ pub fn validate_gcs_measurement(gcs: &GcsData) -> ValidationResult {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_field(
     name: &str,
     value: f32,
@@ -405,24 +406,24 @@ fn validate_field(
     }
 
     // Verificar valores críticos
-    if let Some(crit_low) = critical_low {
-        if value < crit_low {
-            warnings.push(ValidationWarning {
-                field: name.to_string(),
-                message: format!("{} está en rango crítico bajo", name),
-                value,
-            });
-        }
+    if let Some(crit_low) = critical_low
+        && value < crit_low
+    {
+        warnings.push(ValidationWarning {
+            field: name.to_string(),
+            message: format!("{} está en rango crítico bajo", name),
+            value,
+        });
     }
 
-    if let Some(crit_high) = critical_high {
-        if value > crit_high {
-            warnings.push(ValidationWarning {
-                field: name.to_string(),
-                message: format!("{} está en rango crítico alto", name),
-                value,
-            });
-        }
+    if let Some(crit_high) = critical_high
+        && value > crit_high
+    {
+        warnings.push(ValidationWarning {
+            field: name.to_string(),
+            message: format!("{} está en rango crítico alto", name),
+            value,
+        });
     }
 }
 
@@ -517,15 +518,19 @@ mod tests {
 
     #[test]
     fn test_fio2_validation() {
-        let mut data = ApacheIIData::default();
-
         // FiO2 válido
-        data.fio2 = 0.5;
+        let data = ApacheIIData {
+            fio2: 0.5,
+            ..Default::default()
+        };
         let result = validate_apache_measurement(&data);
         assert!(result.errors.is_empty());
 
         // FiO2 inválido (menor que aire ambiente)
-        data.fio2 = 0.1;
+        let data = ApacheIIData {
+            fio2: 0.1,
+            ..Default::default()
+        };
         let result = validate_apache_measurement(&data);
         assert!(!result.errors.is_empty());
     }

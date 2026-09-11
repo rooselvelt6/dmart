@@ -71,24 +71,25 @@ pub fn RadarChart(data: Vec<RadarData>, size: i32) -> impl IntoView {
     let center = size as f32 / 2.0;
     let radius = (size - 60) as f32 / 2.0;
     let n = data.len();
-    
+
     let angle_offset = -90.0_f32;
 
     let get_point = |i: usize, value: f32| -> (f32, f32) {
-        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * std::f32::consts::PI / 180.0;
         let x = center + (angle.cos() * radius * value / 100.0);
         let y = center + (angle.sin() * radius * value / 100.0);
         (x, y)
     };
 
     let get_label_point = |i: usize| -> (f32, f32) {
-        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * std::f32::consts::PI / 180.0;
         let x = center + (angle.cos() * radius) * 1.18;
         let y = center + (angle.sin() * radius) * 1.18;
         (x, y)
     };
 
-    let polygon_points = data.iter()
+    let polygon_points = data
+        .iter()
         .enumerate()
         .map(|(i, d)| {
             let (x, y) = get_point(i, d.normalized());
@@ -110,8 +111,8 @@ pub fn RadarChart(data: Vec<RadarData>, size: i32) -> impl IntoView {
             {[0.0_f32, 0.33, 0.66, 1.0].iter().map(|pct| {
                 let r = radius * pct;
                 view! {
-                    <circle cx={center} cy={center} r={r} 
-                        fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.4" 
+                    <circle cx={center} cy={center} r={r}
+                        fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.4"
                         stroke-dasharray={if *pct == 0.0 { "none" } else { "4 4" }} />
                 }
             }).collect_view()}
@@ -120,15 +121,15 @@ pub fn RadarChart(data: Vec<RadarData>, size: i32) -> impl IntoView {
             {data.iter().enumerate().map(|(i, _)| {
                 let (lx, ly) = get_label_point(i);
                 view! {
-                    <line x1={center} y1={center} x2={lx} y2={ly} 
+                    <line x1={center} y1={center} x2={lx} y2={ly}
                         stroke="var(--uci-border)" stroke-width="1" opacity="0.4" />
                 }
             }).collect_view()}
 
             // Polígono de datos (área cerrada)
-            <polygon points={polygon_points} 
-                fill="url(#radarGradient)" 
-                stroke="#3B82F6" 
+            <polygon points={polygon_points}
+                fill="url(#radarGradient)"
+                stroke="#3B82F6"
                 stroke-width="2.5"
                 stroke-linejoin="round" />
 
@@ -146,11 +147,11 @@ pub fn RadarChart(data: Vec<RadarData>, size: i32) -> impl IntoView {
                 let (x, y) = get_label_point(i);
                 let dy = if y > center { 18.0_f32 } else { -8.0_f32 };
                 view! {
-                    <text x={x} y={y + dy} text-anchor="middle" 
+                    <text x={x} y={y + dy} text-anchor="middle"
                         fill="var(--uci-text)" font-size="11" font-weight="600">
                         {d.label}
                     </text>
-                    <text x={x} y={y + dy + 14.0} text-anchor="middle" 
+                    <text x={x} y={y + dy + 14.0} text-anchor="middle"
                         fill={d.color()} font-size="10" font-weight="700">
                         {format!("{:.0}", d.value)}
                     </text>
@@ -171,13 +172,14 @@ pub fn OrganRadar(data: Vec<RadarData>, size: i32) -> impl IntoView {
     let angle_offset = -90.0_f32;
 
     let get_point = |i: usize, value: f32| -> (f32, f32) {
-        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * std::f32::consts::PI / 180.0;
         let x = center + (angle.cos() * radius * value / 100.0);
         let y = center + (angle.sin() * radius * value / 100.0);
         (x, y)
     };
 
-    let polygon_points = data.iter()
+    let polygon_points = data
+        .iter()
         .enumerate()
         .map(|(i, d)| {
             let (x, y) = get_point(i, d.normalized());
@@ -198,24 +200,24 @@ pub fn OrganRadar(data: Vec<RadarData>, size: i32) -> impl IntoView {
             {[0.33_f32, 0.66, 1.0].iter().map(|pct| {
                 let r = radius * pct;
                 view! {
-                    <circle cx={center} cy={center} r={r} 
+                    <circle cx={center} cy={center} r={r}
                         fill="none" stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
                 }
             }).collect_view()}
 
             {data.iter().enumerate().map(|(i, _)| {
-                let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+                let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * std::f32::consts::PI / 180.0;
                 let lx = center + (angle.cos() * radius * 1.2);
                 let ly = center + (angle.sin() * radius * 1.2);
                 view! {
-                    <line x1={center} y1={center} x2={lx} y2={ly} 
+                    <line x1={center} y1={center} x2={lx} y2={ly}
                         stroke="var(--uci-border)" stroke-width="1" opacity="0.3" />
                 }
             }).collect_view()}
 
-            <polygon points={polygon_points} 
-                fill="url(#organGradient)" 
-                stroke="#EF4444" 
+            <polygon points={polygon_points}
+                fill="url(#organGradient)"
+                stroke="#EF4444"
                 stroke-width="2"
                 stroke-linejoin="round" />
 
@@ -232,23 +234,21 @@ pub fn OrganRadar(data: Vec<RadarData>, size: i32) -> impl IntoView {
 }
 
 #[component]
-pub fn MiniRadarChart(
-    data: Vec<RadarData>,
-    size: i32,
-) -> impl IntoView {
+pub fn MiniRadarChart(data: Vec<RadarData>, size: i32) -> impl IntoView {
     let center = size as f32 / 2.0;
     let radius = (size - 30) as f32 / 2.0;
     let n = data.len().max(1);
     let angle_offset = -90.0_f32;
 
     let get_point = |i: usize, value: f32| -> (f32, f32) {
-        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * 3.14159 / 180.0;
+        let angle = (angle_offset + (i as f32 * 360.0 / n as f32)) * std::f32::consts::PI / 180.0;
         let x = center + (angle.cos() * radius * value / 100.0);
         let y = center + (angle.sin() * radius * value / 100.0);
         (x, y)
     };
 
-    let polygon_points = data.iter()
+    let polygon_points = data
+        .iter()
         .enumerate()
         .map(|(i, d)| {
             let (x, y) = get_point(i, d.normalized());
@@ -261,15 +261,15 @@ pub fn MiniRadarChart(
         <svg width={size} height={size} viewBox={format!("0 0 {} {}", size, size)}>
             {[0.5_f32, 1.0].iter().map(|pct| {
                 view! {
-                    <circle cx={center} cy={center} r={radius * pct} 
+                    <circle cx={center} cy={center} r={radius * pct}
                         fill="none" stroke="var(--uci-border)" stroke-width="0.5" opacity="0.5" />
                 }
             }).collect_view()}
 
-            <polygon points={polygon_points} 
-                fill="var(--uci-accent)" 
+            <polygon points={polygon_points}
+                fill="var(--uci-accent)"
                 fill-opacity="0.3"
-                stroke="var(--uci-accent)" 
+                stroke="var(--uci-accent)"
                 stroke-width="1.5"
                 stroke-linejoin="round" />
 

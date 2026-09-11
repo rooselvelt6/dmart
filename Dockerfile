@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Build Rust server
 # =============================================================================
-FROM rust:1.77-slim-bookworm AS builder-server
+FROM rust:1.98-slim-bookworm AS builder-server
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
@@ -15,7 +15,7 @@ RUN cargo build --release --package dmart-server
 # =============================================================================
 # Stage 2: Build WASM frontend
 # =============================================================================
-FROM rust:1.77-slim-bookworm AS builder-wasm
+FROM rust:1.98-slim-bookworm AS builder-wasm
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
