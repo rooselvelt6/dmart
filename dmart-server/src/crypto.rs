@@ -56,7 +56,30 @@ impl MasterKey {
 
 impl Default for MasterKey {
     fn default() -> Self {
-        Self::from_password("dmart-default-key-change-me")
+        Self::new()
+    }
+}
+
+/// Validates that `DMART_MASTER_KEY` is configured with a strong value.
+///
+/// The server refuses to start (returns `Err`) when the variable is missing or
+/// still using the development vector, so encrypted data is never protected by
+/// a publicly known key.
+pub fn validate_master_key() -> Result<(), String> {
+    match std::env::var("DMART_MASTER_KEY") {
+        Ok(key) if !key.is_empty() && key != "dmart-default-key-change-me" && key.len() >= 16 => {
+            Ok(())
+        }
+        Ok(_) => Err(
+            "DMART_MASTER_KEY is missing or still the insecure development default. Set a strong \
+             value (>= 16 chars) in .env before starting the server (e.g. `openssl rand -hex 32`)."
+                .to_string(),
+        ),
+        Err(_) => Err(
+            "DMART_MASTER_KEY is required in production. Set a strong value in .env \
+             (e.g. `openssl rand -hex 32`)."
+                .to_string(),
+        ),
     }
 }
 
@@ -191,5 +214,22 @@ mod tests {
         let decrypted = service.decrypt_str(&encrypted).unwrap();
 
         assert_eq!(plaintext, decrypted);
+    }
+
+    #[test]
+    fn test_master_key_validation() {
+        unsafe { std::env::remove_var("DMART_MASTER_KEY") };
+        assert!(validate_master_key().is_err());
+
+        unsafe { std::env::set_var("DMART_MASTER_KEY", "dmart-default-key-change-me") };
+        assert!(validate_master_key().is_err());
+
+        unsafe { std::env::set_var("DMART_MASTER_KEY", "una-clave-fuerte-y-muy-larga-32c") };
+        assert!(validate_master_key().is_ok());
+
+        unsafe { std::env::set_var("DMART_MASTER_KEY", "corta") };
+        assert!(validate_master_key().is_err());
+
+        unsafe { std::env::remove_var("DMART_MASTER_KEY") };
     }
 }

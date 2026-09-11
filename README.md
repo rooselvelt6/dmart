@@ -30,7 +30,7 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 - ✅ **Dark/Light Mode** con variables CSS adaptativas
 - ✅ **WASM optimizado** (2.2MB)
 - ✅ **Persistencia SurrealKV** - datos sobreviven reinicios
-- ✅ **Admin auto-seed** - usuario admin/admin123 en primer inicio
+- ✅ **Admin auto-seed** - usuario `admin` creado en primer inicio con `DMART_ADMIN_PASSWORD` (o contraseña aleatoria generada)
 - ✅ **Graceful shutdown** - cierre limpio del servidor
 - ✅ **Dashboard unificado** con scores, distribución y recursos
 - ✅ **Admin CRUD** camas (con tipo), equipos y personal
@@ -283,10 +283,11 @@ role.can("users:delete");   // true solo para Admin
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
-| `/api/auth/login` | POST | Login con Argon2id |
-| `/api/auth/register` | POST |Registrar usuario |
-| `/api/auth/users` | GET | Listar usuarios |
-| `/api/auth/logout` | POST | Cerrar sesión |
+| `/api/auth/login` | POST | Login con Argon2id (401 si las credenciales son inválidas) |
+| `/api/auth/logout` | POST | Cerrar sesión (revoca el token JWT) |
+| `/api/auth/me` | GET | Usuario autenticado actual (requiere token) |
+| `/api/auth/users` | GET | Listar usuarios (solo Admin) |
+| `/api/auth/register` | POST | Crear usuario (solo Admin) |
 
 ### Auditoría PHI
 
@@ -356,10 +357,16 @@ cd dmart-server && cargo run
 | `DMART_DB_PATH` | `./data/dmart.db` | Ruta de la base de datos |
 | `DMART_DIST_PATH` | `./dist` | Ruta de archivos estáticos (WASM) |
 | `DMART_VALKEY_URL` | `redis://127.0.0.1:6379` | URL de cache (opcional) |
-| `DMART_ADMIN_PASSWORD` | `admin123` | Contraseña del usuario admin inicial |
+| `DMART_MASTER_KEY` | *(obligatorio)* | Clave maestra de cifrado; el servidor **no arranca** si falta o usa el valor por defecto. Generar con `openssl rand -hex 32` |
+| `DMART_ADMIN_PASSWORD` | *(vacío)* | Contraseña del admin inicial (primer arranque). Vacío = se genera aleatoria y se muestra una sola vez en los logs |
+| `DMART_ARGON2_M_COST` | `19456` | Coste de memoria Argon2id (~19 MiB) |
+| `DMART_ARGON2_T_COST` | `3` | Iteraciones Argon2id |
+| `DMART_ARGON2_P_COST` | `1` | Paralelismo Argon2id |
+| `DMART_TRUST_PROXY` | `false` | Confiar en `X-Forwarded-For` (solo tras un proxy de confianza que lo sobrescriba) |
+| `DMART_ENABLE_HSTS` | `true` | Emitir cabecera Strict-Transport-Security |
 | `DMART_CORS_ORIGIN` | `http://localhost:3000` | Origen permitido para CORS |
 | `JWT_SECRET` | (autogenerado) | Secreto para firmar tokens JWT |
-| `JWT_EXPIRY_HOURS` | `24` | Horas de expiración del JWT |
+| `JWT_EXPIRY_HOURS` | `1` | Horas de expiración del JWT |
 | `RUST_LOG` | `info` | Nivel de logging |
 
 ### Ejemplo de Configuración
@@ -368,6 +375,7 @@ cd dmart-server && cargo run
 export DMART_PORT=3000
 export DMART_DB_PATH=./data/dmart.db
 export DMART_DIST_PATH=./dist
+export DMART_MASTER_KEY=$(openssl rand -hex 32)
 export RUST_LOG=info
 ./target/release/dmart-server
 ```
@@ -419,16 +427,18 @@ GET    /api/admin/equipos/:id         # Obtener equipo
 PUT    /api/admin/equipos/:id         # Actualizar equipo
 DELETE /api/admin/equipos/:id         # Eliminar equipo
 GET    /api/admin/equipos/disponibles # Equipos disponibles
-GET    /api/admin/staff               # Listar personal
-POST   /api/admin/staff               # Crear personal
-GET    /api/admin/staff/:id           # Obtener personal
-PUT    /api/admin/staff/:id           # Actualizar personal
+GET    /api/admin/staff               # Listar personal (StaffInfo)
+POST   /api/admin/staff               # Crear personal: {"username","nombre","rol","password"}
+GET    /api/admin/staff/:id           # Obtener personal (StaffInfo)
+PUT    /api/admin/staff/:id           # Actualizar: campos opcionales {"nombre","rol","password","activo"}
 DELETE /api/admin/staff/:id           # Eliminar personal
 POST   /api/admin/staff/:id/toggle    # Activar/desactivar
 GET    /api/admin/check-camas         # Verificar cama libre
 GET    /api/admin/institucion         # Obtener configuración de institución
 PUT    /api/admin/institucion         # Actualizar configuración de institución
 ```
+
+> **Nota (Fase 1):** los endpoints `/admin/staff`, `/admin/institucion`, `/auth/register` y `/auth/users` solo aceptan token de **Admin**; las respuestas de staff usan `StaffInfo` y nunca exponen `password_hash`. Los endpoints clínicos (`/admin/check-camas`, `/admin/camas/disponibles`, `/admin/equipos/disponibles`, `/admin/equipos/cama/:id`) siguen disponibles para cualquier rol autenticado.
 
 #### Exportación
 ```http
@@ -769,7 +779,7 @@ Se agregaron 8 benchmarks con Criterion en `dmart-shared/benches/scale_bench.rs`
 El sidebar ahora se renderiza automáticamente después del login sin necesidad de refrescar la página. Se cambió `is_auth` de closure plana a `ReadSignal<bool>` con `signal()`, proporcionando `set_is_auth` via `provide_context` y llamándolo desde `login.rs` tras guardar el token.
 
 **Auth middleware corregido:**
-Las rutas públicas (`/health`, `/auth/login`, `/auth/register`) ahora se reconocen correctamente porque Axum remueve el prefijo `/api` antes del middleware.
+Las rutas públicas (`/health`, `/auth/login`) ahora se reconocen correctamente porque Axum remueve el prefijo `/api` antes del middleware. Desde la Fase 1 el resto de rutas exigen token, y `/admin/*` (salvo helpers clínicos), `/auth/register`, `/auth/users` y `/sandbox` exigen rol Admin.
 
 **Health check corregido:**
 Se reemplazó `SELECT 1` (no soportado por SurrealKV) por `SELECT * FROM patients LIMIT 1`.
@@ -841,7 +851,7 @@ surrealdb = "2"  # Usa SurrealKV por defecto
 | Cambio | Descripción | Archivo |
 |--------|-------------|---------|
 | **Persistencia garantizada** | `fs::create_dir_all()` para asegurar directorio de datos | `db.rs` |
-| **Seed automático admin** | Usuario `admin/admin123` creado en primer inicio | `auth.rs`, `main.rs` |
+| **Seed automático admin** | Usuario `admin` creado en primer inicio con `DMART_ADMIN_PASSWORD` (vacío = aleatoria generada y mostrada una vez) | `auth.rs`, `main.rs` |
 | **Panic handler global** | Log detallado antes de crashes | `main.rs` |
 | **Graceful shutdown** | Manejo de SIGINT/SIGTERM | `main.rs` |
 | **Ruta absoluta DB** | Detecta `current_dir()` para path correcto | `main.rs` |
@@ -852,7 +862,7 @@ surrealdb = "2"  # Usa SurrealKV por defecto
 ```bash
 # El servidor ahora:
 # 1. Crea data/dmart.db automáticamente
-# 2. Seedea admin/admin123 si es primer inicio
+# 2. Seedea admin con DMART_ADMIN_PASSWORD (o aleatoria generada) si es primer inicio
 # 3. Limpia SIGINT/SIGTERM
 # 4. Log de errores antes de panic
 
@@ -865,10 +875,10 @@ cargo run --package dmart-server
 # 1. Iniciar servidor
 cargo run --package dmart-server
 
-# 2. Login con admin
+# 2. Login con admin (usa tu DMART_ADMIN_PASSWORD de .env)
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"TU-PASSWORD-ADMIN"}'
 
 # 3. Crear pacientes
 curl -X POST http://localhost:3000/api/patients \
@@ -885,7 +895,7 @@ cargo run --package dmart-server
 # 6. Login funciona, datos persisten
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"TU-PASSWORD-ADMIN"}'
 # ✅ JWT token recibido
 ```
 

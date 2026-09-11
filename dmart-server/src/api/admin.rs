@@ -1,3 +1,4 @@
+use crate::auth::{hash_password, parse_role};
 use crate::db::Database;
 use anyhow::Error;
 use axum::{
@@ -6,6 +7,8 @@ use axum::{
     response::Json,
 };
 use dmart_shared::models::*;
+use serde::Deserialize;
+use uuid::Uuid;
 
 type ApiResult<T> = Result<Json<ApiResponse<T>>, (StatusCode, String)>;
 
@@ -300,18 +303,35 @@ pub async fn desvincular_equipo_api(
 
 // ─── Staff Users API ─────────────────────────────────────────────
 
+#[derive(Debug, Deserialize)]
+pub struct CreateStaffRequest {
+    pub username: String,
+    pub nombre: String,
+    pub rol: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct UpdateStaffRequest {
+    pub nombre: Option<String>,
+    pub rol: Option<String>,
+    pub password: Option<String>,
+    pub activo: Option<bool>,
+}
+
 pub async fn list_staff_api(
     State(db): State<Database>,
     Query(params): Query<PaginationParams>,
-) -> ApiResult<PaginatedResponse<User>> {
+) -> ApiResult<PaginatedResponse<StaffInfo>> {
     let limit = params.limit();
     let offset = params.offset();
     let staff = crate::db::list_staff_paginated(&db, limit, offset)
         .await
         .map_err(err_to_str)?;
     let total = crate::db::count_staff(&db).await.map_err(err_to_str)?;
+    let items: Vec<StaffInfo> = staff.iter().map(StaffInfo::from).collect();
     Ok(Json(ApiResponse::ok(PaginatedResponse {
-        items: staff,
+        items,
         total,
         limit,
         offset,
@@ -320,18 +340,37 @@ pub async fn list_staff_api(
 
 pub async fn create_staff_api(
     State(db): State<Database>,
-    Json(user): Json<User>,
-) -> ApiResult<User> {
+    Json(req): Json<CreateStaffRequest>,
+) -> ApiResult<StaffInfo> {
+    if req.password.len() < 8 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "La contraseña debe tener al menos 8 caracteres".to_string(),
+        ));
+    }
+    let password_hash = hash_password(&req.password).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    let user = User {
+        user_id: Uuid::new_v4().to_string(),
+        username: req.username,
+        password_hash,
+        rol: parse_role(&req.rol),
+        nombre: req.nombre,
+        activo: true,
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
     let created = crate::db::create_user(&db, user)
         .await
         .map_err(err_to_str)?;
-    Ok(Json(ApiResponse::ok(created)))
+    Ok(Json(ApiResponse::ok(StaffInfo::from(&created))))
 }
 
-pub async fn get_staff_api(State(db): State<Database>, Path(id): Path<String>) -> ApiResult<User> {
+pub async fn get_staff_api(
+    State(db): State<Database>,
+    Path(id): Path<String>,
+) -> ApiResult<StaffInfo> {
     let user = crate::db::get_user(&db, &id).await.map_err(err_to_str)?;
     match user {
-        Some(u) => Ok(Json(ApiResponse::ok(u))),
+        Some(u) => Ok(Json(ApiResponse::ok(StaffInfo::from(&u)))),
         None => Ok(Json(ApiResponse::err("Usuario no encontrado"))),
     }
 }
@@ -339,13 +378,30 @@ pub async fn get_staff_api(State(db): State<Database>, Path(id): Path<String>) -
 pub async fn update_staff_api(
     State(db): State<Database>,
     Path(id): Path<String>,
-    Json(user): Json<User>,
-) -> ApiResult<User> {
+    Json(req): Json<UpdateStaffRequest>,
+) -> ApiResult<StaffInfo> {
+    let user = match crate::db::get_user(&db, &id).await.map_err(err_to_str)? {
+        Some(u) => u,
+        None => return Ok(Json(ApiResponse::err("Usuario no encontrado"))),
+    };
+    let mut user = user;
+    if let Some(nombre) = req.nombre {
+        user.nombre = nombre;
+    }
+    if let Some(rol) = req.rol {
+        user.rol = parse_role(&rol);
+    }
+    if let Some(password) = req.password.filter(|p| !p.is_empty()) {
+        user.password_hash = hash_password(&password).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    }
+    if let Some(activo) = req.activo {
+        user.activo = activo;
+    }
     let updated = crate::db::update_user(&db, &id, user)
         .await
         .map_err(err_to_str)?;
     match updated {
-        Some(u) => Ok(Json(ApiResponse::ok(u))),
+        Some(u) => Ok(Json(ApiResponse::ok(StaffInfo::from(&u)))),
         None => Ok(Json(ApiResponse::err("Usuario no encontrado"))),
     }
 }
@@ -358,7 +414,7 @@ pub async fn delete_staff_api(State(db): State<Database>, Path(id): Path<String>
 pub async fn toggle_user_active(
     State(db): State<Database>,
     Path(id): Path<String>,
-) -> ApiResult<User> {
+) -> ApiResult<StaffInfo> {
     let user = crate::db::get_user(&db, &id).await.map_err(err_to_str)?;
     if let Some(mut u) = user {
         u.activo = !u.activo;
@@ -366,7 +422,7 @@ pub async fn toggle_user_active(
             .await
             .map_err(err_to_str)?;
         match updated {
-            Some(user) => Ok(Json(ApiResponse::ok(user))),
+            Some(user) => Ok(Json(ApiResponse::ok(StaffInfo::from(&user)))),
             None => Ok(Json(ApiResponse::err("Usuario no encontrado"))),
         }
     } else {

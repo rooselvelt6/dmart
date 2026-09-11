@@ -194,7 +194,13 @@ pub fn validate_gcs_measurement(gcs: &GcsData) -> ValidationResult
 | `DMART_DIST_PATH` | ./dist | Ruta frontend |
 | `DMART_VALKEY_URL` | redis://127.0.0.1:6379 | URL Valkey/Redis |
 | `DMART_CORS_ORIGIN` | http://localhost:3000 | Orígenes CORS permitidos (coma-separados) |
-| `DMART_ADMIN_PASSWORD` | admin123 | Password admin inicial (solo primer inicio) |
+| `DMART_MASTER_KEY` | (obligatorio) | Clave maestra de cifrado; el servidor no arranca si falta o usa el valor por defecto (`openssl rand -hex 32`) |
+| `DMART_ADMIN_PASSWORD` | (vacío → aleatoria) | Password admin inicial (solo primer inicio; vacío genera una aleatoria mostrada una vez) |
+| `DMART_ARGON2_M_COST` | 19456 | Memoria Argon2id (~19 MiB) |
+| `DMART_ARGON2_T_COST` | 3 | Iteraciones Argon2id |
+| `DMART_ARGON2_P_COST` | 1 | Paralelismo Argon2id |
+| `DMART_TRUST_PROXY` | false | Confiar en `X-Forwarded-For` (solo tras proxy de confianza) |
+| `DMART_ENABLE_HSTS` | true | Cabecera Strict-Transport-Security |
 | `JWT_SECRET` | (auto-generado) | Secreto JWT de 32 bytes |
 | `JWT_EXPIRY_HOURS` | 1 | Horas de validez del token JWT (1-24) |
 | `RUST_LOG` | dmart_server=info | Nivel de logging |

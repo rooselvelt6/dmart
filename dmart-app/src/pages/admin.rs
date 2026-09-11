@@ -131,15 +131,6 @@ fn parse_estado_equipo(s: &str) -> EstadoEquipo {
     }
 }
 
-fn parse_rol(s: &str) -> UserRole {
-    match s {
-        "Admin" => UserRole::Admin,
-        "Medico" => UserRole::Medico,
-        "Enfermero" => UserRole::Enfermero,
-        _ => UserRole::Viewer,
-    }
-}
-
 // ─── Institución Panel ────────────────────────────────────────────
 
 #[component]
@@ -734,9 +725,9 @@ fn EquiposPanel() -> impl IntoView {
 
 #[component]
 fn StaffPanel() -> impl IntoView {
-    let (staff, set_staff) = signal::<Vec<User>>(vec![]);
+    let (staff, set_staff) = signal::<Vec<StaffInfo>>(vec![]);
     let (show_form, set_show_form) = signal(false);
-    let (edit_user, set_edit_user) = signal::<Option<User>>(None);
+    let (edit_user, set_edit_user) = signal::<Option<StaffInfo>>(None);
     let (form_nombre, set_form_nombre) = signal(String::new());
     let (form_username, set_form_username) = signal(String::new());
     let (form_password, set_form_password) = signal(String::new());
@@ -763,7 +754,7 @@ fn StaffPanel() -> impl IntoView {
         error_msg.set(None);
     };
 
-    let open_edit = move |u: User| {
+    let open_edit = move |u: StaffInfo| {
         set_edit_user.set(Some(u.clone()));
         set_form_nombre.set(u.nombre.clone());
         set_form_username.set(u.username.clone());
@@ -779,29 +770,17 @@ fn StaffPanel() -> impl IntoView {
         let username = form_username.get();
         let password = form_password.get();
         let rol_str = form_rol.get();
-        let _es_editar = edit_user.get().is_some();
         let user_id = edit_user.get().map(|u| u.user_id.clone());
 
         spawn_local(async move {
-            let user = User {
-                nombre,
-                username,
-                password_hash: password,
-                rol: parse_rol(&rol_str),
-                activo: true,
-                ..User::default()
-            };
             let result = if let Some(ref id) = user_id {
-                let mut u = edit_user.get().unwrap();
-                u.nombre = user.nombre.clone();
-                u.username = user.username.clone();
-                u.rol = user.rol.clone();
-                if !user.password_hash.is_empty() {
-                    u.password_hash = user.password_hash.clone();
-                }
-                api::update_staff(id, &u).await.map(|_| ())
+                api::update_staff(id, &nombre, &rol_str, &password)
+                    .await
+                    .map(|_| ())
             } else {
-                api::create_staff(&user).await.map(|_| ())
+                api::create_staff(&username, &nombre, &rol_str, &password)
+                    .await
+                    .map(|_| ())
             };
             match result {
                 Ok(_) => {

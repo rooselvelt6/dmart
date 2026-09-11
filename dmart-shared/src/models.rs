@@ -855,6 +855,28 @@ impl From<&User> for UserInfo {
     }
 }
 
+/// Staff representation without sensitive fields (never exposes `password_hash`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaffInfo {
+    pub user_id: String,
+    pub username: String,
+    pub rol: UserRole,
+    pub nombre: String,
+    pub activo: bool,
+}
+
+impl From<&User> for StaffInfo {
+    fn from(u: &User) -> Self {
+        Self {
+            user_id: u.user_id.clone(),
+            username: u.username.clone(),
+            rol: u.rol.clone(),
+            nombre: u.nombre.clone(),
+            activo: u.activo,
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TipoCama - Tipos de Camas UCI
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,11 +1,13 @@
 use crate::auth::{
-    AuthService, LoginRequest, LoginResponse, RegisterRequest, extract_token_from_header,
+    AuthService, Claims, LoginRequest, LoginResponse, RegisterRequest, extract_token_from_header,
+    parse_role,
 };
 use crate::db::Database;
 use axum::{
     Json, Router,
     extract::State,
     http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use dmart_shared::models::*;
@@ -20,10 +22,7 @@ pub fn router() -> Router<Database> {
         .route("/refresh", post(refresh))
 }
 
-async fn login(
-    State(db): State<Database>,
-    Json(req): Json<LoginRequest>,
-) -> Result<Json<ApiResponse<LoginResponse>>, StatusCode> {
+async fn login(State(db): State<Database>, Json(req): Json<LoginRequest>) -> Response {
     let auth_service = AuthService::new((*db).clone());
     match auth_service
         .authenticate(&req.username, &req.password)
@@ -35,48 +34,94 @@ async fn login(
                     .log_login_success(&response.user.user_id, &response.user.username, None)
                     .await;
             }
-            Ok(Json(ApiResponse::ok(response)))
+            (StatusCode::OK, Json(ApiResponse::ok(response))).into_response()
         }
         Err(e) => {
             if let Some(audit) = crate::audit::audit() {
                 let _ = audit.log_login_failed(&req.username, &e, None).await;
             }
-            Ok(Json(ApiResponse::err(e)))
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiResponse::<LoginResponse>::err(e)),
+            )
+                .into_response()
         }
     }
 }
 
-async fn logout() -> Result<Json<ApiResponse<()>>, StatusCode> {
+async fn logout(headers: HeaderMap, claims: Claims) -> Result<Json<ApiResponse<()>>, StatusCode> {
+    let token = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(extract_token_from_header)
+        .unwrap_or("");
+    crate::auth::revoke_token(token, claims.exp);
+    crate::auth::persist_revoked_token(token, claims.exp).await;
     Ok(Json(ApiResponse::ok(())))
 }
 
-async fn me() -> Result<Json<ApiResponse<UserInfo>>, StatusCode> {
-    Ok(Json(ApiResponse::ok(UserInfo {
-        user_id: "demo".to_string(),
-        username: "demo".to_string(),
-        rol: UserRole::Admin,
-        nombre: "Usuario Demo".to_string(),
-    })))
+async fn me(
+    State(db): State<Database>,
+    claims: Claims,
+) -> Result<Json<ApiResponse<UserInfo>>, StatusCode> {
+    let auth_service = AuthService::new((*db).clone());
+    let user_info = match auth_service.get_user(&claims.sub).await {
+        Ok(Some(u)) => UserInfo::from(&u),
+        _ => UserInfo {
+            user_id: claims.sub.clone(),
+            username: claims.username.clone(),
+            rol: parse_role(&claims.rol),
+            nombre: claims.username.clone(),
+        },
+    };
+    Ok(Json(ApiResponse::ok(user_info)))
 }
 
-async fn list_users(
-    State(db): State<Database>,
-) -> Result<Json<ApiResponse<Vec<UserInfo>>>, StatusCode> {
+async fn list_users(State(db): State<Database>, claims: Claims) -> Response {
+    if !claims.has_permission("*") {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::<Vec<UserInfo>>::err("Solo administradores")),
+        )
+            .into_response();
+    }
     let auth_service = AuthService::new((*db).clone());
     match auth_service.list_users().await {
-        Ok(users) => Ok(Json(ApiResponse::ok(users))),
-        Err(e) => Ok(Json(ApiResponse::err(e.to_string()))),
+        Ok(users) => (StatusCode::OK, Json(ApiResponse::ok(users))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<Vec<UserInfo>>::err(e)),
+        )
+            .into_response(),
     }
 }
 
 async fn register(
     State(db): State<Database>,
+    claims: Claims,
     Json(req): Json<RegisterRequest>,
-) -> Result<Json<ApiResponse<UserInfo>>, StatusCode> {
+) -> Response {
+    if !claims.has_permission("*") {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::<UserInfo>::err(
+                "Solo administradores pueden crear usuarios",
+            )),
+        )
+            .into_response();
+    }
     let auth_service = AuthService::new((*db).clone());
     match auth_service.register(req).await {
-        Ok(user) => Ok(Json(ApiResponse::ok(UserInfo::from(&user)))),
-        Err(e) => Ok(Json(ApiResponse::err(e))),
+        Ok(user) => (
+            StatusCode::CREATED,
+            Json(ApiResponse::ok(UserInfo::from(&user))),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<UserInfo>::err(e)),
+        )
+            .into_response(),
     }
 }
 

@@ -6,12 +6,13 @@
 //! - Clickjacking (X-Frame-Options)
 
 use axum::{
-    extract::{Request, State},
+    extract::{ConnectInfo, Request, State},
     http::{HeaderValue, StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -111,7 +112,7 @@ impl LoginThrottle {
 
 /// All security headers as key-value pairs
 pub fn security_headers() -> Vec<(header::HeaderName, HeaderValue)> {
-    vec![
+    let mut headers = vec![
         (header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY")),
         (
             header::X_CONTENT_TYPE_OPTIONS,
@@ -145,7 +146,20 @@ pub fn security_headers() -> Vec<(header::HeaderName, HeaderValue)> {
             header::HeaderName::from_static("cross-origin-opener-policy"),
             HeaderValue::from_static("same-origin"),
         ),
-    ]
+    ];
+
+    // Strict-Transport-Security only makes sense over HTTPS; disable with DMART_ENABLE_HSTS=false
+    let hsts_enabled = std::env::var("DMART_ENABLE_HSTS")
+        .map(|v| v != "false")
+        .unwrap_or(true);
+    if hsts_enabled {
+        headers.push((
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ));
+    }
+
+    headers
 }
 
 /// Middleware that applies all security headers to every response
@@ -183,18 +197,38 @@ pub async fn rate_limit_middleware(
     }
 }
 
+/// Real client IP from the socket, unless `DMART_TRUST_PROXY=true` is set
+/// (then the `X-Forwarded-For` header is honored because the app sits behind
+/// a trusted reverse proxy that overwrites it). Never trusts the header by
+/// default, otherwise the rate limiter can be bypassed by spoofing it.
+fn client_ip(req: &Request) -> Option<String> {
+    let trust_proxy = std::env::var("DMART_TRUST_PROXY")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+
+    if trust_proxy
+        && let Some(forwarded) = req
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+    {
+        return Some(
+            forwarded
+                .split(',')
+                .next()
+                .unwrap_or(forwarded)
+                .trim()
+                .to_string(),
+        );
+    }
+
+    req.extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ci| ci.0.ip().to_string())
+}
+
 fn get_client_key(req: &Request) -> String {
-    req.headers()
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.split(',').next().unwrap_or(s).to_string())
-        .or_else(|| {
-            req.headers()
-                .get("x-real-ip")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_else(|| "unknown".to_string())
+    client_ip(req).unwrap_or_else(|| "unknown".to_string())
 }
 
 /// Middleware for login throttling

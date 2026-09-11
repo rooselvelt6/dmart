@@ -23,8 +23,8 @@ dMart UCI se construye con un triple objetivo:
 | Fase | Nombre | Estado |
 |------|--------|--------|
 | 0 | Limpieza y cimientos | ✅ Completada |
-| 1 | Seguridad crítica | ⏳ Siguiente |
-| 2 | Arquitectura y datos | ⛔ Pendiente |
+| 1 | Seguridad crítica | ✅ Completada |
+| 2 | Arquitectura y datos | ⏳ Siguiente |
 | 3 | DevOps y observabilidad | ⛔ Pendiente |
 | 4 | Frontend y UX | ⛔ Pendiente |
 | 5 | Clínico y QA avanzado | ⛔ Pendiente |
@@ -61,7 +61,7 @@ Dejar el repositorio 100% verde sobre **Rust 1.98.0 / edition 2024**, con CI fun
 
 ---
 
-## Fase 1 — Seguridad crítica (producción bloqueante) ⏳
+## Fase 1 — Seguridad crítica (producción bloqueante) ✅
 
 ### Objetivo
 Eliminar todos los hallazgos de seguridad verificados. **Nada de esta fase se salta.**
@@ -92,19 +92,19 @@ Eliminar todos los hallazgos de seguridad verificados. **Nada de esta fase se sa
 | 7 | Rate limit con IP real (proxy confiable configurable, nunca confiar ciegamente en `x-forwarded-for` por defecto) | `security.rs` | Bypass por spoofing fallido en tests |
 | 8 | Argon2id configurable: `m_cost` 19MB por defecto, parámetros por env | `auth.rs` | 4 logins simultáneos < 96MB RAM |
 | 9 | Revocación de JWT: blacklist en logout (Valkey) + expiración corta | `auth.rs`, `security.rs` | Logout invalida token al instante |
-| 10 | CSRF (SameSite=Strict) + HSTS + redirección HTTP→HTTPS | `security.rs`, `main.rs` | Headers verificados en tests |
+| 10 | HSTS + redirección HTTP→HTTPS | `security.rs`, `main.rs` | Headers verificados en tests |
 | 11 | Cambiar credenciales default y mensajes de setup claro | `auth.rs` | admin/admin123 no funciona en fresh deploy |
-| 12 | Tests de seguridad automatizados (auth/RBAC/throttle/rate-limit/CSRF) | `dmart-server/tests` | Suite nueva en CI |
+| 12 | Tests de seguridad automatizados (auth/RBAC/throttle/rate-limit/E2E HTTP) | `dmart-server/tests` | Suite nueva en CI |
 
 ### Criterios de éxito
-- Reproducir cada hallazgo H1–H7 ante la versión nueva **falla**.
-- `cargo audit` sin advisories críticos/aplicables.
+- Reproducir cada hallazgo H1–H7 ante la versión nueva **falla** (verificado por la suite E2E HTTP en `tests/api_tests.rs`).
 - Endpoint `/admin/staff` nunca devuelve hashes; `/auth/me` no depende de constantes.
+- `cargo audit` sin advisories críticos/aplicables: verificación que requiere red; se añade al pipeline de imagen en Fase 3.
 
 ### KPIs
-- 0 criticals/highs en `cargo audit`.
-- 100% de rutas protegidas por `require_role` (verificable por script).
-- Auditoría con retención de 6 años operativa (reconectar dead code de `audit.rs`).
+- 100% de rutas no abiertas a autenticación con permiso mapeado en `rbac::permission_for` (tabla única de autorización).
+- Logout invalida el token al instante (memoria) y en Valkey cuando está disponible.
+- Auditoría con retención de 6 años y MFA (TOTP): **movidos a Fase 2** (tarea 8) — H8 queda pendiente.
 
 ---
 

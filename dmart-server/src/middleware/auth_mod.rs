@@ -6,14 +6,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::auth::{AuthService, Claims, extract_token_from_header};
+use crate::auth::{AuthService, extract_token_from_header};
 use dmart_shared::models::ApiResponse;
 
 #[derive(Clone)]
 pub struct AuthMiddlewareConfig {
     pub auth_service: AuthService,
-    #[allow(dead_code)]
-    pub required_paths: Vec<String>,
     pub open_paths: Vec<String>,
 }
 
@@ -21,27 +19,33 @@ impl AuthMiddlewareConfig {
     pub fn new(auth_service: AuthService) -> Self {
         Self {
             auth_service,
-            required_paths: vec![
-                "/patients".to_string(),
-                "/measurements".to_string(),
-                "/stats".to_string(),
-            ],
-            open_paths: vec![
-                "/health".to_string(),
-                "/auth/login".to_string(),
-                "/auth/register".to_string(),
-            ],
+            open_paths: vec!["/health".to_string(), "/auth/login".to_string()],
         }
     }
 
     pub fn is_path_open(&self, path: &str) -> bool {
         self.open_paths.iter().any(|p| path.starts_with(p))
     }
+}
 
-    #[allow(dead_code)]
-    pub fn is_auth_required(&self, path: &str) -> bool {
-        !self.is_path_open(path)
-    }
+/// Returns true for paths that require the Admin role (permission `*`).
+///
+/// Staff management, user creation and the sandbox/generator are restricted,
+/// while the patient-care helpers (`check-camas`, `disponibles`, equipo de
+/// cama) remain available to any authenticated clinician.
+pub fn is_admin_only_path(path: &str) -> bool {
+    const CARE_PATHS: [&str; 4] = [
+        "/admin/check-camas",
+        "/admin/camas/disponibles",
+        "/admin/equipos/disponibles",
+        "/admin/equipos/cama/",
+    ];
+    let is_care_path = CARE_PATHS.iter().any(|p| path.starts_with(p));
+    let is_admin_area = path.starts_with("/admin")
+        || path.starts_with("/auth/register")
+        || path.starts_with("/auth/users")
+        || path.starts_with("/sandbox");
+    is_admin_area && !is_care_path
 }
 
 pub async fn auth_middleware(
@@ -75,6 +79,38 @@ pub async fn auth_middleware(
 
     match state.auth_service.verify_token(token) {
         Ok(claims) => {
+            if crate::auth::is_token_revoked_in_cache(token).await {
+                let response = Json(ApiResponse::<String>::err("Token revocado".to_string()));
+                return Response::builder()
+                    .status(401)
+                    .body(response.into_response().into_body())
+                    .unwrap();
+            }
+
+            if is_admin_only_path(&path) && !claims.has_permission("*") {
+                let response = Json(ApiResponse::<String>::err(
+                    "Forbidden: se requiere rol Admin".to_string(),
+                ));
+                return Response::builder()
+                    .status(403)
+                    .body(response.into_response().into_body())
+                    .unwrap();
+            }
+
+            let method = request.method().to_string();
+            if let Some(required) = crate::rbac::permission_for(&method, &path)
+                && !claims.has_permission(required)
+            {
+                let response = Json(ApiResponse::<String>::err(format!(
+                    "Forbidden: se requiere permiso {}",
+                    required
+                )));
+                return Response::builder()
+                    .status(403)
+                    .body(response.into_response().into_body())
+                    .unwrap();
+            }
+
             let mut request = request;
             request.extensions_mut().insert(claims);
             next.run(request).await
@@ -89,29 +125,27 @@ pub async fn auth_middleware(
     }
 }
 
-#[allow(dead_code)]
-pub fn require_auth(claims: &Claims, permission: &str) -> Result<(), String> {
-    if claims.has_permission(permission) || claims.has_permission("*") {
-        Ok(())
-    } else {
-        Err(format!("Permission denied: {}", permission))
+#[cfg(test)]
+mod tests {
+    use super::is_admin_only_path;
+
+    #[test]
+    fn admin_only_detection() {
+        assert!(is_admin_only_path("/admin/staff"));
+        assert!(is_admin_only_path("/admin/stats"));
+        assert!(is_admin_only_path("/admin/equipos"));
+        assert!(is_admin_only_path("/admin/camas"));
+        assert!(is_admin_only_path("/admin/equipos/asignar"));
+        assert!(is_admin_only_path("/auth/register"));
+        assert!(is_admin_only_path("/auth/users"));
+        assert!(is_admin_only_path("/sandbox/generate"));
+
+        assert!(!is_admin_only_path("/admin/check-camas"));
+        assert!(!is_admin_only_path("/admin/camas/disponibles"));
+        assert!(!is_admin_only_path("/admin/equipos/disponibles"));
+        assert!(!is_admin_only_path("/admin/equipos/cama/abc"));
+        assert!(!is_admin_only_path("/patients"));
+        assert!(!is_admin_only_path("/auth/login"));
+        assert!(!is_admin_only_path("/health"));
     }
 }
-
-#[allow(dead_code)]
-pub fn require_role(claims: &Claims, roles: &[&str]) -> Result<(), String> {
-    if roles
-        .iter()
-        .any(|r| *r == claims.rol || claims.has_permission("*"))
-    {
-        Ok(())
-    } else {
-        Err(format!(
-            "Role not authorized. Required: {}",
-            roles.join(" or ")
-        ))
-    }
-}
-
-#[allow(dead_code)]
-pub struct AuthUser(pub Claims);

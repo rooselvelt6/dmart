@@ -11,11 +11,10 @@ mod security;
 use axum::{
     Router,
     extract::DefaultBodyLimit,
-    extract::State,
     http::{HeaderValue, Method, StatusCode},
     middleware as axum_mw,
     response::{Html, IntoResponse},
-    routing::{get, post},
+    routing::get,
 };
 use std::net::SocketAddr;
 use tower_http::{
@@ -25,61 +24,9 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use serde::Serialize;
-use std::sync::OnceLock;
-use std::time::Instant;
-
 use crate::auth::AuthService;
-use crate::middleware::auth_mod::{AuthMiddlewareConfig, auth_middleware};
-use crate::security::{create_security_state, login_throttle_middleware, rate_limit_middleware};
-
-fn start_instant() -> &'static Instant {
-    static INSTANT: OnceLock<Instant> = OnceLock::new();
-    INSTANT.get_or_init(Instant::now)
-}
-
-fn uptime_seconds() -> u64 {
-    start_instant().elapsed().as_secs()
-}
-
-#[derive(Serialize)]
-struct HealthResponse {
-    status: String,
-    version: String,
-    timestamp: String,
-    uptime_seconds: u64,
-    database: String,
-    cache: String,
-}
-
-async fn health_check(State(db): State<crate::db::Database>) -> impl IntoResponse {
-    let now = chrono::Utc::now().to_rfc3339();
-
-    let db_status = match db.query("SELECT * FROM patients LIMIT 1").await {
-        Ok(_) => "connected".to_string(),
-        Err(e) => format!("error: {}", e),
-    };
-
-    let cache_status = if cache::cache_available() {
-        "connected".to_string()
-    } else {
-        "unavailable".to_string()
-    };
-
-    let response = HealthResponse {
-        status: if db_status == "connected" {
-            "healthy".to_string()
-        } else {
-            "degraded".to_string()
-        },
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        timestamp: now,
-        uptime_seconds: uptime_seconds(),
-        database: db_status,
-        cache: cache_status,
-    };
-    (StatusCode::OK, axum::Json(response)).into_response()
-}
+use crate::middleware::auth_mod::AuthMiddlewareConfig;
+use crate::security::create_security_state;
 
 async fn spa_handler() -> impl IntoResponse {
     let dist_path = std::env::var("DMART_DIST_PATH").unwrap_or_else(|_| "./dist".to_string());
@@ -98,6 +45,9 @@ async fn spa_handler() -> impl IntoResponse {
 async fn main() -> anyhow::Result<()> {
     // Load .env file first (before any env var reads)
     dotenvy::dotenv().ok();
+
+    // Fail fast if a strong DMART_MASTER_KEY is not configured
+    crypto::validate_master_key().map_err(|e| anyhow::anyhow!("{}", e))?;
 
     // Setup panic hook FIRST - before any async code
     let default_panic = std::panic::take_hook();
@@ -208,160 +158,9 @@ async fn main() -> anyhow::Result<()> {
             .allow_origin(AllowOrigin::list(origins))
     };
 
-    // ── API Router ─────────────────────────────────────────────────
+    // ── API Router (rutas + middleware de seguridad) ────────────────
 
-    let api_router = Router::new()
-        // Health check
-        .route("/health", get(health_check))
-        // Stats
-        .route("/stats", get(api::stats::get_stats))
-        // Admin
-        .route("/admin/stats", get(api::admin::get_admin_stats))
-        .route("/admin/camas/init", post(api::admin::init_camas_api))
-        .route(
-            "/admin/camas",
-            get(api::admin::list_camas_api).post(api::admin::create_cama_api),
-        )
-        .route(
-            "/admin/camas/{id}",
-            get(api::admin::get_cama_api)
-                .put(api::admin::update_cama_api)
-                .delete(api::admin::delete_cama_api),
-        )
-        .route(
-            "/admin/camas/disponibles",
-            get(api::admin::get_camas_disponibles),
-        )
-        .route(
-            "/admin/check-camas",
-            get(api::admin::check_camas_disponibles),
-        )
-        .route(
-            "/admin/equipos",
-            get(api::admin::list_equipos_api).post(api::admin::create_equipo_api),
-        )
-        .route(
-            "/admin/equipos/disponibles",
-            get(api::admin::get_equipos_disponibles_api),
-        )
-        .route(
-            "/admin/equipos/{id}",
-            get(api::admin::get_equipo_api)
-                .put(api::admin::update_equipo_api)
-                .delete(api::admin::delete_equipo_api),
-        )
-        .route(
-            "/admin/equipos/cama/{cama_id}",
-            get(api::admin::list_equipos_por_cama_api),
-        )
-        .route(
-            "/admin/equipos/asignar",
-            post(api::admin::asignar_equipo_cama_api),
-        )
-        .route(
-            "/admin/equipos/{equipo_id}/desvincular",
-            post(api::admin::desvincular_equipo_api),
-        )
-        .route(
-            "/admin/staff",
-            get(api::admin::list_staff_api).post(api::admin::create_staff_api),
-        )
-        .route(
-            "/admin/staff/{id}",
-            get(api::admin::get_staff_api)
-                .put(api::admin::update_staff_api)
-                .delete(api::admin::delete_staff_api),
-        )
-        .route(
-            "/admin/staff/{id}/toggle",
-            post(api::admin::toggle_user_active),
-        )
-        // Auth
-        .nest("/auth", api::auth::router())
-        // Patients
-        .route(
-            "/patients",
-            get(api::patients::list_patients).post(api::patients::create_patient),
-        )
-        .route(
-            "/patients/{id}",
-            get(api::patients::get_patient)
-                .put(api::patients::update_patient)
-                .delete(api::patients::delete_patient),
-        )
-        .route(
-            "/patients/{id}/egreso",
-            post(api::patients::egreso_paciente),
-        )
-        // Measurements (registro completo)
-        .route(
-            "/patients/{id}/measurements",
-            get(api::measurements::get_measurements).post(api::measurements::create_measurement),
-        )
-        .route(
-            "/patients/{id}/measurements/last",
-            get(api::measurements::get_last_measurement),
-        )
-        // Escalas individuales
-        .route(
-            "/patients/{id}/scales/apache",
-            axum::routing::post(api::scales::calc_apache),
-        )
-        .route(
-            "/patients/{id}/scales/gcs",
-            axum::routing::post(api::scales::calc_gcs),
-        )
-        .route(
-            "/patients/{id}/scales/news2",
-            axum::routing::post(api::scales::calc_news2),
-        )
-        .route(
-            "/patients/{id}/scales/sofa",
-            axum::routing::post(api::scales::calc_sofa),
-        )
-        .route(
-            "/patients/{id}/scales/saps3",
-            axum::routing::post(api::scales::calc_saps3),
-        )
-        .route(
-            "/patients/{id}/scales/history",
-            get(api::scales::scale_history),
-        )
-        // Export
-        .route("/patients/{id}/export/csv", get(api::export::export_csv))
-        .route("/patients/{id}/export/pdf", get(api::export::export_pdf))
-        // Institucion
-        .route(
-            "/admin/institucion",
-            get(api::institucion::get_institucion).put(api::institucion::upsert_institucion),
-        )
-        // Diagnosticos CIE-10
-        .route("/diagnosticos", get(api::diagnosticos::list_diagnosticos))
-        .route(
-            "/diagnosticos/search",
-            get(api::diagnosticos::search_diagnosticos),
-        )
-        // Sandbox
-        .route("/sandbox/generate", post(api::sandbox::generate_patients))
-        .route("/sandbox/clear", post(api::sandbox::clear_sandbox))
-        // FHIR R4
-        .route("/fhir/Patient", get(api::fhir::fhir_patient_search))
-        .route("/fhir/Patient/{id}", get(api::fhir::fhir_patient_get))
-        .with_state(database.clone());
-
-    // Apply security middleware to API router (layers wrap from outside in)
-    // Login throttling first (before rate limiting to prevent brute force)
-    let api_router = api_router
-        .layer(axum_mw::from_fn_with_state(
-            security_state.clone(),
-            login_throttle_middleware,
-        ))
-        .layer(axum_mw::from_fn_with_state(
-            security_state.clone(),
-            rate_limit_middleware,
-        ))
-        // JWT auth middleware (open paths like /auth/login bypass)
-        .layer(axum_mw::from_fn_with_state(auth_config, auth_middleware));
+    let api_router = api::build_api_router(database.clone(), auth_config, security_state);
 
     // ── Static files ────────────────────────────────────────────────
 
@@ -415,9 +214,12 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("    Frontend: http://{}/", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal)
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal)
+    .await?;
 
     tracing::info!("🛑 Server shutdown complete");
     Ok(())

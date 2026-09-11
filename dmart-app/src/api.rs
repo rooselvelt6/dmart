@@ -546,8 +546,8 @@ pub async fn get_equipos_disponibles() -> ApiResult<Vec<Equipo>> {
 
 // ─── Staff CRUD ─────────────────────────────────────────────────────
 
-pub async fn list_staff() -> ApiResult<Vec<User>> {
-    let resp: ApiResponse<PaginatedResponse<User>> =
+pub async fn list_staff() -> ApiResult<Vec<StaffInfo>> {
+    let resp: ApiResponse<PaginatedResponse<StaffInfo>> =
         authed_get(&format!("{}/admin/staff?limit=200", API_BASE))
             .send()
             .await
@@ -558,8 +558,8 @@ pub async fn list_staff() -> ApiResult<Vec<User>> {
     Ok(resp.data.map(|p| p.items).unwrap_or_default())
 }
 
-pub async fn get_staff(id: &str) -> ApiResult<User> {
-    let resp: ApiResponse<User> = authed_get(&format!("{}/admin/staff/{}", API_BASE, id))
+pub async fn get_staff(id: &str) -> ApiResult<StaffInfo> {
+    let resp: ApiResponse<StaffInfo> = authed_get(&format!("{}/admin/staff/{}", API_BASE, id))
         .send()
         .await
         .map_err(|e| e.to_string())?
@@ -569,9 +569,19 @@ pub async fn get_staff(id: &str) -> ApiResult<User> {
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 
-pub async fn create_staff(user: &User) -> ApiResult<User> {
-    let resp: ApiResponse<User> = authed_post(&format!("{}/admin/staff", API_BASE))
-        .json(user)
+pub async fn create_staff(
+    username: &str,
+    nombre: &str,
+    rol: &str,
+    password: &str,
+) -> ApiResult<StaffInfo> {
+    let resp: ApiResponse<StaffInfo> = authed_post(&format!("{}/admin/staff", API_BASE))
+        .json(&serde_json::json!({
+            "username": username,
+            "nombre": nombre,
+            "rol": rol,
+            "password": password,
+        }))
         .map_err(|e| e.to_string())?
         .send()
         .await
@@ -582,9 +592,21 @@ pub async fn create_staff(user: &User) -> ApiResult<User> {
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 
-pub async fn update_staff(id: &str, user: &User) -> ApiResult<User> {
-    let resp: ApiResponse<User> = authed_put(&format!("{}/admin/staff/{}", API_BASE, id))
-        .json(user)
+pub async fn update_staff(
+    id: &str,
+    nombre: &str,
+    rol: &str,
+    password: &str,
+) -> ApiResult<StaffInfo> {
+    let mut body = serde_json::json!({
+        "nombre": nombre,
+        "rol": rol,
+    });
+    if !password.is_empty() {
+        body["password"] = serde_json::json!(password);
+    }
+    let resp: ApiResponse<StaffInfo> = authed_put(&format!("{}/admin/staff/{}", API_BASE, id))
+        .json(&body)
         .map_err(|e| e.to_string())?
         .send()
         .await
@@ -603,14 +625,15 @@ pub async fn delete_staff(id: &str) -> ApiResult<()> {
     Ok(())
 }
 
-pub async fn toggle_staff(id: &str) -> ApiResult<User> {
-    let resp: ApiResponse<User> = authed_post(&format!("{}/admin/staff/{}/toggle", API_BASE, id))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+pub async fn toggle_staff(id: &str) -> ApiResult<StaffInfo> {
+    let resp: ApiResponse<StaffInfo> =
+        authed_post(&format!("{}/admin/staff/{}/toggle", API_BASE, id))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 

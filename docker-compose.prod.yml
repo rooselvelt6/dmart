@@ -27,6 +27,13 @@ services:
       - DMART_DIST_PATH=/app/dist
       - DMART_VALKEY_URL=redis://valkey:6379
       - RUST_LOG=dmart_server=info,tower_http=info
+      - DMART_MASTER_KEY=${DMART_MASTER_KEY:?set DMART_MASTER_KEY in .env}
+      - DMART_ADMIN_PASSWORD=${DMART_ADMIN_PASSWORD:-}
+      - DMART_ARGON2_M_COST=${DMART_ARGON2_M_COST:-19456}
+      - DMART_ARGON2_T_COST=${DMART_ARGON2_T_COST:-3}
+      - DMART_ARGON2_P_COST=${DMART_ARGON2_P_COST:-1}
+      - DMART_TRUST_PROXY=true
+      - DMART_ENABLE_HSTS=true
     volumes:
       - dmart-data:/app/data
     depends_on:
