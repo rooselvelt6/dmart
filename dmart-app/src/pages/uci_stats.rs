@@ -1,31 +1,28 @@
 use leptos::prelude::*;
 use crate::api;
-use crate::api::{UciStatsResponse, GravedadStats, PromedioScores};
+use crate::api::{GravedadStats, PromedioScores, UciStatsResponse};
+use crate::components::ui_kit::LoadingState;
 
 #[component]
 pub fn UciStats() -> impl IntoView {
-    let stats_resource = LocalResource::new(|| {
-        async move {
-            api::get_stats().await.unwrap_or_else(|_| UciStatsResponse {
-                total_pacientes: 0,
-                pacientes_activos: 0,
-                por_gravedad: GravedadStats {
-                    criticos: 0,
-                    severos: 0,
-                    moderados: 0,
-                    bajos: 0,
-                },
-                promedios: PromedioScores {
-                    apache_promedio: 0.0,
-                    gcs_promedio: 0.0,
-                    sofa_promedio: 0.0,
-                    saps3_promedio: 0.0,
-                    news2_promedio: 0.0,
-                },
-                reciente: vec![],
-            })
-        }
+    let retry = RwSignal::new(0u32);
+    let stats_resource = LocalResource::new(move || {
+        let _r = retry.get();
+        async move { api::get_stats().await }
     });
+
+    let render_stats = move || match stats_resource.get() {
+        Some(Ok(stats)) => view! { <StatsContent stats=stats /> }.into_any(),
+        Some(Err(e)) => view! {
+            <crate::components::ui_kit::ErrorState
+                message=format!("No se pudieron cargar las estadísticas: {}", e)
+                on_retry=Some(Callback::new(move |()| {
+                    retry.update(|v| *v += 1);
+                }))
+            />
+        }.into_any(),
+        None => view! {}.into_any(),
+    };
 
     view! {
         <div class="page-enter">
@@ -33,12 +30,8 @@ pub fn UciStats() -> impl IntoView {
                 <h1 class="text-2xl font-bold" style="color:var(--uci-text);">Estadisticas UCI</h1>
             </div>
 
-            <Suspense fallback=move || view! { <div class="p-10 text-center rounded-lg" style="background:var(--uci-surface);">Cargando...</div> }>
-                {move || stats_resource.get().map(|stats| {
-                    view! {
-                        <StatsContent stats=stats />
-                    }
-                })}
+            <Suspense fallback=move || view! { <LoadingState label="Cargando estadísticas..." /> }>
+                {move || render_stats()}
             </Suspense>
         </div>
     }

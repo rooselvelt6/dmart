@@ -26,9 +26,22 @@ impl Default for Theme {
     fn default() -> Self {
         match LocalStorage::get::<String>(THEME_KEY) {
             Ok(stored) if stored == "light" => Theme::Light,
-            _ => Theme::Dark,
+            Ok(stored) if stored == "dark" => Theme::Dark,
+            // Sin preferencia guardada: respetar el sistema operativo.
+            _ => system_prefers_light(),
         }
     }
+}
+
+/// Detecta `prefers-color-scheme` del sistema (default: dark).
+fn system_prefers_light() -> Theme {
+    if let Some(window) = web_sys::window()
+        && let Ok(Some(media)) = window.match_media("(prefers-color-scheme: light)")
+        && media.matches()
+    {
+        return Theme::Light;
+    }
+    Theme::Dark
 }
 
 impl From<String> for Theme {

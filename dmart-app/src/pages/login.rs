@@ -60,18 +60,20 @@ pub fn LoginPage() -> impl IntoView {
                 </div>
 
                 {move || error.get().then(|| view! {
-                    <div class="bg-uci-critical/10 border border-uci-critical/30 p-4 rounded-xl mb-6 text-uci-critical text-xs font-semibold animate-pulse">
+                    <div role="alert" class="bg-uci-critical/10 border border-uci-critical/30 p-4 rounded-xl mb-6 text-uci-critical text-xs font-semibold">
                         "⚠ Credenciales inválidas. Por favor intente de nuevo."
                     </div>
                 })}
 
                 <form on:submit=on_submit class="space-y-6">
                     <div>
-                        <label class="form-label">"Usuario / Identificación"</label>
+                        <label for="login-username" class="form-label">"Usuario / Identificación"</label>
                         <input
+                            id="login-username"
                             type="text"
-                            class="form-input py-3"
+                            class="form-input py-3 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
                             placeholder="admin_uci"
+                            autocomplete="username"
                             prop:value=username
                             on:input=move |ev| set_username.set(event_target_value(&ev))
                             required
@@ -79,13 +81,15 @@ pub fn LoginPage() -> impl IntoView {
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-2">
-                            <label class="form-label mb-0">"Contraseña"</label>
+                            <label for="login-password" class="form-label mb-0">"Contraseña"</label>
                             <a href="#" class="text-[10px] text-uci-accent hover:underline">"¿Olvido su clave?"</a>
                         </div>
                         <input
+                            id="login-password"
                             type="password"
-                            class="form-input py-3"
+                            class="form-input py-3 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
                             placeholder="••••••••"
+                            autocomplete="current-password"
                             prop:value=password
                             on:input=move |ev| set_password.set(event_target_value(&ev))
                             required
@@ -94,8 +98,9 @@ pub fn LoginPage() -> impl IntoView {
 
                     <button
                         type="submit"
-                        class="btn-primary w-full py-4 text-base font-bold tracking-wide mt-4 relative overflow-hidden group"
+                        class="btn-primary w-full py-4 text-base font-bold tracking-wide mt-4 relative overflow-hidden group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                         disabled=loading
+                        aria-busy=loading
                     >
                         <span class=move || if loading.get() { "opacity-0" } else { "opacity-100" }>
                             "Iniciar Sesión"

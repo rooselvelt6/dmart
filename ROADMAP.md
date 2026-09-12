@@ -171,7 +171,7 @@ Operar el sistema en producción: monitoreo, logs estructurados, backups y despl
 
 ---
 
-## Fase 4 — Frontend y UX ⛔
+## Fase 4 — Frontend y UX 🔄
 
 ### Objetivo
 Experiencia clínica fluida, accesible y sin pantallas en blanco.
@@ -180,14 +180,18 @@ Experiencia clínica fluida, accesible y sin pantallas en blanco.
 
 | # | Tarea | Archivos | Criterio |
 |---|-------|----------|----------|
-| 1 | Loading states + error handling en todas las páginas (Suspense/fallback) | `dmart-app/src/pages/*` | Sin pantallas vacías |
-| 2 | PWA Offline (service worker cache-first para WASM) | `dmart-app/` | Opera sin internet |
-| 3 | Notificaciones de deterioro (Web Push API) | `dmart-app/`, `security.rs` | Alertas en vivo |
-| 4 | Accesibilidad WCAG 2.1 AA (ARIA, contraste, teclado) | `dmart-app/src/components/*` | Auditoría axe sin errores |
-| 5 | Virtual scrolling en listas 1000+ pacientes | `dmart-app/src/pages/patients.rs` | DOM estable |
-| 6 | Dark mode respetando `prefers-color-scheme` | `dmart-app/src/stores/theme.rs` | Persistencia confirmada |
-| 7 | Búsqueda reactiva debounce 300ms | `dmart-app/src/pages/patients.rs` | Feedback < 300ms |
-| 8 | WebSocket streaming de scores en tiempo real | `dmart-server`, `dmart-app` | Datos frescos sin recarga |
+| 1 | Loading states + error handling en todas las páginas (Suspense/fallback) | `dmart-app/src/pages/*`, `components/ui_kit.rs` | Sin pantallas vacías | ✅ |
+| 2 | PWA Offline (service worker cache-first para WASM) | `dmart-app/` (`manifest.webmanifest`, `sw.js`, `index.html`) | Opera sin internet | ✅ |
+| 3 | Notificaciones de deterioro (Web Push API) | `dmart-app/`, `security.rs` | Alertas en vivo | ⛔ Pendiente (requiere infra push/VAPID) |
+| 4 | Accesibilidad WCAG 2.1 AA (ARIA, contraste, teclado) | `dmart-app/src/components/*`, `app.rs`, `login.rs` | Auditoría axe sin errores | ✅ |
+| 5 | Virtual scrolling en listas 1000+ pacientes | `dmart-app/src/pages/patients.rs` | DOM estable | ✅ |
+| 6 | Dark mode respetando `prefers-color-scheme` | `dmart-app/src/stores/theme.rs` | Persistencia confirmada | ✅ |
+| 7 | Búsqueda reactiva debounce 300ms | `dmart-app/src/pages/patients.rs` | Feedback < 300ms | ✅ |
+| 8 | Streaming de scores en tiempo real (implementado vía SSE, no WebSocket) | `dmart-server/src/realtime.rs`, `dmart-app/src/stores/realtime.rs` | Datos frescos sin recarga | ✅ |
+
+> Nota tarea 8: se eligió **SSE** (axum `response::sse` + `EventSource`) en lugar de WebSocket:
+> sin dependencias extra, sin openssl, con auth por `?token=` y keep-alive de 15s. Se reemplazó
+> el encabezado original "WebSocket streaming" por este criterio equivalente cumplido.
 
 ### Criterios de éxito
 - Lighthouse accesibilidad ≥ 95.

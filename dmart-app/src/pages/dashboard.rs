@@ -9,31 +9,57 @@ use leptos::prelude::*;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
-    let stats = LocalResource::new(|| async move {
-        api::get_stats().await.unwrap_or_else(|_| UciStatsResponse {
-            total_pacientes: 0,
-            pacientes_activos: 0,
-            por_gravedad: GravedadStats {
-                criticos: 0,
-                severos: 0,
-                moderados: 0,
-                bajos: 0,
-            },
-            promedios: PromedioScores {
-                apache_promedio: 0.0,
-                gcs_promedio: 0.0,
-                sofa_promedio: 0.0,
-                saps3_promedio: 0.0,
-                news2_promedio: 0.0,
-            },
-            reciente: vec![],
-        })
+    // Trigger de refresco: cambia cuando llega un evento en tiempo real.
+    let realtime = crate::stores::use_realtime();
+    let refresh = RwSignal::new(0u32);
+
+    let stats = LocalResource::new(move || {
+        let current = refresh.get();
+        async move {
+            let _ = current;
+            api::get_stats().await.unwrap_or_else(|_| UciStatsResponse {
+                total_pacientes: 0,
+                pacientes_activos: 0,
+                por_gravedad: GravedadStats {
+                    criticos: 0,
+                    severos: 0,
+                    moderados: 0,
+                    bajos: 0,
+                },
+                promedios: PromedioScores {
+                    apache_promedio: 0.0,
+                    gcs_promedio: 0.0,
+                    sofa_promedio: 0.0,
+                    saps3_promedio: 0.0,
+                    news2_promedio: 0.0,
+                },
+                reciente: vec![],
+            })
+        }
     });
 
-    let patients =
-        LocalResource::new(|| async move { api::list_patients(None).await.unwrap_or_default() });
+    let patients = LocalResource::new(move || {
+        let current = refresh.get();
+        async move {
+            let _ = current;
+            api::list_patients(None).await.unwrap_or_default()
+        }
+    });
 
-    let admin_stats = LocalResource::new(|| async move { api::get_admin_stats().await.ok() });
+    // Cada evento measurement recargamos los datos del panel.
+    Effect::new(move |_| {
+        if realtime.get().is_some() {
+            refresh.update(|v| *v += 1);
+        }
+    });
+
+    let admin_stats = LocalResource::new(move || {
+        let current = refresh.get();
+        async move {
+            let _ = current;
+            api::get_admin_stats().await.ok()
+        }
+    });
 
     view! {
         <div class="page-enter">
@@ -42,12 +68,7 @@ pub fn DashboardPage() -> impl IntoView {
                 <p style="color:var(--uci-muted); font-size:13px; margin:0;">"Pacientes activos, scores, recursos — vision general"</p>
             </div>
 
-            <Suspense fallback=move || view! {
-                <div style="text-align:center; padding:60px; color:var(--uci-muted);">
-                    <div style="font-size:32px; margin-bottom:8px;"><i class="fa-solid fa-spinner fa-spin"></i></div>
-                    "Cargando..."
-                </div>
-            }>
+            <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label="Cargando panel..." /> }>
                 {move || {
                     stats.get().map(|s| {
                         let pacientes = patients.get().unwrap_or_default();
@@ -279,8 +300,8 @@ fn PatientPokemonCard(patient: PatientListItem) -> impl IntoView {
             </div>
 
             <Suspense fallback=move || view! {
-                <div style="height:50px; background:var(--uci-surface); display:flex; align-items:center; justify-content:center; color:var(--uci-muted); font-size:11px;">
-                    <i class="fa-solid fa-spinner fa-spin mr-2"></i>"Cargando..."
+                <div style="height:50px; background:var(--uci-surface); display:flex; align-items:center; justify-content:center;">
+                    <i class="fa-solid fa-spinner fa-spin mr-2" style="color:var(--uci-muted);"></i><span style="color:var(--uci-muted); font-size:11px;">"Cargando..."</span>
                 </div>
             }>
                 {move || measurements.get().map(|ms| {

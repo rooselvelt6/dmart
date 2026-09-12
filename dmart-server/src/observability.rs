@@ -272,11 +272,10 @@ pub async fn graceful_shutdown(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
-    fn test_resource_attributes() {
-        // resource() function removed, test placeholder
-        assert!(true);
+    fn observability_modules_load() {
+        // La inicialización de métricas requiere globales; verificar que el
+        // módulo compila y el estado base de health existe.
+        let _ = crate::api::uptime_seconds();
     }
 }

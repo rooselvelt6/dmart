@@ -9,6 +9,7 @@ mod middleware;
 pub mod migrations;
 mod observability;
 pub mod rbac;
+mod realtime;
 mod security;
 
 use axum::{

@@ -31,6 +31,8 @@ web-sys = { version = "0.3", features = [
     "HtmlInputElement", "HtmlSelectElement", "HtmlTextAreaElement",
     "Event", "InputEvent", "MouseEvent", "Location",
     "Blob", "Url", "HtmlAnchorElement",
+    "EventSource", "MessageEvent",
+    "MediaQueryList",
     "console",
 ] }
 js-sys = "0.3"

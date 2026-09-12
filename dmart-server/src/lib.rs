@@ -9,4 +9,5 @@ pub mod middleware;
 pub mod migrations;
 pub mod observability;
 pub mod rbac;
+pub mod realtime;
 pub mod security;

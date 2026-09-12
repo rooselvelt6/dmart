@@ -69,6 +69,15 @@ pub async fn auth_middleware(
         .and_then(|v| v.to_str().ok());
 
     let token = match auth_header.and_then(extract_token_from_header) {
+        Some(t) => Some(t.to_string()),
+        None if path.starts_with("/realtime") => request.uri().query().and_then(|q| {
+            q.split('&')
+                .find_map(|kv| kv.strip_prefix("token=").map(str::to_string))
+        }),
+        None => None,
+    };
+
+    let token = match token {
         Some(t) => t,
         None => {
             let response = Json(ApiResponse::<String>::err(
@@ -81,9 +90,9 @@ pub async fn auth_middleware(
         }
     };
 
-    match state.auth_service.verify_token(token) {
+    match state.auth_service.verify_token(&token) {
         Ok(claims) => {
-            if crate::auth::is_token_revoked_in_cache(token).await {
+            if crate::auth::is_token_revoked_in_cache(&token).await {
                 let response = Json(ApiResponse::<String>::err("Token revocado".to_string()));
                 return Response::builder()
                     .status(401)

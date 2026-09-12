@@ -1,0 +1,21 @@
+{
+  "name": "UCI — Sistema de Cuidados Intensivos",
+  "short_name": "UCI",
+  "description": "Gestión de pacientes, escalas de severidad (APACHE II, Glasgow, SOFA, NEWS2, SAPS III) y monitoreo en tiempo real de la UCI.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B1220",
+  "theme_color": "#0B1220",
+  "lang": "es",
+  "categories": ["medical", "health"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

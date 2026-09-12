@@ -141,7 +141,7 @@ async fn test_transactional_create_assigns_cama_and_equipos() {
         .await
         .expect("config");
 
-    let mut cama = Cama::new(1 as u8, TipoCama::General);
+    let mut cama = Cama::new(1_u8, TipoCama::General);
     cama.estado = EstadoCama::Libre;
     let cama = dmart_server::db::create_cama(&db, cama)
         .await
@@ -158,7 +158,7 @@ async fn test_transactional_create_assigns_cama_and_equipos() {
     let created = dmart_server::db::create_patient_with_assignments(
         &db,
         patient,
-        &[equipo.equipo_id.clone()],
+        std::slice::from_ref(&equipo.equipo_id),
     )
     .await
     .expect("create tx");
@@ -191,7 +191,7 @@ async fn test_transactional_create_rolls_back_when_cama_occupada() {
         .await
         .expect("config");
 
-    let mut cama = Cama::new(1 as u8, TipoCama::General);
+    let mut cama = Cama::new(1_u8, TipoCama::General);
     cama.estado = EstadoCama::Ocupada;
     cama.paciente_id = Some("otro_paciente".to_string());
     let cama = dmart_server::db::create_cama(&db, cama)
@@ -210,7 +210,7 @@ async fn test_transactional_create_rolls_back_when_cama_occupada() {
     let err = dmart_server::db::create_patient_with_assignments(
         &db,
         patient,
-        &[equipo.equipo_id.clone()],
+        std::slice::from_ref(&equipo.equipo_id),
     )
     .await
     .expect_err("debe fallar: cama ocupada");
@@ -249,7 +249,7 @@ async fn test_egreso_libera_cama_y_equipos_transaccional() {
         .await
         .expect("config");
 
-    let mut cama = Cama::new(1 as u8, TipoCama::General);
+    let mut cama = Cama::new(1_u8, TipoCama::General);
     cama.estado = EstadoCama::Libre;
     let cama = dmart_server::db::create_cama(&db, cama)
         .await
@@ -266,7 +266,7 @@ async fn test_egreso_libera_cama_y_equipos_transaccional() {
     let created = dmart_server::db::create_patient_with_assignments(
         &db,
         patient,
-        &[equipo.equipo_id.clone()],
+        std::slice::from_ref(&equipo.equipo_id),
     )
     .await
     .expect("create tx");
@@ -298,11 +298,11 @@ async fn test_camas_equipos_counts_group_by() {
         .await
         .expect("seed config");
 
-    let mut c1 = Cama::new(1 as u8, TipoCama::General);
+    let mut c1 = Cama::new(1_u8, TipoCama::General);
     c1.estado = EstadoCama::Libre;
-    let mut c2 = Cama::new(2 as u8, TipoCama::General);
+    let mut c2 = Cama::new(2_u8, TipoCama::General);
     c2.estado = EstadoCama::Ocupada;
-    let mut c3 = Cama::new(3 as u8, TipoCama::Aislamiento);
+    let mut c3 = Cama::new(3_u8, TipoCama::Aislamiento);
     c3.estado = EstadoCama::Libre;
     dmart_server::db::create_cama(&db, c1).await.expect("cama1");
     dmart_server::db::create_cama(&db, c2).await.expect("cama2");
@@ -1175,5 +1175,82 @@ async fn test_e2e_audit_retention_cleanup_deletes_old_logs() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "audit list => {}", json);
-    assert!(json["data"].as_array().unwrap().len() >= 1);
+    assert!(!json["data"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_e2e_realtime_stream_requires_auth_and_accepts_token_param() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "realtime_admin",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Realtime Admin",
+    )
+    .await;
+    let http = build_app(&db).await;
+    let token = login_token(&http, "realtime_admin", "SuperSecreto_01!").await;
+
+    // Sin autenticación => 401
+    let (status, _) = send(&http, Method::GET, "/realtime/stream", None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "SSE sin token => 401");
+
+    // Token inválido => 401
+    let (status, _) = send(
+        &http,
+        Method::GET,
+        "/realtime/stream?token=basura",
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "token inválido => 401");
+
+    // Con token en query => 200 + content-type text/event-stream.
+    // No usamos send() (colecciona el body completo y el stream no termina);
+    // verificamos el status y el content-type de la cabecera.
+    let app = http.clone();
+    let request = axum::http::Request::builder()
+        .method(Method::GET)
+        .uri(format!("/realtime/stream?token={}", token))
+        .body(Body::empty())
+        .expect("build request");
+    let response = app.clone().oneshot(request).await.expect("oneshot");
+    assert_eq!(response.status(), StatusCode::OK, "SSE con token => 200");
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        content_type.starts_with("text/event-stream"),
+        "content-type SSE => {}",
+        content_type
+    );
+    // No consumimos el body: el stream SSE queda abierto y el test termina.
+    drop(response);
+    let _ = app;
+}
+
+#[tokio::test]
+async fn test_realtime_broadcast_single_instance() {
+    // El hub de eventos es un broadcast: publicar y suscribirse funciona
+    // de forma aislada (simula un cliente conectado que espera eventos).
+    let hub = dmart_server::realtime::RealtimeHub::new();
+    let mut rx = hub.subscribe();
+    hub.publish(
+        "e2e_event",
+        serde_json::json!({ "ok": true, "from": "test" }),
+    );
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+        .await
+        .expect("timeout esperando evento")
+        .expect("debe recibir el evento publicado");
+    assert!(
+        msg.contains("e2e_event"),
+        "el evento contiene el tipo esperado: {}",
+        msg
+    );
 }

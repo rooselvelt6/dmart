@@ -64,6 +64,19 @@ pub async fn create_measurement(
                 patient.updated_at = Utc::now().to_rfc3339();
                 let _ = db_ops::update_patient(&db, &patient_id, patient).await;
             }
+            // Publicar evento en tiempo real (SSE)
+            crate::realtime::publish(
+                "measurement",
+                serde_json::json!({
+                    "patient_id": patient_id,
+                    "measurement_id": m.measurement_id,
+                    "apache_score": m.apache_score,
+                    "gcs_score": m.gcs_score,
+                    "severity": m.severity.label(),
+                    "mortality_risk": m.mortality_risk,
+                    "timestamp": m.timestamp,
+                }),
+            );
             (StatusCode::CREATED, Json(ApiResponse::ok(m))).into_response()
         }
         Err(e) => (

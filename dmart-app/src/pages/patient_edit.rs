@@ -29,7 +29,7 @@ pub fn PatientEditPage() -> impl IntoView {
                 </div>
             </Show>
 
-            <Suspense fallback=move || view! { <div style="text-align:center; padding:60px; color:var(--uci-muted);">"Cargando..."</div> }>
+            <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label="Cargando paciente..." /> }>
                 {move || patient_res.get().map(|res_wrapper| match res_wrapper {
                     Ok(p) => {
                         let patient = RwSignal::new(p.clone());

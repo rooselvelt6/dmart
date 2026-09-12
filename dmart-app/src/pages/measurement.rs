@@ -169,14 +169,7 @@ pub fn MeasurementPage() -> impl IntoView {
 
     view! {
             <div class="w-full min-h-screen" style="background:var(--uci-bg);">
-                <Suspense fallback=move || view! {
-                    <div class="flex items-center justify-center min-h-[60vh]">
-                        <div class="flex flex-col items-center gap-4">
-                            <div class="w-12 h-12 border-4 rounded-full animate-spin" style="border-color:var(--uci-accent); border-top-color:transparent;"></div>
-                            <span class="text-sm font-bold uppercase tracking-widest" style="color:var(--uci-muted);">"Cargando..."</span>
-                        </div>
-                    </div>
-                }>
+                <Suspense fallback=move || view! { <div class="flex items-center justify-center min-h-[60vh]"><crate::components::ui_kit::LoadingState label="Cargando..." /></div> }>
                     {move || patient_res.get().map(|res_wrapper| match res_wrapper {
                         Ok(ref p) => Either::Left(view! {
                             <div class="max-w-[1800px] mx-auto px-4 py-6">

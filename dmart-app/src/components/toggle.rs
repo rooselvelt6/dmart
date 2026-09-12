@@ -8,6 +8,8 @@ where
     view! {
         <button
             type="button"
+            role="switch"
+            aria-checked=move || value.get()
             class=move || format!("toggle {}", if value.get() { "on" } else { "" })
             on:click=move |_| on_change(!value.get())
         ></button>

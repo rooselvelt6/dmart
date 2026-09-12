@@ -21,6 +21,9 @@ pub fn App() -> impl IntoView {
     let sidebar_open = RwSignal::new(false);
     let _ = crate::stores::create_theme_store();
 
+    // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).
+    let _realtime = crate::stores::use_realtime();
+
     let preloaded = RwSignal::new(load_patients_cached().unwrap_or_default());
     spawn_local(async move {
         let fresh = fetch_patients_cached().await;
@@ -38,10 +41,12 @@ pub fn App() -> impl IntoView {
                     <Show when=move || is_auth.get()>
                         <button
                             on:click=move |_| sidebar_open.update(|o| *o = !*o)
-                            class="md:hidden fixed top-4 left-4 z-30 p-2 rounded-lg shadow-lg"
+                            aria-label="Abrir menú de navegación"
+                            aria-expanded=move || sidebar_open.get()
+                            class="md:hidden fixed top-4 left-4 z-30 p-2 rounded-lg shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                             style="background:var(--uci-surface); border:1px solid var(--uci-border);"
                         >
-                            <svg style="width:24px;height:24px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg style="width:24px;height:24px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
                         </button>
@@ -107,6 +112,7 @@ pub fn App() -> impl IntoView {
                     </Routes>
                 </main>
             </div>
+            <crate::stores::ToastContainer />
         </Router>
     }
 }
@@ -176,9 +182,10 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     </div>
                     <button
                         on:click=close_sidebar
-                        class="md:hidden ml-auto p-2 hover:bg-uci-border/30 rounded-lg"
+                        aria-label="Cerrar menú de navegación"
+                        class="md:hidden ml-auto p-2 hover:bg-uci-border/30 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                     >
-                        <svg style="width:20px;height:20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg style="width:20px;height:20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -260,15 +267,16 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         LocalStorage::delete("dmart_auth");
                         window().location().reload().unwrap_or_default();
                     }
+                    aria-label="Cerrar sesión"
                     style="
-                        width:100%; padding:10px 16px; 
+                        width:100%; padding:10px 16px;
                         background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);
                         border-radius:10px; color:var(--uci-critical); font-size:13px; font-weight:600;
                         cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
                         transition:all 0.2s;
                     "
                 >
-                    <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
                     "Cerrar Sesión"

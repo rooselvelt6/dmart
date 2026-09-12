@@ -7,6 +7,43 @@ pub fn Spinner() -> impl IntoView {
     }
 }
 
+/// Estado de carga reutilizable (accesible).
+#[component]
+pub fn LoadingState(label: &'static str) -> impl IntoView {
+    view! {
+        <div
+            class="flex items-center justify-center gap-3 p-10"
+            style="color:var(--uci-muted);"
+            role="status"
+            aria-live="polite"
+            aria-label=move || label
+        >
+            <Spinner />
+            <span style="font-size:14px;">{label}</span>
+        </div>
+    }
+}
+
+/// Estado de error reutilizable con botón de reintento.
+#[component]
+pub fn ErrorState(message: String, on_retry: Option<Callback<()>>) -> impl IntoView {
+    view! {
+        <div
+            class="flex flex-col items-center justify-center gap-3 p-10 text-center rounded-lg"
+            style="background:var(--uci-surface); color:var(--uci-text);"
+            role="alert"
+        >
+            <div style="font-size:28px;" aria-hidden="true">"⚠"</div>
+            <p style="font-size:14px; margin:0; max-width:420px; color:var(--uci-muted);">{move || message.clone()}</p>
+            {move || on_retry.map(|cb| {
+                view! {
+                    <button class="btn-primary" on:click=move |_| cb.run(())>"Reintentar"</button>
+                }
+            })}
+        </div>
+    }
+}
+
 #[component]
 pub fn Badge(label: &'static str) -> impl IntoView {
     view! {

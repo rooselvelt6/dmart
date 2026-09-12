@@ -85,6 +85,9 @@ pub fn build_api_router(
     let api_router = Router::new()
         // Health check
         .route("/health", get(health_check))
+        // Realtime (SSE)
+        .route("/realtime/stream", get(crate::realtime::realtime_stream))
+        .route("/realtime/ping", get(crate::realtime::realtime_ping))
         // Stats
         .route("/stats", get(stats::get_stats))
         // Admin

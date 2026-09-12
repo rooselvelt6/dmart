@@ -93,8 +93,8 @@ pub fn PatientDetailPage() -> impl IntoView {
                                             <a href=format!("/api/patients/{}/export/csv", p.patient_id) class="btn-outline px-4 py-3" title="CSV">
                                                 <i class="fa-solid fa-file-csv mr-2"></i>"CSV"
                                             </a>
-                                            <button on:click=move |_| show_delete_modal.set(true) class="btn-danger p-2" title="Eliminar">
-                                                <i class="fa-solid fa-trash"></i>
+                                            <button on:click=move |_| show_delete_modal.set(true) class="btn-danger p-2" title="Eliminar" aria-label="Eliminar paciente">
+                                                <i class="fa-solid fa-trash" aria-hidden="true"></i>
                                             </button>
                                         </div>
                                     </div>
@@ -200,7 +200,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                     <h3 class="text-xs font-bold text-uci-accent uppercase tracking-widest mb-5 flex items-center gap-2">
                                         <i class="fa-solid fa-chart-line"></i>"Evolución del APACHE II"
                                     </h3>
-                                    <Suspense fallback=move || view! { <div class="h-48 flex items-center justify-center text-uci-muted"><i class="fa-solid fa-spinner fa-spin text-xl"></i>" Cargando..."</div> }>
+                                    <Suspense fallback=move || view! { <div class="h-48 flex items-center justify-center"><crate::components::ui_kit::LoadingState label="Cargando evolución..." /></div> }>
                                         {move || measurements_res.get().map(|res_wrapper| match res_wrapper {
                                             Ok(ms) if ms.is_empty() => Either::Left(view! {
                                                 <div class="h-48 flex flex-col items-center justify-center text-uci-muted bg-uci-bg/30 rounded-xl">
