@@ -130,27 +130,7 @@ pub async fn create_patient(
     let equipos_ids = req.equipos_ids;
     let pid = patient.patient_id.clone();
 
-    if let (Some(cama_id), Some(_pnombre)) = (&patient.cama_id, &patient.cama_numero) {
-        let nombre_completo = patient.nombre_completo();
-        if let Err(e) =
-            db_ops::asignar_cama_paciente(&db, cama_id, &patient.patient_id, &nombre_completo).await
-        {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<Patient>::err(format!(
-                    "Error asignando cama: {}",
-                    e
-                ))),
-            )
-                .into_response();
-        }
-
-        for equipo_id in &equipos_ids {
-            let _ = db_ops::asignar_equipo_cama(&db, equipo_id, cama_id).await;
-        }
-    }
-
-    match db_ops::create_patient(&db, patient).await {
+    match db_ops::create_patient_with_assignments(&db, patient, &equipos_ids).await {
         Ok(p) => {
             if let Some(audit) = crate::audit::audit() {
                 let _ = audit
@@ -285,19 +265,20 @@ pub async fn egreso_paciente(
     let paciente = db_ops::get_patient(&db, &id).await;
 
     match paciente {
-        Ok(Some(p)) => {
-            if let Some(cama_id) = &p.cama_id {
-                let _ = db_ops::liberar_equipos_de_cama(&db, cama_id).await;
-                let _ = db_ops::liberar_cama(&db, cama_id).await;
-            }
-            (
+        Ok(Some(p)) => match db_ops::egresar_paciente(&db, &p).await {
+            Ok(_) => (
                 StatusCode::OK,
                 Json(ApiResponse::ok(
                     "Paciente egresado, cama y equipos liberados",
                 )),
             )
-                .into_response()
-        }
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<String>::err(e.to_string())),
+            )
+                .into_response(),
+        },
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ApiResponse::<String>::err("Paciente no encontrado")),

@@ -1,3 +1,4 @@
+use crate::audit::{AuditQuery, AuditService};
 use crate::auth::{hash_password, parse_role};
 use crate::db::Database;
 use anyhow::Error;
@@ -428,6 +429,77 @@ pub async fn toggle_user_active(
     } else {
         Ok(Json(ApiResponse::err("Usuario no encontrado")))
     }
+}
+
+// ─── Auditoría (HIPAA) ──────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct AuditQueryParams {
+    pub limit: Option<usize>,
+    pub user_id: Option<String>,
+    pub action: Option<String>,
+    pub resource: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+pub struct RetentionResponse {
+    pub retention_years: i64,
+    pub deleted_logs: usize,
+}
+
+fn audit_service() -> Result<AuditService, (StatusCode, String)> {
+    crate::audit::audit().cloned().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Auditoría no inicializada".to_string(),
+        )
+    })
+}
+
+pub async fn get_audit_logs_api(
+    Query(params): Query<AuditQueryParams>,
+) -> ApiResult<Vec<crate::audit::AuditLog>> {
+    let service = audit_service()?;
+    let limit = params.limit.unwrap_or(50).min(200);
+    let action = params.action.as_deref().and_then(|a| a.parse().ok());
+    let query = AuditQuery {
+        user_id: params.user_id,
+        action,
+        resource: params.resource,
+        start_date: params.start_date,
+        end_date: params.end_date,
+        limit: Some(limit),
+    };
+    let logs = service
+        .query(query)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(ApiResponse::ok(logs)))
+}
+
+pub async fn get_audit_critical_api(
+    Query(params): Query<AuditQueryParams>,
+) -> ApiResult<Vec<crate::audit::AuditLog>> {
+    let service = audit_service()?;
+    let logs = service
+        .get_critical_events(params.limit.unwrap_or(50).min(200))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(ApiResponse::ok(logs)))
+}
+
+pub async fn run_audit_retention_cleanup() -> ApiResult<RetentionResponse> {
+    let service = audit_service()?;
+    let deleted_logs = service
+        .cleanup_old_logs()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(ApiResponse::ok(RetentionResponse {
+        retention_years: crate::audit::AUDIT_RETENTION_YEARS,
+        deleted_logs,
+    })))
 }
 
 // ─── Asignar paciente a cama (para registro de paciente) ───────────

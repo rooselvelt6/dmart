@@ -42,6 +42,9 @@ fn jwt_expiry_hours() -> i64 {
     })
 }
 
+/// Validez (segundos) del token de reto emitido tras el primer factor MFA.
+const MFA_CHALLENGE_SECONDS: i64 = 5 * 60;
+
 fn jwt_secret() -> &'static [u8] {
     static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
     JWT_SECRET.get_or_init(|| {
@@ -104,6 +107,12 @@ pub struct Claims {
     pub permissions: Vec<String>,
     pub exp: i64,
     pub iat: i64,
+    #[serde(default = "default_token_scope")]
+    pub scope: String,
+}
+
+fn default_token_scope() -> String {
+    "session".to_string()
 }
 
 impl Claims {
@@ -201,10 +210,17 @@ impl AuthService {
         {
             Some(u) => u,
             None => {
-                let users: Vec<User> = self.db.select("users").await.map_err(|e| e.to_string())?;
+                let users: Vec<User> = self
+                    .db
+                    .query("SELECT * FROM users WHERE username = $username LIMIT 1")
+                    .bind(("username", username.to_string()))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .take(0)
+                    .map_err(|e| e.to_string())?;
                 users
                     .into_iter()
-                    .find(|u| u.username == username)
+                    .next()
                     .ok_or_else(|| "Usuario no encontrado".to_string())?
             }
         };
@@ -222,6 +238,39 @@ impl AuthService {
 
         let permissions = crate::rbac::Role::from(user.rol.clone()).permissions();
 
+        let mfa_enabled = crate::db::get_mfa_settings(&self.db, &user.user_id)
+            .await
+            .map(|s| s.map(|s| s.enabled).unwrap_or(false))
+            .unwrap_or(false);
+
+        if mfa_enabled {
+            // Primer factor correcto: emite un token de reto de corta duración.
+            // La sesión solo se completa tras validar el código TOTP.
+            let exp = chrono::Utc::now().timestamp() + MFA_CHALLENGE_SECONDS;
+            let iat = chrono::Utc::now().timestamp();
+            let claims = Claims {
+                sub: user.user_id.clone(),
+                username: user.username.clone(),
+                rol: user.rol.to_string(),
+                permissions,
+                exp,
+                iat,
+                scope: "mfa".to_string(),
+            };
+            let token = encode(
+                &Header::default(),
+                &claims,
+                &EncodingKey::from_secret(jwt_secret()),
+            )
+            .map_err(|e| e.to_string())?;
+
+            return Ok(LoginResponse {
+                token,
+                user: UserInfo::from(&user),
+                mfa_required: true,
+            });
+        }
+
         let exp_hours = jwt_expiry_hours();
         let exp = chrono::Utc::now().timestamp() + exp_hours * 3600;
         let iat = chrono::Utc::now().timestamp();
@@ -233,6 +282,47 @@ impl AuthService {
             permissions,
             exp,
             iat,
+            scope: "session".to_string(),
+        };
+
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(jwt_secret()),
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(LoginResponse {
+            token,
+            user: UserInfo::from(&user),
+            mfa_required: false,
+        })
+    }
+
+    /// Emite el token de sesión completo tras una verificación MFA satisfactoria.
+    pub async fn complete_mfa_login(&self, user_id: &str) -> Result<LoginResponse, String> {
+        let user: User = self
+            .get_user(user_id)
+            .await?
+            .ok_or_else(|| "Usuario no encontrado".to_string())?;
+
+        if !user.activo {
+            return Err("Usuario inactivo".to_string());
+        }
+
+        let permissions = crate::rbac::Role::from(user.rol.clone()).permissions();
+        let exp_hours = jwt_expiry_hours();
+        let exp = chrono::Utc::now().timestamp() + exp_hours * 3600;
+        let iat = chrono::Utc::now().timestamp();
+
+        let claims = Claims {
+            sub: user.user_id.clone(),
+            username: user.username.clone(),
+            rol: user.rol.to_string(),
+            permissions,
+            exp,
+            iat,
+            scope: "session".to_string(),
         };
 
         let token = encode(
@@ -276,18 +366,47 @@ impl AuthService {
     }
 
     pub async fn get_user(&self, user_id: &str) -> Result<Option<User>, String> {
-        let users: Vec<User> = self.db.select("users").await.map_err(|e| e.to_string())?;
+        let users: Vec<User> = self
+            .db
+            .query("SELECT * FROM users WHERE user_id = $user_id LIMIT 1")
+            .bind(("user_id", user_id.to_string()))
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+        Ok(users.into_iter().next())
+    }
 
-        Ok(users.into_iter().find(|u| u.user_id == user_id))
+    async fn load_user_by_username_or_id(
+        &self,
+        username: &str,
+        user_id: &str,
+    ) -> Result<Option<User>, String> {
+        let users: Vec<User> = self
+            .db
+            .query("SELECT * FROM users WHERE username = $username OR user_id = $user_id LIMIT 1")
+            .bind(("username", username.to_string()))
+            .bind(("user_id", user_id.to_string()))
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+        Ok(users.into_iter().next())
     }
 
     pub async fn refresh_token(&self, token: &str) -> Result<LoginResponse, String> {
         let claims = self.verify_token(token)?;
-        let user: Option<User> = self
-            .db
-            .select(("users", &claims.username))
-            .await
-            .map_err(|e| e.to_string())?;
+        if claims.scope != "session" {
+            return Err("Token de reto MFA no es una sesión válida".to_string());
+        }
+
+        let user = match self.db.select(("users", &claims.sub)).await {
+            Ok(Some(u)) => Some(u),
+            _ => {
+                self.load_user_by_username_or_id(&claims.username, &claims.sub)
+                    .await?
+            }
+        };
         let user = user.ok_or_else(|| "Usuario no encontrado".to_string())?;
 
         if !user.activo {
@@ -307,6 +426,7 @@ impl AuthService {
             permissions,
             exp,
             iat,
+            scope: "session".to_string(),
         };
 
         let token = encode(

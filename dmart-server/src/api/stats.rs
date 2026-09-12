@@ -1,6 +1,7 @@
 use crate::db as db_ops;
 use crate::db::Database;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use chrono::Datelike;
 use dmart_shared::models::*;
 use serde::Serialize;
 
@@ -9,7 +10,7 @@ fn calculate_age(fecha_nacimiento: &str) -> u8 {
         return 0;
     }
     let birth_year: i32 = fecha_nacimiento[..4].parse().unwrap_or(2000);
-    let current_year = 2026;
+    let current_year = chrono::Utc::now().year();
     (current_year - birth_year).max(0) as u8
 }
 
@@ -40,77 +41,27 @@ pub struct PromedioScores {
 }
 
 pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
-    // Load up to 50000 patients for stats computation
-    let result = db_ops::list_patients(&db, 50000, 0).await;
+    let agg_result = db_ops::aggregate_patient_stats(&db).await;
+    let recent_result = db_ops::list_patients(&db, 50, 0).await;
 
-    match result {
-        Ok(patients) => {
-            let total = patients.len();
-
-            let criticos = patients
-                .iter()
-                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Critico))
-                .count();
-            let severos = patients
-                .iter()
-                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Severo))
-                .count();
-            let moderados = patients
-                .iter()
-                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Moderado))
-                .count();
-            let bajos = patients
-                .iter()
-                .filter(|p| matches!(p.estado_gravedad, SeverityLevel::Bajo))
-                .count();
-
-            let mut apache_sum = 0u32;
-            let mut gcs_sum = 0u32;
-            let mut sofa_sum = 0u32;
-            let mut saps_sum = 0u32;
-            let mut news_sum = 0u32;
-            let mut count_with_scores = 0usize;
-
-            for p in &patients {
-                if let Some(s) = p.ultimo_apache_score {
-                    apache_sum += s;
-                }
-                if let Some(s) = p.ultimo_gcs_score {
-                    gcs_sum += s as u32;
-                }
-                if let Some(s) = p.ultimo_sofa_score {
-                    sofa_sum += s;
-                }
-                if let Some(s) = p.ultimo_saps3_score {
-                    saps_sum += s;
-                }
-                if let Some(s) = p.ultimo_news2_score {
-                    news_sum += s;
-                }
-                if p.ultimo_apache_score.is_some() || p.ultimo_sofa_score.is_some() {
-                    count_with_scores += 1;
-                }
-            }
-
-            let count = if count_with_scores > 0 {
-                count_with_scores
-            } else {
-                1
+    match (agg_result, recent_result) {
+        (Ok(agg), Ok(patients)) => {
+            let gravedad = GravedadStats {
+                criticos: agg.criticos as usize,
+                severos: agg.severos as usize,
+                moderados: agg.moderados as usize,
+                bajos: agg.bajos as usize,
             };
+
+            let avg =
+                |sum: f64, n: u64| -> f32 { if n > 0 { (sum / n as f64) as f32 } else { 0.0 } };
 
             let promedios = PromedioScores {
-                apache_promedio: apache_sum as f32 / count as f32,
-                gcs_promedio: gcs_sum as f32 / count as f32,
-                sofa_promedio: sofa_sum as f32 / count as f32,
-                saps3_promedio: saps_sum as f32 / count as f32,
-                news2_promedio: news_sum as f32 / count as f32,
-            };
-
-            let gravedad = GravedadStats {
-                criticos,
-                severos,
-                moderados,
-                bajos,
+                apache_promedio: avg(agg.apache_sum, agg.apache_n),
+                gcs_promedio: avg(agg.gcs_sum, agg.gcs_n),
+                sofa_promedio: avg(agg.sofa_sum, agg.sofa_n),
+                saps3_promedio: avg(agg.saps3_sum, agg.saps3_n),
+                news2_promedio: avg(agg.news2_sum, agg.news2_n),
             };
 
             let items: Vec<PatientListItem> = patients
@@ -137,8 +88,8 @@ pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
                 .collect();
 
             let stats = UciStats {
-                total_pacientes: total,
-                pacientes_activos: total,
+                total_pacientes: agg.total as usize,
+                pacientes_activos: agg.total as usize,
                 por_gravedad: gravedad,
                 promedios,
                 reciente: items,
@@ -146,7 +97,7 @@ pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
 
             (StatusCode::OK, Json(ApiResponse::ok(stats))).into_response()
         }
-        Err(e) => (
+        (Err(e), _) | (_, Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<UciStats>::err(e.to_string())),
         )

@@ -20,6 +20,10 @@ pub fn router() -> Router<Database> {
         .route("/users", get(list_users))
         .route("/register", post(register))
         .route("/refresh", post(refresh))
+        .route("/mfa/setup", post(crate::mfa::setup))
+        .route("/mfa/confirm", post(crate::mfa::confirm))
+        .route("/mfa/verify", post(crate::mfa::verify))
+        .route("/mfa/disable", post(crate::mfa::disable))
 }
 
 async fn login(State(db): State<Database>, Json(req): Json<LoginRequest>) -> Response {

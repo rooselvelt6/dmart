@@ -1,8 +1,9 @@
 //! Registro de auditoría PHI (HIPAA).
 //!
-//! El query/cleanup de logs (retención 6 años, detección de accesos denegados,
-//! exportaciones) aún no está expuesto vía API; se conecta en Fases 1-2 del
-//! roadmap (RBAC + observabilidad), por eso el `allow(dead_code)`.
+//! El servicio se inicializa en `main()` y las consultas se exponen vía
+//! `/api/admin/audit*`. La limpieza por retención (6 años) responde a
+//! `POST /api/admin/audit/cleanup` usando `cleanup_old_logs`.
+//! Algunos helpers auxiliares permanecen sin uso por ahora.
 #![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
@@ -26,7 +27,7 @@ pub fn audit() -> Option<&'static AuditService> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditLog {
-    pub id: String,
+    pub uid: String,
     pub timestamp: String,
     pub user_id: Option<String>,
     pub username: Option<String>,
@@ -103,6 +104,30 @@ impl AuditAction {
     }
 }
 
+impl std::str::FromStr for AuditAction {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "LOGIN" => Ok(AuditAction::Login),
+            "LOGOUT" => Ok(AuditAction::Logout),
+            "LOGIN_FAILED" => Ok(AuditAction::LoginFailed),
+            "LOGOUT_FAILED" => Ok(AuditAction::LogoutFailed),
+            "CREATE" => Ok(AuditAction::Create),
+            "READ" => Ok(AuditAction::Read),
+            "UPDATE" => Ok(AuditAction::Update),
+            "DELETE" => Ok(AuditAction::Delete),
+            "EXPORT" => Ok(AuditAction::Export),
+            "CONFIG_CHANGE" => Ok(AuditAction::ConfigChange),
+            "AUTH_CHANGE" => Ok(AuditAction::AuthChange),
+            "ACCESS_DENIED" => Ok(AuditAction::AccessDenied),
+            "DATA_ACCESS" => Ok(AuditAction::DataAccess),
+            "DATA_MODIFICATION" => Ok(AuditAction::DataModification),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditQuery {
     pub user_id: Option<String>,
@@ -113,6 +138,7 @@ pub struct AuditQuery {
     pub limit: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct AuditService {
     db: Surreal<Db>,
 }
@@ -137,7 +163,7 @@ impl AuditService {
         error_message: Option<&str>,
     ) -> Result<AuditLog, String> {
         let log = AuditLog {
-            id: Uuid::new_v4().to_string(),
+            uid: Uuid::new_v4().to_string(),
             timestamp: Utc::now().to_rfc3339(),
             user_id: user_id.map(String::from),
             username: username.map(String::from),
@@ -153,7 +179,7 @@ impl AuditService {
 
         let created: Option<AuditLog> = self
             .db
-            .create(("audit_logs", log.id.clone()))
+            .create(("audit_logs", log.uid.clone()))
             .content(log)
             .await
             .map_err(|e| e.to_string())?;
@@ -310,89 +336,99 @@ impl AuditService {
     }
 
     pub async fn query(&self, query: AuditQuery) -> Result<Vec<AuditLog>, String> {
-        let mut logs: Vec<AuditLog> = self
-            .db
-            .select("audit_logs")
-            .await
-            .map_err(|e| e.to_string())?;
+        let mut sql = String::from("SELECT * FROM audit_logs WHERE true");
+        if query.user_id.is_some() {
+            sql.push_str(" AND user_id = $user_id");
+        }
+        if query.action.is_some() {
+            sql.push_str(" AND action = $action");
+        }
+        if query.resource.is_some() {
+            sql.push_str(" AND resource = $resource");
+        }
+        if query.start_date.is_some() {
+            sql.push_str(" AND timestamp >= $start_date");
+        }
+        if query.end_date.is_some() {
+            sql.push_str(" AND timestamp <= $end_date");
+        }
+        sql.push_str(" ORDER BY timestamp DESC");
+        if query.limit.is_some() {
+            sql.push_str(" LIMIT $limit");
+        }
 
+        let mut s = self.db.query(sql);
         if let Some(user_id) = &query.user_id {
-            logs.retain(|l| l.user_id.as_ref() == Some(user_id));
+            s = s.bind(("user_id", user_id.clone()));
         }
-
         if let Some(action) = &query.action {
-            logs.retain(|l| l.action == *action);
+            s = s.bind(("action", *action));
         }
-
         if let Some(resource) = &query.resource {
-            logs.retain(|l| l.resource == *resource);
+            s = s.bind(("resource", resource.clone()));
         }
-
         if let Some(start_date) = &query.start_date {
-            logs.retain(|l| l.timestamp >= *start_date);
+            s = s.bind(("start_date", start_date.clone()));
         }
-
         if let Some(end_date) = &query.end_date {
-            logs.retain(|l| l.timestamp <= *end_date);
+            s = s.bind(("end_date", end_date.clone()));
         }
-
-        logs.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-
         if let Some(limit) = query.limit {
-            logs.truncate(limit);
+            s = s.bind(("limit", limit as i64));
         }
 
+        let logs: Vec<AuditLog> = s
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
         Ok(logs)
     }
 
     pub async fn get_recent(&self, limit: usize) -> Result<Vec<AuditLog>, String> {
         let logs: Vec<AuditLog> = self
             .db
-            .select("audit_logs")
+            .query("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT $limit")
+            .bind(("limit", limit as i64))
             .await
+            .map_err(|e| e.to_string())?
+            .take(0)
             .map_err(|e| e.to_string())?;
-
-        let mut logs = logs;
-        logs.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-        logs.truncate(limit);
-
         Ok(logs)
     }
 
     pub async fn get_failed_logins(&self, limit: usize) -> Result<Vec<AuditLog>, String> {
         let logs: Vec<AuditLog> = self
             .db
-            .select("audit_logs")
+            .query("SELECT * FROM audit_logs WHERE action = $action ORDER BY timestamp DESC LIMIT $limit")
+            .bind(("action", AuditAction::LoginFailed))
+            .bind(("limit", limit as i64))
             .await
+            .map_err(|e| e.to_string())?
+            .take(0)
             .map_err(|e| e.to_string())?;
-
-        let mut failed: Vec<AuditLog> = logs
-            .into_iter()
-            .filter(|l| matches!(l.action, AuditAction::LoginFailed))
-            .collect();
-
-        failed.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-        failed.truncate(limit);
-
-        Ok(failed)
+        Ok(logs)
     }
 
     pub async fn get_critical_events(&self, limit: usize) -> Result<Vec<AuditLog>, String> {
+        let critical: Vec<AuditAction> = vec![
+            AuditAction::LoginFailed,
+            AuditAction::LogoutFailed,
+            AuditAction::Delete,
+            AuditAction::ConfigChange,
+            AuditAction::AuthChange,
+            AuditAction::AccessDenied,
+        ];
         let logs: Vec<AuditLog> = self
             .db
-            .select("audit_logs")
+            .query("SELECT * FROM audit_logs WHERE action IN $critical ORDER BY timestamp DESC LIMIT $limit")
+            .bind(("critical", critical))
+            .bind(("limit", limit as i64))
             .await
+            .map_err(|e| e.to_string())?
+            .take(0)
             .map_err(|e| e.to_string())?;
-
-        let mut critical: Vec<AuditLog> = logs
-            .into_iter()
-            .filter(|l| l.action.is_critical())
-            .collect();
-
-        critical.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-        critical.truncate(limit);
-
-        Ok(critical)
+        Ok(logs)
     }
 
     pub async fn get_retention_days(&self) -> i64 {
@@ -409,31 +445,31 @@ impl AuditService {
     }
 
     pub async fn cleanup_old_logs(&self) -> Result<usize, String> {
-        let logs: Vec<AuditLog> = self
+        let cutoff =
+            (Utc::now() - chrono::Duration::days(AUDIT_RETENTION_YEARS * 365)).to_rfc3339();
+        // Contar cuántos se van a borrar
+        let count: Vec<serde_json::Value> = self
             .db
-            .select("audit_logs")
+            .query("SELECT count() FROM audit_logs WHERE timestamp < $cutoff")
+            .bind(("cutoff", cutoff.clone()))
             .await
+            .map_err(|e| e.to_string())?
+            .take(0)
             .map_err(|e| e.to_string())?;
+        let to_delete = count
+            .first()
+            .and_then(|v| v.get("count"))
+            .and_then(|c| c.as_u64())
+            .unwrap_or(0) as usize;
 
-        let cutoff = Utc::now() - chrono::Duration::days(AUDIT_RETENTION_YEARS * 365);
-        let mut deleted = 0;
-
-        for log in logs {
-            if let Ok(dt) = DateTime::parse_from_rfc3339(&log.timestamp)
-                && dt.with_timezone(&Utc) < cutoff
-            {
-                let _: Option<AuditLog> = self
-                    .db
-                    .delete(("audit_logs", log.id.clone()))
-                    .await
-                    .map_err(|e| e.to_string())
-                    .ok()
-                    .flatten();
-                deleted += 1;
-            }
+        if to_delete > 0 {
+            self.db
+                .query("DELETE FROM audit_logs WHERE timestamp < $cutoff")
+                .bind(("cutoff", cutoff))
+                .await
+                .map_err(|e| e.to_string())?;
         }
-
-        Ok(deleted)
+        Ok(to_delete)
     }
 }
 

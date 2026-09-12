@@ -142,6 +142,13 @@ pub fn build_api_router(
                 .delete(admin::delete_staff_api),
         )
         .route("/admin/staff/{id}/toggle", post(admin::toggle_user_active))
+        // Auditoría (HIPAA, retención 6 años)
+        .route("/admin/audit", get(admin::get_audit_logs_api))
+        .route("/admin/audit/critical", get(admin::get_audit_critical_api))
+        .route(
+            "/admin/audit/cleanup",
+            post(admin::run_audit_retention_cleanup),
+        )
         // Auth
         .nest("/auth", auth::router())
         // Patients
@@ -192,6 +199,10 @@ pub fn build_api_router(
         // FHIR R4
         .route("/fhir/Patient", get(fhir::fhir_patient_search))
         .route("/fhir/Patient/{id}", get(fhir::fhir_patient_get))
+        .route(
+            "/fhir/Patient/{id}/Observation",
+            get(fhir::fhir_observation_list),
+        )
         .with_state(database);
 
     // Apply security middleware (layers wrap from outside in)

@@ -855,6 +855,16 @@ impl From<&User> for UserInfo {
     }
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MfaSettings {
+    pub user_id: String,
+    pub enabled: bool,
+    pub secret: Option<String>,
+    pub pending_secret: Option<String>,
+    pub backup_codes: Vec<String>,
+    pub created_at: String,
+}
+
 /// Staff representation without sensitive fields (never exposes `password_hash`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StaffInfo {

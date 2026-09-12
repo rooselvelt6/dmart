@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::db::Database;
 use anyhow::Error;
 use axum::{
@@ -9,8 +7,6 @@ use axum::{
 };
 use dmart_shared::models::*;
 use serde::Serialize;
-
-type ApiResult<T> = Result<Json<ApiResponse<T>>, (StatusCode, String)>;
 
 fn err_to_str(e: Error) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
@@ -49,6 +45,13 @@ struct FhirBundle {
 #[derive(Serialize)]
 struct FhirBundleEntry {
     resource: FhirPatient,
+}
+
+#[derive(Serialize)]
+struct FhirObservationBundle {
+    resource_type: String,
+    total: usize,
+    entry: Vec<FhirObservation>,
 }
 
 #[derive(Serialize)]
@@ -175,4 +178,91 @@ pub async fn fhir_patient_get(
         serde_json::to_value(patient_to_fhir(&patient))
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
     ))
+}
+
+fn score_observation(
+    patient_id: &str,
+    code: &str,
+    display: &str,
+    value: u32,
+    unit: &str,
+    effective: &str,
+) -> FhirObservation {
+    FhirObservation {
+        resource_type: "Observation".to_string(),
+        id: format!("{}-{}", patient_id, code),
+        status: "final".to_string(),
+        code: FhirCodeableConcept {
+            coding: vec![FhirCoding {
+                system: "http://dmart.local/fhir/CodeSystem/scores".to_string(),
+                code: code.to_string(),
+                display: display.to_string(),
+            }],
+            text: display.to_string(),
+        },
+        subject: FhirReference {
+            reference: format!("Patient/{}", patient_id),
+        },
+        effective_date_time: effective.to_string(),
+        value_quantity: Some(FhirQuantity {
+            value: value as f32,
+            unit: unit.to_string(),
+        }),
+    }
+}
+
+/// GET /fhir/Patient/{id}/Observation — escalas y scores del paciente como
+/// recursos FHIR R4 (Bundle de tipo searchset).
+pub async fn fhir_observation_list(
+    State(db): State<Database>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let patient = crate::db::get_patient(&db, &id)
+        .await
+        .map_err(err_to_str)?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
+
+    let effective = patient.updated_at.clone();
+    let mut observations = Vec::new();
+
+    if let Some(gcs) = patient.ultimo_gcs_score {
+        observations.push(score_observation(
+            &patient.patient_id,
+            "gcs",
+            "Escala de coma de Glasgow (GCS)",
+            gcs as u32,
+            "puntos",
+            &effective,
+        ));
+    }
+    if let Some(apache) = patient.ultimo_apache_score {
+        observations.push(score_observation(
+            &patient.patient_id,
+            "apache2",
+            "APACHE II score",
+            apache,
+            "puntos",
+            &effective,
+        ));
+    }
+    if let Some(sofa) = patient.ultimo_sofa_score {
+        observations.push(score_observation(
+            &patient.patient_id,
+            "sofa",
+            "SOFA score",
+            sofa,
+            "puntos",
+            &effective,
+        ));
+    }
+
+    let bundle = FhirObservationBundle {
+        resource_type: "Bundle".to_string(),
+        total: observations.len(),
+        entry: observations,
+    };
+
+    Ok(Json(serde_json::to_value(bundle).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?))
 }

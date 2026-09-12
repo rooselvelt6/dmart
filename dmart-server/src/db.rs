@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use dmart_shared::models::*;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, SurrealKv};
@@ -17,7 +18,160 @@ pub async fn connect(path: &str) -> Result<Database> {
 
     let db = Surreal::new::<SurrealKv>(path).await?;
     db.use_ns("dmart").use_db("icu").await?;
+
+    // Esquema versionado: aplica índices y cambios pendientes (idempotente).
+    let applied = crate::migrations::run_migrations(&db).await?;
+    if !applied.is_empty() {
+        tracing::info!("🧬 Migrations applied: {}", applied.join(", "));
+    }
+
     Ok(Arc::new(db))
+}
+
+// ─── Diagnósticos CIE-10 (persistidos en SurrealDB) ─────────────────
+
+/// Seeds el catálogo CIE-10 en la tabla `diagnosticos` si aún no existe.
+/// El catálogo vive en `dmart_shared::models::diagnosticos_uci()` como única
+/// fuente, pero se persiste para sobrevivir reinicios.
+pub async fn seed_diagnosticos(db: &Surreal<Db>) -> Result<()> {
+    let existing: Vec<Diagnostico> = db.select("diagnosticos").await.unwrap_or_default();
+    if !existing.is_empty() {
+        return Ok(());
+    }
+    for d in diagnosticos_uci() {
+        let _: Option<Diagnostico> = db
+            .create(("diagnosticos", d.codigo.clone()))
+            .content(d)
+            .await?;
+    }
+    tracing::info!("🧬 Seeded {} CIE-10 diagnostics", diagnosticos_uci().len());
+    Ok(())
+}
+
+pub async fn list_diagnosticos(db: &Surreal<Db>) -> Result<Vec<Diagnostico>> {
+    let mut diags: Vec<Diagnostico> = db.select("diagnosticos").await?;
+    diags.sort_by(|a, b| a.codigo.cmp(&b.codigo));
+    Ok(diags)
+}
+
+pub async fn search_diagnosticos(db: &Surreal<Db>, query: &str) -> Result<Vec<Diagnostico>> {
+    let q = query.trim();
+    if q.is_empty() {
+        return list_diagnosticos(db).await;
+    }
+    let like = q.to_lowercase();
+    let diags: Vec<Diagnostico> = db
+        .query(
+            "SELECT * FROM diagnosticos WHERE \
+                string::contains(string::lowercase(codigo), $q) OR \
+                string::contains(string::lowercase(descripcion), $q) OR \
+                string::contains(string::lowercase(categoria), $q)",
+        )
+        .bind(("q", like))
+        .await?
+        .take(0)?;
+    Ok(diags)
+}
+
+// ─── MFA TOTP settings ───────────────────────────────────────────────
+
+pub async fn get_mfa_settings(db: &Surreal<Db>, user_id: &str) -> Result<Option<MfaSettings>> {
+    let settings: Option<MfaSettings> = db.select(("mfa_settings", user_id)).await?;
+    Ok(settings)
+}
+
+pub async fn upsert_mfa_settings(db: &Surreal<Db>, settings: MfaSettings) -> Result<()> {
+    let _: Vec<MfaSettings> = db
+        .query("UPSERT type::thing('mfa_settings', $id) CONTENT $data RETURN AFTER")
+        .bind(("id", settings.user_id.clone()))
+        .bind(("data", settings))
+        .await?
+        .take(0)?;
+    Ok(())
+}
+
+pub async fn delete_mfa_settings(db: &Surreal<Db>, user_id: &str) -> Result<()> {
+    let _: Option<MfaSettings> = db.delete(("mfa_settings", user_id)).await?;
+    Ok(())
+}
+
+// ─── Stats (agregaciones server-side, sin cargar filas) ──────────────
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PatientAggregates {
+    pub total: u64,
+    pub criticos: u64,
+    pub severos: u64,
+    pub moderados: u64,
+    pub bajos: u64,
+    pub apache_sum: f64,
+    pub apache_n: u64,
+    pub gcs_sum: f64,
+    pub gcs_n: u64,
+    pub sofa_sum: f64,
+    pub sofa_n: u64,
+    pub saps3_sum: f64,
+    pub saps3_n: u64,
+    pub news2_sum: f64,
+    pub news2_n: u64,
+}
+
+/// Calcula totales y promedios de scores con agregaciones SurrealQL en lugar
+/// de cargar los pacientes en memoria.
+pub async fn aggregate_patient_stats(db: &Surreal<Db>) -> Result<PatientAggregates> {
+    let mut agg = PatientAggregates::default();
+
+    let groups: Vec<serde_json::Value> = db
+        .query("SELECT estado_gravedad, count() AS n FROM patients GROUP BY estado_gravedad")
+        .await?
+        .take(0)?;
+    for row in groups {
+        let (Some(sev), Some(n)) = (
+            row.get("estado_gravedad").and_then(|v| v.as_str()),
+            row.get("n").and_then(|v| v.as_u64()),
+        ) else {
+            continue;
+        };
+        match sev {
+            "Critico" => agg.criticos = n,
+            "Severo" => agg.severos = n,
+            "Moderado" => agg.moderados = n,
+            _ => agg.bajos += n,
+        }
+    }
+
+    let scores: Vec<serde_json::Value> = db
+        .query(
+            "SELECT ultimo_apache_score, ultimo_gcs_score, ultimo_sofa_score, ultimo_saps3_score, ultimo_news2_score FROM patients",
+        )
+        .await?
+        .take(0)?;
+
+    agg.total = scores.len() as u64;
+    for row in scores {
+        if let Some(v) = row.get("ultimo_apache_score").and_then(|v| v.as_f64()) {
+            agg.apache_sum += v;
+            agg.apache_n += 1;
+        }
+        if let Some(v) = row.get("ultimo_gcs_score").and_then(|v| v.as_f64()) {
+            agg.gcs_sum += v;
+            agg.gcs_n += 1;
+        }
+        if let Some(v) = row.get("ultimo_sofa_score").and_then(|v| v.as_f64()) {
+            agg.sofa_sum += v;
+            agg.sofa_n += 1;
+        }
+        if let Some(v) = row.get("ultimo_saps3_score").and_then(|v| v.as_f64()) {
+            agg.saps3_sum += v;
+            agg.saps3_n += 1;
+        }
+        if let Some(v) = row.get("ultimo_news2_score").and_then(|v| v.as_f64()) {
+            agg.news2_sum += v;
+            agg.news2_n += 1;
+        }
+    }
+
+    Ok(agg)
 }
 
 // ─── Patients ──────────────────────────────────────────────────────────────
@@ -37,6 +191,84 @@ pub async fn create_patient(db: &Surreal<Db>, mut patient: Patient) -> Result<Pa
 pub async fn get_patient(db: &Surreal<Db>, id: &str) -> Result<Option<Patient>> {
     let patient: Option<Patient> = db.select(("patients", id)).await?;
     Ok(patient)
+}
+
+/// Crea el paciente asignando cama y equipos dentro de una única transacción
+/// SurrealQL. Si cualquier paso falla (cama ocupada, error de escritura), toda
+/// la transacción se revierte y no quedan camas ni equipos huérfanos.
+pub async fn create_patient_with_assignments(
+    db: &Surreal<Db>,
+    patient: Patient,
+    equipos_ids: &[String],
+) -> Result<Patient> {
+    let patient_id = if patient.patient_id.is_empty() {
+        Uuid::new_v4().to_string()
+    } else {
+        patient.patient_id.clone()
+    };
+    let cama_id = patient.cama_id.clone().unwrap_or_default();
+    let paciente_nombre = patient.nombre_completo();
+
+    if !cama_id.is_empty() {
+        let cama = get_cama(db, &cama_id).await?;
+        let cama = cama.ok_or_else(|| anyhow::anyhow!("Cama no encontrada"))?;
+        if cama.estado != EstadoCama::Libre {
+            return Err(anyhow::anyhow!("Cama no disponible o no encontrada"));
+        }
+    }
+
+    let sql = r#"
+        BEGIN TRANSACTION;
+        IF string::len($cama_id) > 0 {
+            LET $cama = (SELECT * FROM camas WHERE id = type::thing('camas', $cama_id) AND estado = 'Libre' LIMIT 1);
+            IF array::len($cama) = 0 { THROW 'Cama no disponible o no encontrada'; };
+            UPDATE type::thing('camas', $cama_id) SET estado = 'Ocupada', paciente_id = $pid, paciente_nombre = $pnombre;
+            FOR $e in $equipos {
+                UPDATE type::thing('equipos', $e) SET cama_id = $cama_id;
+            };
+        };
+LET $created = CREATE type::thing('patients', $pid) CONTENT $patient RETURN AFTER;
+        COMMIT TRANSACTION;
+        RETURN $created;
+    "#;
+
+    let mut res = db
+        .query(sql)
+        .bind(("cama_id", cama_id))
+        .bind(("pid", patient_id.clone()))
+        .bind(("pnombre", paciente_nombre))
+        .bind(("equipos", equipos_ids.to_vec()))
+        .bind(("patient", patient))
+        .await?;
+
+    if let Some((_, err)) = res.take_errors().into_iter().next() {
+        return Err(anyhow::anyhow!("{}", err));
+    }
+
+    get_patient(db, &patient_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Failed to create patient"))
+}
+
+/// Libera la cama y sus equipos al egresar un paciente, todo en una sola
+/// transacción SurrealQL.
+pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient) -> Result<()> {
+    let Some(cama_id) = &patient.cama_id else {
+        return Ok(());
+    };
+
+    let sql = r#"
+        BEGIN TRANSACTION;
+        UPDATE type::table('equipos') SET cama_id = NONE WHERE cama_id = $cama_id;
+        UPDATE type::thing('camas', $cama_id) SET estado = 'Libre', paciente_id = NONE, paciente_nombre = NONE;
+        COMMIT TRANSACTION;
+    "#;
+
+    let mut res = db.query(sql).bind(("cama_id", cama_id.clone())).await?;
+    if let Some((_, err)) = res.take_errors().into_iter().next() {
+        return Err(anyhow::anyhow!("{}", err));
+    }
+    Ok(())
 }
 
 pub async fn update_patient(
@@ -206,21 +438,18 @@ pub async fn create_cama(db: &Surreal<Db>, mut cama: Cama) -> Result<Cama> {
     created.ok_or_else(|| anyhow::anyhow!("Failed to create cama"))
 }
 
-pub async fn get_cama_libre_por_tipo(db: &Surreal<Db>, tipo: &TipoCama) -> Result<Option<Cama>> {
-    let todas: Vec<Cama> = db.select("camas").await?;
-    Ok(todas
-        .into_iter()
-        .find(|c| c.estado == EstadoCama::Libre && c.tipo == *tipo))
-}
-
 pub async fn get_cama(db: &Surreal<Db>, id: &str) -> Result<Option<Cama>> {
     let cama: Option<Cama> = db.select(("camas", id)).await?;
     Ok(cama)
 }
 
 pub async fn get_cama_by_numero(db: &Surreal<Db>, numero: u8) -> Result<Option<Cama>> {
-    let todas: Vec<Cama> = db.select("camas").await?;
-    Ok(todas.into_iter().find(|c| c.numero == numero))
+    let camas: Vec<Cama> = db
+        .query("SELECT * FROM camas WHERE numero = $numero LIMIT 1")
+        .bind(("numero", numero))
+        .await?
+        .take(0)?;
+    Ok(camas.into_iter().next())
 }
 
 pub async fn update_cama(db: &Surreal<Db>, id: &str, cama: Cama) -> Result<Option<Cama>> {
@@ -252,34 +481,69 @@ pub async fn count_camas(db: &Surreal<Db>) -> Result<u64> {
 }
 
 pub async fn get_cama_libre(db: &Surreal<Db>) -> Result<Option<Cama>> {
-    let todas: Vec<Cama> = db.select("camas").await?;
-    Ok(todas.into_iter().find(|c| c.estado == EstadoCama::Libre))
+    let estado = format!("{:?}", EstadoCama::Libre);
+    let camas: Vec<Cama> = db
+        .query("SELECT * FROM camas WHERE estado = $estado LIMIT 1")
+        .bind(("estado", estado))
+        .await?
+        .take(0)?;
+    Ok(camas.into_iter().next())
 }
 
 pub async fn count_camas_por_tipo(
     db: &Surreal<Db>,
 ) -> Result<Vec<dmart_shared::models::TipoCamaCount>> {
-    use std::collections::HashMap;
-    let todas: Vec<Cama> = db.select("camas").await?;
-    let mut map: HashMap<String, (u8, u8)> = HashMap::new();
-    for c in &todas {
-        let key = c.tipo.label().to_string();
-        let entry = map.entry(key).or_insert((0, 0));
-        entry.0 += 1;
-        if c.estado == EstadoCama::Libre {
-            entry.1 += 1;
+    let estado = format!("{:?}", EstadoCama::Libre);
+
+    let totales: Vec<serde_json::Value> = db
+        .query("SELECT tipo, count() AS total FROM camas GROUP BY tipo")
+        .await?
+        .take(0)?;
+    let libres: Vec<serde_json::Value> = db
+        .query("SELECT tipo, count() AS libres FROM camas WHERE estado = $estado GROUP BY tipo")
+        .bind(("estado", estado))
+        .await?
+        .take(0)?;
+
+    let mut map: std::collections::HashMap<String, (u8, u8)> = std::collections::HashMap::new();
+    for row in totales {
+        if let (Some(tipo), Some(total)) = (
+            row.get("tipo").and_then(|v| v.as_str()),
+            row.get("total").and_then(|v| v.as_u64()),
+        ) {
+            map.insert(tipo.to_string(), (total as u8, 0));
         }
     }
+    for row in libres {
+        if let (Some(tipo), Some(libres)) = (
+            row.get("tipo").and_then(|v| v.as_str()),
+            row.get("libres").and_then(|v| v.as_u64()),
+        ) {
+            map.entry(tipo.to_string()).or_insert((0, 0)).1 = libres as u8;
+        }
+    }
+
     Ok(map
         .into_iter()
         .map(
             |(tipo, (total, libres))| dmart_shared::models::TipoCamaCount {
-                tipo,
+                tipo: tipo_cama_label(&tipo).to_string(),
                 total,
                 libres,
             },
         )
         .collect())
+}
+
+fn tipo_cama_label(stored: &str) -> &'static str {
+    match stored {
+        "General" => TipoCama::General.label(),
+        "Aislamiento" => TipoCama::Aislamiento.label(),
+        "Pediatrica" => TipoCama::Pediatrica.label(),
+        "Coronaria" => TipoCama::Coronaria.label(),
+        "Quemados" => TipoCama::Quemados.label(),
+        _ => TipoCama::Otro.label(),
+    }
 }
 
 pub async fn asignar_cama_paciente(
@@ -372,11 +636,13 @@ pub async fn count_equipos(db: &Surreal<Db>) -> Result<u64> {
 }
 
 pub async fn list_equipos_por_cama(db: &Surreal<Db>, cama_id: &str) -> Result<Vec<Equipo>> {
-    let todas: Vec<Equipo> = db.select("equipos").await?;
-    Ok(todas
-        .into_iter()
-        .filter(|e| e.cama_id.as_deref() == Some(cama_id))
-        .collect())
+    let cama = cama_id.to_string();
+    let equipos: Vec<Equipo> = db
+        .query("SELECT * FROM equipos WHERE cama_id = $cama")
+        .bind(("cama", cama))
+        .await?
+        .take(0)?;
+    Ok(equipos)
 }
 
 pub async fn asignar_equipo_cama(
@@ -406,37 +672,68 @@ pub async fn desvincular_equipo_cama(db: &Surreal<Db>, equipo_id: &str) -> Resul
 }
 
 pub async fn list_equipos_disponibles(db: &Surreal<Db>) -> Result<Vec<Equipo>> {
-    let todas: Vec<Equipo> = db.select("equipos").await?;
-    Ok(todas
-        .into_iter()
-        .filter(|e| e.estado == EstadoEquipo::Activo && e.cama_id.is_none())
-        .collect())
+    let estado = format!("{:?}", EstadoEquipo::Activo);
+    let equipos: Vec<Equipo> = db
+        .query("SELECT * FROM equipos WHERE estado = $estado AND cama_id = NONE")
+        .bind(("estado", estado))
+        .await?
+        .take(0)?;
+    Ok(equipos)
 }
 
 pub async fn count_equipos_por_tipo(
     db: &Surreal<Db>,
 ) -> Result<Vec<dmart_shared::models::EquipoTipoCount>> {
-    use std::collections::HashMap;
-    let todas: Vec<Equipo> = db.select("equipos").await?;
-    let mut map: HashMap<String, (u32, u32)> = HashMap::new();
-    for e in &todas {
-        let key = e.tipo.label().to_string();
-        let entry = map.entry(key).or_insert((0, 0));
-        entry.0 += 1;
-        if e.estado == EstadoEquipo::Activo && e.cama_id.is_none() {
-            entry.1 += 1;
+    let estado = format!("{:?}", EstadoEquipo::Activo);
+
+    let totales: Vec<serde_json::Value> = db
+        .query("SELECT tipo, count() AS total FROM equipos GROUP BY tipo")
+        .await?
+        .take(0)?;
+    let disponibles: Vec<serde_json::Value> = db
+        .query("SELECT tipo, count() AS disponibles FROM equipos WHERE estado = $estado AND cama_id = NONE GROUP BY tipo")
+        .bind(("estado", estado))
+        .await?
+        .take(0)?;
+
+    let mut map: std::collections::HashMap<String, (u32, u32)> = std::collections::HashMap::new();
+    for row in totales {
+        if let (Some(tipo), Some(total)) = (
+            row.get("tipo").and_then(|v| v.as_str()),
+            row.get("total").and_then(|v| v.as_u64()),
+        ) {
+            map.insert(tipo.to_string(), (total as u32, 0));
         }
     }
+    for row in disponibles {
+        if let (Some(tipo), Some(d)) = (
+            row.get("tipo").and_then(|v| v.as_str()),
+            row.get("disponibles").and_then(|v| v.as_u64()),
+        ) {
+            map.entry(tipo.to_string()).or_insert((0, 0)).1 = d as u32;
+        }
+    }
+
     Ok(map
         .into_iter()
         .map(
             |(tipo, (total, disponibles))| dmart_shared::models::EquipoTipoCount {
-                tipo,
+                tipo: tipo_equipo_label(&tipo).to_string(),
                 total,
                 disponibles,
             },
         )
         .collect())
+}
+
+fn tipo_equipo_label(stored: &str) -> &'static str {
+    match stored {
+        "VentiladorMecanico" => TipoEquipo::VentiladorMecanico.label(),
+        "Monitor" => TipoEquipo::Monitor.label(),
+        "Computador" => TipoEquipo::Computador.label(),
+        "BombaInfusion" => TipoEquipo::BombaInfusion.label(),
+        _ => TipoEquipo::Otro.label(),
+    }
 }
 
 pub async fn delete_equipo(db: &Surreal<Db>, id: &str) -> Result<()> {
@@ -471,8 +768,12 @@ pub async fn get_user(db: &Surreal<Db>, id: &str) -> Result<Option<User>> {
 }
 
 pub async fn get_user_by_username(db: &Surreal<Db>, username: &str) -> Result<Option<User>> {
-    let todos: Vec<User> = db.select("users").await?;
-    Ok(todos.into_iter().find(|u| u.username == username))
+    let users: Vec<User> = db
+        .query("SELECT * FROM users WHERE username = $username LIMIT 1")
+        .bind(("username", username.to_string()))
+        .await?
+        .take(0)?;
+    Ok(users.into_iter().next())
 }
 
 pub async fn update_user(db: &Surreal<Db>, id: &str, user: User) -> Result<Option<User>> {
@@ -486,11 +787,15 @@ pub async fn list_users(db: &Surreal<Db>) -> Result<Vec<User>> {
 }
 
 pub async fn list_staff(db: &Surreal<Db>) -> Result<Vec<User>> {
-    let todos: Vec<User> = db.select("users").await?;
-    Ok(todos
-        .into_iter()
-        .filter(|u| matches!(u.rol, UserRole::Medico | UserRole::Enfermero))
-        .collect())
+    let staff: Vec<User> = db
+        .query(
+            "SELECT * FROM users WHERE rol = $medico OR rol = $enfermero ORDER BY created_at DESC",
+        )
+        .bind(("medico", "Medico"))
+        .bind(("enfermero", "Enfermero"))
+        .await?
+        .take(0)?;
+    Ok(staff)
 }
 
 pub async fn list_staff_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<User>> {

@@ -45,7 +45,21 @@ anyhow = "1"
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+tracing-opentelemetry = "0.25"
+
+# Metrics & Observability
+metrics = "0.21"
+metrics-exporter-prometheus = { version = "0.13", default-features = false, features = ["hyper", "tokio"] }
+metrics-process = "2"
+
+# OpenTelemetry (solo SDK para métricas/traces locales)
+opentelemetry = { version = "0.25", features = ["metrics", "trace"] }
+opentelemetry_sdk = { version = "0.25", features = ["metrics", "trace"] }
+opentelemetry-semantic-conventions = "0.25"
+
+# Health & Graceful Shutdown
+axum-health = "0.1"
 
 # Cryptography
 chacha20poly1305 = "0.10"
@@ -56,6 +70,9 @@ sha2 = "0.10"
 
 # JWT Authentication
 jsonwebtoken = "9"
+
+# TOTP multi-factor authentication
+totp-rs = { version = "5", default-features = false, features = ["otpauth", "gen_secret"] }
 
 # Argon2 password hashing (HIPAA compliant)
 argon2 = "0.5"
@@ -68,3 +85,4 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+totp-rs = { version = "5", default-features = false, features = ["otpauth"] }

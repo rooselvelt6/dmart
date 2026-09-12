@@ -1,6 +1,7 @@
 use crate::db::Database;
 use anyhow::Error;
 use axum::{extract::State, http::StatusCode, response::Json};
+use chrono::Datelike;
 use dmart_shared::models::*;
 
 type ApiResult<T> = Result<Json<ApiResponse<T>>, (StatusCode, String)>;
@@ -84,7 +85,7 @@ fn generate_synthetic_patient() -> Patient {
     p.apellido = apellidos[idx_ape].to_string();
     p.sexo = sexo;
     p.cedula = format!("V-{}", rng.gen_range(1000000..=30000000));
-    let year: i32 = 2026i32 - edad as i32;
+    let year: i32 = chrono::Utc::now().year() - edad as i32;
     p.edad = edad;
     p.fecha_nacimiento = format!(
         "{:04}-{:02}-{:02}",

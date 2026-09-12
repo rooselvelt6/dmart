@@ -4,7 +4,10 @@ pub mod auth;
 mod cache;
 mod crypto;
 mod db;
+mod mfa;
 mod middleware;
+pub mod migrations;
+mod observability;
 pub mod rbac;
 mod security;
 
@@ -17,15 +20,19 @@ use axum::{
     routing::get,
 };
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
     services::ServeDir,
-    trace::TraceLayer,
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::auth::AuthService;
 use crate::middleware::auth_mod::AuthMiddlewareConfig;
+use crate::observability::{
+    connect_with_retry, graceful_shutdown, init_metrics, init_tracing, observability_router,
+};
 use crate::security::create_security_state;
 
 async fn spa_handler() -> impl IntoResponse {
@@ -56,16 +63,12 @@ async fn main() -> anyhow::Result<()> {
         default_panic(info);
     }));
 
-    // Logging
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "dmart_server=info,tower_http=info".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
+    // ── Observability: Tracing (JSON + optional OpenTelemetry) ─────────
+    init_tracing()?;
     tracing::info!("🏥 UCI-DMART Server initializing...");
+
+    // ── Observability: Metrics (Prometheus + optional OpenTelemetry) ────
+    init_metrics()?;
 
     // Use absolute path for data persistence
     let db_path = std::env::var("DMART_DB_PATH").unwrap_or_else(|_| {
@@ -82,7 +85,19 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("📁 Data directory: {}", parent.display());
     }
 
-    let database = db::connect(&db_path).await?;
+    // Connect to DB with exponential backoff retry
+    let max_retries = std::env::var("DMART_DB_MAX_RETRIES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5);
+    let base_delay = Duration::from_secs(
+        std::env::var("DMART_DB_BASE_DELAY_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2),
+    );
+
+    let database = Arc::new(connect_with_retry(&db_path, max_retries, base_delay).await?);
     tracing::info!("✅ SurrealDB connected at {}", db_path);
 
     // Initialize audit service
@@ -93,6 +108,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Seed institution config if none exists
     db::seed_institucion_config(&database).await?;
+
+    // Seed CIE-10 catalog if it does not survive yet (task F2-5)
+    db::seed_diagnosticos(&database).await?;
 
     // Seed initial beds (4 camas) if none exist
     let camas_existentes = db::list_camas(&database).await?;
@@ -110,6 +128,9 @@ async fn main() -> anyhow::Result<()> {
     if cache_ok {
         tracing::info!("✅ Valkey cache connected");
     }
+
+    // ── Observability: Metrics ──────────────────────────────────────
+    let prometheus_handle = init_metrics()?;
 
     // ── Security Setup ──────────────────────────────────────────────
 
@@ -162,12 +183,16 @@ async fn main() -> anyhow::Result<()> {
 
     let api_router = api::build_api_router(database.clone(), auth_config, security_state);
 
+    // ── Observability Router (/health, /live, /ready, /metrics) ───────
+    let obs_router = observability_router(database.clone(), prometheus_handle);
+
     // ── Static files ────────────────────────────────────────────────
 
     let dist_path = std::env::var("DMART_DIST_PATH").unwrap_or_else(|_| "./dist".to_string());
 
     let app = Router::new()
         .nest("/api", api_router)
+        .nest("/obs", obs_router)
         .fallback_service(ServeDir::new(&dist_path))
         .route("/", get(spa_handler))
         .route("/login", get(spa_handler))
@@ -188,7 +213,11 @@ async fn main() -> anyhow::Result<()> {
         .layer(DefaultBodyLimit::max(1024 * 1024)) // 1MB request body limit
         .layer(cors)
         .layer(axum_mw::from_fn(security::security_headers_middleware))
-        .layer(TraceLayer::new_for_http());
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                .on_response(DefaultOnResponse::new().include_headers(true)),
+        );
 
     // Server
     let port: u16 = std::env::var("DMART_PORT")
@@ -197,29 +226,37 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(3000);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
-    // Graceful shutdown setup
-    let shutdown_signal = async {
-        let mut sigint =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).unwrap();
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
-        tokio::select! {
-            _ = sigint.recv() => tracing::info!("📤 Received SIGINT"),
-            _ = sigterm.recv() => tracing::info!("📤 Received SIGTERM"),
-        }
-    };
-
     tracing::info!("🚀 Server running at http://{}", addr);
     tracing::info!("    API:      http://{}/api/patients", addr);
     tracing::info!("    Frontend: http://{}/", addr);
+    tracing::info!("    Obs:      http://{}/obs/health", addr);
+    tracing::info!("    Metrics:  http://localhost:9090/metrics");
+
+    let shutdown_timeout = Duration::from_secs(
+        std::env::var("DMART_SHUTDOWN_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30),
+    );
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(
+    let server = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal)
-    .await?;
+    );
+
+    graceful_shutdown(shutdown_timeout, || {
+        Box::pin(async {
+            // Here you could add cleanup logic:
+            // - Flush metrics
+            // - Close DB connections
+            // - Shutdown cache
+            tracing::info!("🧹 Cleanup completed");
+        })
+    })
+    .await;
+
+    server.await?;
 
     tracing::info!("🛑 Server shutdown complete");
     Ok(())

@@ -64,6 +64,297 @@ async fn test_patient_pagination() {
 }
 
 #[tokio::test]
+async fn test_stats_aggregates_group_by() {
+    use dmart_shared::models::{Patient, SeverityLevel};
+
+    let (db, _dir) = test_db().await;
+
+    let mut p = Patient::new();
+    p.estado_gravedad = SeverityLevel::Critico;
+    p.ultimo_apache_score = Some(30);
+    p.ultimo_gcs_score = Some(6);
+    p.ultimo_sofa_score = Some(9);
+    dmart_server::db::create_patient(&db, p).await.expect("c1");
+
+    let mut p = Patient::new();
+    p.estado_gravedad = SeverityLevel::Critico;
+    p.ultimo_apache_score = Some(40);
+    p.ultimo_sofa_score = Some(1);
+    dmart_server::db::create_patient(&db, p).await.expect("c2");
+
+    let mut p = Patient::new();
+    p.estado_gravedad = SeverityLevel::Severo;
+    p.ultimo_apache_score = None;
+    dmart_server::db::create_patient(&db, p).await.expect("c3");
+
+    let agg = dmart_server::db::aggregate_patient_stats(&db)
+        .await
+        .expect("aggregate");
+    assert_eq!(agg.total, 3);
+    assert_eq!(agg.criticos, 2);
+    assert_eq!(agg.severos, 1);
+    assert_eq!(agg.moderados, 0);
+    assert_eq!(agg.apache_n, 2, "solo 2 pacientes tienen apache");
+    assert!((agg.apache_sum - 70.0).abs() < 0.001);
+    assert!((agg.sofa_sum - 10.0).abs() < 0.001);
+    assert_eq!(agg.sofa_n, 2);
+    assert_eq!(agg.gcs_sum as u64, 6);
+    assert_eq!(agg.gcs_n, 1);
+    assert_eq!(agg.saps3_n, 0);
+    assert_eq!(agg.news2_n, 0);
+}
+
+#[tokio::test]
+async fn test_diagnosticos_seed_and_search() {
+    let (db, _dir) = test_db().await;
+    dmart_server::db::seed_diagnosticos(&db)
+        .await
+        .expect("seed");
+
+    let total = dmart_server::db::list_diagnosticos(&db)
+        .await
+        .expect("list");
+    assert!(!total.is_empty());
+
+    let hits = dmart_server::db::search_diagnosticos(&db, "neumon")
+        .await
+        .expect("search");
+    assert!(!hits.is_empty(), "debe encontrar diagnósticos de neumonía");
+
+    let by_code = dmart_server::db::search_diagnosticos(&db, "j18")
+        .await
+        .expect("search code");
+    assert!(
+        by_code.iter().any(|d| d.codigo == "J18.9"),
+        "búsqueda por código"
+    );
+}
+
+#[tokio::test]
+async fn test_transactional_create_assigns_cama_and_equipos() {
+    use dmart_shared::models::{
+        Cama, Equipo, EstadoCama, EstadoEquipo, Patient, TipoCama, TipoEquipo,
+    };
+
+    let (db, _dir) = test_db().await;
+    dmart_server::db::seed_institucion_config(&db)
+        .await
+        .expect("config");
+
+    let mut cama = Cama::new(1 as u8, TipoCama::General);
+    cama.estado = EstadoCama::Libre;
+    let cama = dmart_server::db::create_cama(&db, cama)
+        .await
+        .expect("cama");
+    let mut equipo = Equipo::new("TX-01".to_string(), TipoEquipo::VentiladorMecanico);
+    equipo.estado = EstadoEquipo::Activo;
+    let equipo = dmart_server::db::create_equipo(&db, equipo)
+        .await
+        .expect("equipo");
+
+    let mut patient = Patient::new();
+    patient.cama_id = Some(cama.cama_id.clone());
+    patient.cama_numero = Some(cama.numero);
+    let created = dmart_server::db::create_patient_with_assignments(
+        &db,
+        patient,
+        &[equipo.equipo_id.clone()],
+    )
+    .await
+    .expect("create tx");
+
+    let cama_post = dmart_server::db::get_cama_by_numero(&db, cama.numero)
+        .await
+        .expect("get cama")
+        .expect("exists");
+    assert_eq!(cama_post.estado, EstadoCama::Ocupada);
+    assert_eq!(
+        cama_post.paciente_id.as_deref(),
+        Some(created.patient_id.as_str())
+    );
+
+    let equipos_cama = dmart_server::db::list_equipos_por_cama(&db, &cama.cama_id)
+        .await
+        .expect("equipos cama");
+    assert_eq!(equipos_cama.len(), 1);
+    assert_eq!(equipos_cama[0].equipo_id, equipo.equipo_id);
+}
+
+#[tokio::test]
+async fn test_transactional_create_rolls_back_when_cama_occupada() {
+    use dmart_shared::models::{
+        Cama, Equipo, EstadoCama, EstadoEquipo, Patient, TipoCama, TipoEquipo,
+    };
+
+    let (db, _dir) = test_db().await;
+    dmart_server::db::seed_institucion_config(&db)
+        .await
+        .expect("config");
+
+    let mut cama = Cama::new(1 as u8, TipoCama::General);
+    cama.estado = EstadoCama::Ocupada;
+    cama.paciente_id = Some("otro_paciente".to_string());
+    let cama = dmart_server::db::create_cama(&db, cama)
+        .await
+        .expect("cama");
+    let mut equipo = Equipo::new("TX-02".to_string(), TipoEquipo::Monitor);
+    equipo.estado = EstadoEquipo::Activo;
+    equipo.cama_id = Some("otra_cama".to_string());
+    let equipo = dmart_server::db::create_equipo(&db, equipo)
+        .await
+        .expect("equipo");
+
+    let mut patient = Patient::new();
+    patient.cama_id = Some(cama.cama_id.clone());
+    patient.cama_numero = Some(cama.numero);
+    let err = dmart_server::db::create_patient_with_assignments(
+        &db,
+        patient,
+        &[equipo.equipo_id.clone()],
+    )
+    .await
+    .expect_err("debe fallar: cama ocupada");
+    assert!(
+        err.to_string().contains("Cama no disponible"),
+        "msg actual: {}",
+        err
+    );
+
+    let cama_post = dmart_server::db::get_cama_by_numero(&db, cama.numero)
+        .await
+        .expect("get cama")
+        .expect("exists");
+    assert_eq!(cama_post.estado, EstadoCama::Ocupada, "cama intacta");
+    assert_eq!(cama_post.paciente_id.as_deref(), Some("otro_paciente"));
+
+    let equipo_post = dmart_server::db::get_equipo(&db, &equipo.equipo_id)
+        .await
+        .expect("get equipo")
+        .expect("exists");
+    assert_eq!(
+        equipo_post.cama_id.as_deref(),
+        Some("otra_cama"),
+        "equipo intacto"
+    );
+}
+
+#[tokio::test]
+async fn test_egreso_libera_cama_y_equipos_transaccional() {
+    use dmart_shared::models::{
+        Cama, Equipo, EstadoCama, EstadoEquipo, Patient, TipoCama, TipoEquipo,
+    };
+
+    let (db, _dir) = test_db().await;
+    dmart_server::db::seed_institucion_config(&db)
+        .await
+        .expect("config");
+
+    let mut cama = Cama::new(1 as u8, TipoCama::General);
+    cama.estado = EstadoCama::Libre;
+    let cama = dmart_server::db::create_cama(&db, cama)
+        .await
+        .expect("cama");
+    let mut equipo = Equipo::new("TX-03".to_string(), TipoEquipo::BombaInfusion);
+    equipo.estado = EstadoEquipo::Activo;
+    let equipo = dmart_server::db::create_equipo(&db, equipo)
+        .await
+        .expect("equipo");
+
+    let mut patient = Patient::new();
+    patient.cama_id = Some(cama.cama_id.clone());
+    patient.cama_numero = Some(cama.numero);
+    let created = dmart_server::db::create_patient_with_assignments(
+        &db,
+        patient,
+        &[equipo.equipo_id.clone()],
+    )
+    .await
+    .expect("create tx");
+
+    dmart_server::db::egresar_paciente(&db, &created)
+        .await
+        .expect("egreso");
+
+    let cama_post = dmart_server::db::get_cama_by_numero(&db, cama.numero)
+        .await
+        .expect("get cama")
+        .expect("exists");
+    assert_eq!(cama_post.estado, EstadoCama::Libre);
+    assert!(cama_post.paciente_id.is_none());
+
+    let equipo_post = dmart_server::db::get_equipo(&db, &equipo.equipo_id)
+        .await
+        .expect("get equipo")
+        .expect("exists");
+    assert!(equipo_post.cama_id.is_none(), "equipo liberado");
+}
+
+#[tokio::test]
+async fn test_camas_equipos_counts_group_by() {
+    use dmart_shared::models::{Cama, Equipo, EstadoCama, EstadoEquipo, TipoCama, TipoEquipo};
+
+    let (db, _dir) = test_db().await;
+    dmart_server::db::seed_institucion_config(&db)
+        .await
+        .expect("seed config");
+
+    let mut c1 = Cama::new(1 as u8, TipoCama::General);
+    c1.estado = EstadoCama::Libre;
+    let mut c2 = Cama::new(2 as u8, TipoCama::General);
+    c2.estado = EstadoCama::Ocupada;
+    let mut c3 = Cama::new(3 as u8, TipoCama::Aislamiento);
+    c3.estado = EstadoCama::Libre;
+    dmart_server::db::create_cama(&db, c1).await.expect("cama1");
+    dmart_server::db::create_cama(&db, c2).await.expect("cama2");
+    dmart_server::db::create_cama(&db, c3).await.expect("cama3");
+
+    let por_tipo = dmart_server::db::count_camas_por_tipo(&db)
+        .await
+        .expect("count camas");
+    let general = por_tipo
+        .iter()
+        .find(|c| c.tipo == "General")
+        .expect("general");
+    assert_eq!(general.total, 2);
+    assert_eq!(general.libres, 1, "libres por tipo con GROUP BY");
+    let aislamiento = por_tipo
+        .iter()
+        .find(|c| c.tipo == "Aislamiento")
+        .expect("aisl");
+    assert_eq!(aislamiento.total, 1);
+    assert_eq!(aislamiento.libres, 1);
+
+    let mut eq = Equipo::new("VENT-01".to_string(), TipoEquipo::VentiladorMecanico);
+    eq.estado = EstadoEquipo::Activo;
+    dmart_server::db::create_equipo(&db, eq)
+        .await
+        .expect("eq libre");
+    let mut eq2 = Equipo::new("MON-01".to_string(), TipoEquipo::Monitor);
+    eq2.estado = EstadoEquipo::Activo;
+    eq2.cama_id = Some("cama_test".to_string());
+    dmart_server::db::create_equipo(&db, eq2)
+        .await
+        .expect("eq en cama");
+
+    let por_tipo_eq = dmart_server::db::count_equipos_por_tipo(&db)
+        .await
+        .expect("count equipos");
+    let vent_label = TipoEquipo::VentiladorMecanico.label();
+    let vent = por_tipo_eq
+        .iter()
+        .find(|e| e.tipo == vent_label)
+        .expect("vent");
+    assert_eq!(vent.total, 1);
+    assert_eq!(vent.disponibles, 1);
+    let mon = por_tipo_eq
+        .iter()
+        .find(|e| e.tipo == "Monitor")
+        .expect("mon");
+    assert_eq!(mon.total, 1);
+    assert_eq!(mon.disponibles, 0, "el monitor está asignado a una cama");
+}
+
+#[tokio::test]
 async fn test_auth_register() {
     let (db, _dir) = test_db().await;
     let auth = dmart_server::auth::AuthService::new(db);
@@ -545,4 +836,344 @@ async fn test_e2e_login_throttle_locks_after_failures() {
     )
     .await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "bloqueado => 429");
+}
+
+fn totp_code(secret_b32: &str, account: &str) -> String {
+    let secret = totp_rs::Secret::Encoded(secret_b32.to_string())
+        .to_bytes()
+        .expect("decodificar secreto");
+    let totp = totp_rs::TOTP::new(
+        totp_rs::Algorithm::SHA1,
+        6,
+        1,
+        30,
+        secret,
+        None,
+        account.to_string(),
+    )
+    .expect("totp");
+    totp.generate_current().expect("generar código")
+}
+
+#[tokio::test]
+async fn test_e2e_mfa_setup_confirm_verify_disable() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "mfa_user",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "MFA Admin",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("mfa_user", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["data"]["mfa_required"], false);
+    let user_id = json["data"]["user"]["user_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let session = json["data"]["token"].as_str().unwrap().to_string();
+
+    let (status, json) = send(&http, Method::POST, "/auth/mfa/setup", Some(&session), None).await;
+    assert_eq!(status, StatusCode::OK, "setup => {}", json);
+    let secret = json["data"]["secret"].as_str().unwrap().to_string();
+    assert!(!secret.is_empty());
+    let codes: Vec<String> = json["data"]["backup_codes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(codes.len(), 10);
+
+    let code = totp_code(&secret, &user_id);
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/mfa/confirm",
+        Some(&session),
+        Some(serde_json::json!({ "code": code })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "confirm => {}", json);
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("mfa_user", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["data"]["mfa_required"], true, "2º factor exigido");
+    let challenge = json["data"]["token"].as_str().unwrap().to_string();
+
+    let (status, _) = send(&http, Method::GET, "/patients", Some(&challenge), None).await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "reto MFA no puede usar rutas"
+    );
+
+    let code2 = totp_code(&secret, &user_id);
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/mfa/verify",
+        Some(&challenge),
+        Some(serde_json::json!({ "code": code2 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "verify => {}", json);
+    assert_eq!(json["data"]["mfa_required"], false);
+    let full = json["data"]["token"].as_str().unwrap().to_string();
+
+    let (status, _) = send(&http, Method::GET, "/patients", Some(&full), None).await;
+    assert_eq!(status, StatusCode::OK, "sesión completa opera normal");
+
+    let _ = user_id;
+}
+
+#[tokio::test]
+async fn test_e2e_fhir_observation_returns_scores_bundle() {
+    use dmart_shared::models::{Patient, SeverityLevel};
+
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "fhir_obs",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Medico,
+        "FHIR Obs",
+    )
+    .await;
+    let http = build_app(&db).await;
+    let token = login_token(&http, "fhir_obs", "SuperSecreto_01!").await;
+
+    let mut p = Patient::new();
+    p.ultimo_apache_score = Some(24);
+    p.ultimo_gcs_score = Some(9);
+    p.estado_gravedad = SeverityLevel::Critico;
+    let created = dmart_server::db::create_patient(&db, p)
+        .await
+        .expect("create");
+
+    let (status, json) = send(
+        &http,
+        Method::GET,
+        &format!("/fhir/Patient/{}/Observation", created.patient_id),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "bundle => {}", json);
+    assert_eq!(json["resource_type"], "Bundle", "bundle => {}", json);
+    assert!(json["entry"].as_array().unwrap().len() >= 2);
+    let codes: Vec<&str> = json["entry"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["code"]["coding"][0]["code"].as_str().unwrap())
+        .collect();
+    assert!(codes.contains(&"gcs"));
+    assert!(codes.contains(&"apache2"));
+
+    let (status, _) = send(
+        &http,
+        Method::GET,
+        "/fhir/Patient/no-existe/Observation",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_e2e_mfa_backup_code_and_disable() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "mfa_backup",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "MFA Backup",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("mfa_backup", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let user_id = json["data"]["user"]["user_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let session = json["data"]["token"].as_str().unwrap().to_string();
+
+    let (status, json) = send(&http, Method::POST, "/auth/mfa/setup", Some(&session), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let secret = json["data"]["secret"].as_str().unwrap().to_string();
+    let backup = json["data"]["backup_codes"][0]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let code = totp_code(&secret, &user_id);
+    send(
+        &http,
+        Method::POST,
+        "/auth/mfa/confirm",
+        Some(&session),
+        Some(serde_json::json!({ "code": code })),
+    )
+    .await;
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("mfa_backup", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["data"]["mfa_required"], true);
+    let challenge = json["data"]["token"].as_str().unwrap().to_string();
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/mfa/verify",
+        Some(&challenge),
+        Some(serde_json::json!({ "backup_code": backup })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "backup code => {}", json);
+    assert_eq!(json["data"]["mfa_required"], false);
+
+    let code3 = totp_code(&secret, &user_id);
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/mfa/disable",
+        Some(&session),
+        Some(serde_json::json!({ "code": code3 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "disable => {}", json);
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("mfa_backup", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["data"]["mfa_required"], false, "MFA desactivado");
+}
+
+#[tokio::test]
+async fn test_e2e_audit_retention_cleanup_deletes_old_logs() {
+    use dmart_server::audit::{AuditAction, AuditLog, AuditService};
+
+    let (db, _dir) = test_db().await;
+    dmart_server::audit::init_global_audit(db.clone());
+
+    let service = AuditService::new(db.clone());
+    let _ = service
+        .log_login_success("u-fresh", "admin", None)
+        .await
+        .expect("log fresh");
+
+    let old = AuditLog {
+        uid: uuid::Uuid::new_v4().to_string(),
+        timestamp: (chrono::Utc::now() - chrono::Duration::days(6 * 365 + 1)).to_rfc3339(),
+        user_id: None,
+        username: Some("admin".to_string()),
+        action: AuditAction::Login,
+        resource: "auth".to_string(),
+        resource_id: None,
+        details: None,
+        ip_address: None,
+        user_agent: None,
+        success: true,
+        error_message: None,
+    };
+    let _: Option<AuditLog> = db
+        .create(("audit_logs", old.uid.clone()))
+        .content(old.clone())
+        .await
+        .expect("seed old log");
+
+    // Verificar que el log antiguo existe y tiene timestamp correcto
+    let before: Vec<AuditLog> = db
+        .query("SELECT * FROM audit_logs WHERE uid = $uid")
+        .bind(("uid", old.uid.clone()))
+        .await
+        .expect("query old log")
+        .take(0)
+        .expect("take old");
+    assert_eq!(before.len(), 1, "log antiguo sembrado");
+    assert!(before[0].timestamp < chrono::Utc::now().to_rfc3339());
+
+    let deleted = service.cleanup_old_logs().await.expect("cleanup");
+    assert_eq!(deleted, 1, "solo se borra el log antiguo");
+    let remaining = service.get_recent(10).await.expect("recent");
+    assert!(
+        remaining.iter().all(|l| l.uid != old.uid),
+        "el log antiguo ya no está presente"
+    );
+
+    seed_user(
+        &db,
+        "audit_admin",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Audit Admin",
+    )
+    .await;
+    let http = build_app(&db).await;
+    let token = login_token(&http, "audit_admin", "SuperSecreto_01!").await;
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/admin/audit/cleanup",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "cleanup api => {}", json);
+    assert_eq!(json["data"]["retention_years"], 6);
+
+    let (status, json) = send(
+        &http,
+        Method::GET,
+        "/admin/audit?limit=5",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "audit list => {}", json);
+    assert!(json["data"].as_array().unwrap().len() >= 1);
 }

@@ -19,7 +19,11 @@ impl AuthMiddlewareConfig {
     pub fn new(auth_service: AuthService) -> Self {
         Self {
             auth_service,
-            open_paths: vec!["/health".to_string(), "/auth/login".to_string()],
+            open_paths: vec![
+                "/health".to_string(),
+                "/auth/login".to_string(),
+                "/auth/mfa/verify".to_string(),
+            ],
         }
     }
 
@@ -81,6 +85,16 @@ pub async fn auth_middleware(
         Ok(claims) => {
             if crate::auth::is_token_revoked_in_cache(token).await {
                 let response = Json(ApiResponse::<String>::err("Token revocado".to_string()));
+                return Response::builder()
+                    .status(401)
+                    .body(response.into_response().into_body())
+                    .unwrap();
+            }
+
+            if claims.scope != "session" {
+                let response = Json(ApiResponse::<String>::err(
+                    "Complete la verificación MFA".to_string(),
+                ));
                 return Response::builder()
                     .status(401)
                     .body(response.into_response().into_body())

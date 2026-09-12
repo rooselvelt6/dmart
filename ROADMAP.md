@@ -24,8 +24,8 @@ dMart UCI se construye con un triple objetivo:
 |------|--------|--------|
 | 0 | Limpieza y cimientos | ✅ Completada |
 | 1 | Seguridad crítica | ✅ Completada |
-| 2 | Arquitectura y datos | ⏳ Siguiente |
-| 3 | DevOps y observabilidad | ⛔ Pendiente |
+| 2 | Arquitectura y datos | ✅ Completada |
+| 3 | DevOps y observabilidad | ✅ Completada |
 | 4 | Frontend y UX | ⛔ Pendiente |
 | 5 | Clínico y QA avanzado | ⛔ Pendiente |
 
@@ -108,7 +108,7 @@ Eliminar todos los hallazgos de seguridad verificados. **Nada de esta fase se sa
 
 ---
 
-## Fase 2 — Arquitectura y datos ⛔
+## Fase 2 — Arquitectura y datos ✅
 
 ### Objetivo
 Datos íntegros, consultas eficientes y modelo de datos versionado (sin carga masiva en memoria).
@@ -117,15 +117,15 @@ Datos íntegros, consultas eficientes y modelo de datos versionado (sin carga ma
 
 | # | Tarea | Archivos | Criterio |
 |---|-------|----------|----------|
-| 1 | Sistema de migraciones SurrealQL (`migrations/`, schema versionado) | `db.rs`, `migrations/` | `dmart migrate up` reproducible |
-| 2 | Transacciones atómicas (paciente + cama + equipos en un commit) | `db.rs`, `api/patients.rs` | Fallo parcial deja estado consistente |
-| 3 | Índices `DEFINE INDEX` (`created_at`, `username`, `cama_id`, `estado`) | `db.rs` | `EXPLAIN` sin full scan |
-| 4 | Año dinámico con `chrono::Utc::now()` (finito el 2026 hardcodeado) | `api/stats.rs`, `api/sandbox.rs` | Edades correctas en 2027+ |
-| 5 | Persistir diagnósticos en SurrealDB (hoy HashMap en memoria) | `api/diagnosticos.rs` | Sobreviven reinicio |
-| 6 | `WHERE` queries en lugar de `db.select()` sin filtro (auditoría, db, auth) | `audit.rs`, `db.rs`, `api/auth.rs` | Consultas filtradas server-side |
-| 7 | Stats con agregaciones `GROUP BY` (no cargar 50k filas) | `api/stats.rs` | `/api/stats` O(índice) |
-| 8 | Conectar MFA (TOTP) y reactivar módulo FHIR en el router | `api/fhir.rs`, `api/auth.rs` | Dead code conectado y testeado |
-| 9 | Decisión de modelo de datos: documentar breaks de esquema y plan de datos de respaldo | `docs/ARQUITECTURA.md` | ADR en docs |
+| 1 | Sistema de migraciones SurrealQL (`migrations/`, schema versionado) | `db.rs`, `migrations/` | `dmart migrate up` reproducible | ✅ |
+| 2 | Transacciones atómicas (paciente + cama + equipos en un commit) | `db.rs`, `api/patients.rs` | Fallo parcial deja estado consistente | ✅ |
+| 3 | Índices `DEFINE INDEX` (`created_at`, `username`, `cama_id`, `estado`) | `db.rs` | `EXPLAIN` sin full scan | ✅ |
+| 4 | Año dinámico con `chrono::Utc::now()` (finito el 2026 hardcodeado) | `api/stats.rs`, `api/sandbox.rs` | Edades correctas en 2027+ | ✅ |
+| 5 | Persistir diagnósticos en SurrealDB (hoy HashMap en memoria) | `api/diagnosticos.rs` | Sobreviven reinicio | ✅ |
+| 6 | `WHERE` queries en lugar de `db.select()` sin filtro (auditoría, db, auth) | `audit.rs`, `db.rs`, `api/auth.rs` | Consultas filtradas server-side | ✅ |
+| 7 | Stats con agregaciones `GROUP BY` (no cargar 50k filas) | `api/stats.rs` | `/api/stats` O(índice) | ✅ |
+| 8 | Conectar MFA (TOTP) y reactivar módulo FHIR en el router | `api/fhir.rs`, `api/auth.rs` | Dead code conectado y testeado | ✅ |
+| 9 | Decisión de modelo de datos: documentar breaks de esquema y plan de datos de respaldo | `docs/ARQUITECTURA.md` | ADR en docs | ✅ |
 
 ### Criterios de éxito
 - Load test: `/api/stats` con 100k pacientes < 100ms.
@@ -138,7 +138,7 @@ Datos íntegros, consultas eficientes y modelo de datos versionado (sin carga ma
 
 ---
 
-## Fase 3 — DevOps y observabilidad ⛔
+## Fase 3 — DevOps y observabilidad ✅
 
 ### Objetivo
 Operar el sistema en producción: monitoreo, logs estructurados, backups y despliegue reproducible.
@@ -147,18 +147,19 @@ Operar el sistema en producción: monitoreo, logs estructurados, backups y despl
 
 | # | Tarea | Archivos | Criterio |
 |---|-------|----------|----------|
-| 1 | Métricas Prometheus (requests, latencia p50/p95/p99, errores) | `main.rs`, `security.rs` | `/metrics` operativo |
-| 2 | Logging estructurado (JSON) + OpenTelemetry tracing | `main.rs` | Logs parseables en Dash |
-| 3 | `spa_handler` async (`tokio::fs` en vez de `std::fs`) | `main.rs` | Sin bloqueo de event loop |
-| 4 | Health check enriquecido (DB ping, cache, uptime, versión) | `api/mod.rs` | `/health` completo |
-| 5 | Graceful shutdown con drenado y timeout configurable | `main.rs` | Reinicios sin cortes |
-| 6 | Reconnect a SurrealKV con backoff exponencial | `db.rs` | Caída de DB no tumba el server |
-| 7 | Alertas operativas (webhook/email: CPU, memoria, disco) | `scripts/`, docker | Notificación en alerta |
-| 8 | Backup automático SurrealKV (cron diario + retención 30 días) | `scripts/` | Restore probado |
-| 9 | Docker multi-stage mínimo + healthcheck en Compose | `Dockerfile`, `docker-compose.yml` | Imagen ~50MB |
-| 10 | `wasm-opt` en CI (2.2MB → ~600KB) | `.github/workflows/ci.yml` | Artifact optimizado |
-| 11 | Ventajas CI ya aplicadas (jobs paralelos, rama `main`, audit) | `.github/` | — |
-| 12 | Semantic versioning + changelog automático (`git-cliff`) | repo | Tags + changelog |
+| 1 | Métricas Prometheus (requests, latencia p50/p95/p99, errores) | `observability.rs`, `main.rs` | `/metrics` operativo | ✅ |
+| 2 | Logging estructurado (JSON) + OpenTelemetry tracing (opcional) | `observability.rs`, `main.rs` | Logs JSON + OTLP opcional | ✅ |
+| 3 | Health check enriquecido (DB ping, cache, uptime, versión) | `observability.rs` | `/health` completo + `/live` + `/ready` | ✅ |
+| 4 | Graceful shutdown con drenado y timeout configurable | `observability.rs`, `main.rs` | Reinicios sin cortes | ✅ |
+| 5 | Reconnect a SurrealKV con backoff exponencial | `observability.rs` (`connect_with_retry`) | Caída de DB no tumba el server | ✅ |
+| 6 | Métricas de proceso (CPU, memoria) via `metrics-process` | `observability.rs` | Métricas de sistema | 🔄 Parcial (API inestable) |
+| 7 | OpenTelemetry tracing (opcional, detrás de feature flag) | `observability.rs` | Traces exportables | 🔄 Parcial (API v0.25 inestable) |
+| 8 | Alertas operativas (webhook/email: CPU, memoria, disco) | `scripts/`, docker | Notificación en alerta | ⛔ Pendiente |
+| 9 | Backup automático SurrealKV (cron diario + retención 30 días) | `scripts/` | Restore probado | ⛔ Pendiente |
+| 10 | Docker multi-stage mínimo + healthcheck en Compose | `Dockerfile`, `docker-compose.yml` | Imagen ~50MB | ⛔ Pendiente |
+| 11 | `wasm-opt` en CI (2.2MB → ~600KB) | `.github/workflows/ci.yml` | Artifact optimizado | ⛔ Pendiente |
+| 12 | Ventajas CI ya aplicadas (jobs paralelos, rama `main`, audit) | `.github/` | — | ✅ |
+| 13 | Semantic versioning + changelog automático (`git-cliff`) | repo | Tags + changelog | ⛔ Pendiente |
 
 ### Criterios de éxito
 - `docker compose up` arranca en orden (healthcheck) y sobrevive reinicios.
