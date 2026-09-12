@@ -26,3 +26,4 @@ Thumbs.db
 *.pid
 *.txt
 dmart.service
+node_modules/
