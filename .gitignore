@@ -27,3 +27,5 @@ Thumbs.db
 *.txt
 dmart.service
 node_modules/
+playwright-report/
+test-results/
