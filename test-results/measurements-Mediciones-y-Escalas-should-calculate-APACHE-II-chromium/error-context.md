@@ -1,0 +1,204 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: measurements.spec.ts >> Mediciones y Escalas >> should calculate APACHE II
+- Location: tests/e2e/measurements.spec.ts:25:7
+
+# Error details
+
+```
+Test timeout of 30000ms exceeded while running "beforeEach" hook.
+```
+
+```
+Error: page.fill: Test timeout of 30000ms exceeded.
+Call log:
+  - waiting for locator('input[type="email"]')
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - heading "Directory listing for /" [level=1] [ref=e2]
+  - separator [ref=e3]
+  - list [ref=e4]:
+    - listitem [ref=e5]:
+      - link ".dockerignore" [ref=e6] [cursor=pointer]:
+        - /url: .dockerignore
+    - listitem [ref=e7]:
+      - link ".env.example" [ref=e8] [cursor=pointer]:
+        - /url: .env.example
+    - listitem [ref=e9]:
+      - link ".git/" [ref=e10] [cursor=pointer]:
+        - /url: .git/
+    - listitem [ref=e11]:
+      - link ".github/" [ref=e12] [cursor=pointer]:
+        - /url: .github/
+    - listitem [ref=e13]:
+      - link ".gitignore" [ref=e14] [cursor=pointer]:
+        - /url: .gitignore
+    - listitem [ref=e15]:
+      - link "Caddyfile" [ref=e16] [cursor=pointer]:
+        - /url: Caddyfile
+    - listitem [ref=e17]:
+      - link "Cargo.lock" [ref=e18] [cursor=pointer]:
+        - /url: Cargo.lock
+    - listitem [ref=e19]:
+      - link "Cargo.toml" [ref=e20] [cursor=pointer]:
+        - /url: Cargo.toml
+    - listitem [ref=e21]:
+      - link "CHECKPOINT_FASE5.md" [ref=e22] [cursor=pointer]:
+        - /url: CHECKPOINT_FASE5.md
+    - listitem [ref=e23]:
+      - link "dist/" [ref=e24] [cursor=pointer]:
+        - /url: dist/
+    - listitem [ref=e25]:
+      - link "dmart-app/" [ref=e26] [cursor=pointer]:
+        - /url: dmart-app/
+    - listitem [ref=e27]:
+      - link "dmart-server/" [ref=e28] [cursor=pointer]:
+        - /url: dmart-server/
+    - listitem [ref=e29]:
+      - link "dmart-shared/" [ref=e30] [cursor=pointer]:
+        - /url: dmart-shared/
+    - listitem [ref=e31]:
+      - link "docker-compose.prod.yml" [ref=e32] [cursor=pointer]:
+        - /url: docker-compose.prod.yml
+    - listitem [ref=e33]:
+      - link "docker-compose.yml" [ref=e34] [cursor=pointer]:
+        - /url: docker-compose.yml
+    - listitem [ref=e35]:
+      - link "Dockerfile" [ref=e36] [cursor=pointer]:
+        - /url: Dockerfile
+    - listitem [ref=e37]:
+      - link "Dockerfile.dev" [ref=e38] [cursor=pointer]:
+        - /url: Dockerfile.dev
+    - listitem [ref=e39]:
+      - link "docs/" [ref=e40] [cursor=pointer]:
+        - /url: docs/
+    - listitem [ref=e41]:
+      - link "keep-alive.sh" [ref=e42] [cursor=pointer]:
+        - /url: keep-alive.sh
+    - listitem [ref=e43]:
+      - link "node_modules/" [ref=e44] [cursor=pointer]:
+        - /url: node_modules/
+    - listitem [ref=e45]:
+      - link "package-lock.json" [ref=e46] [cursor=pointer]:
+        - /url: package-lock.json
+    - listitem [ref=e47]:
+      - link "package.json" [ref=e48] [cursor=pointer]:
+        - /url: package.json
+    - listitem [ref=e49]:
+      - link "playwright-report/" [ref=e50] [cursor=pointer]:
+        - /url: playwright-report/
+    - listitem [ref=e51]:
+      - link "playwright.config.ts" [ref=e52] [cursor=pointer]:
+        - /url: playwright.config.ts
+    - listitem [ref=e53]:
+      - link "README.md" [ref=e54] [cursor=pointer]:
+        - /url: README.md
+    - listitem [ref=e55]:
+      - link "ROADMAP.md" [ref=e56] [cursor=pointer]:
+        - /url: ROADMAP.md
+    - listitem [ref=e57]:
+      - link "rust-toolchain.toml" [ref=e58] [cursor=pointer]:
+        - /url: rust-toolchain.toml
+    - listitem [ref=e59]:
+      - link "scripts/" [ref=e60] [cursor=pointer]:
+        - /url: scripts/
+    - listitem [ref=e61]:
+      - link "start-server.sh" [ref=e62] [cursor=pointer]:
+        - /url: start-server.sh
+    - listitem [ref=e63]:
+      - link "target/" [ref=e64] [cursor=pointer]:
+        - /url: target/
+    - listitem [ref=e65]:
+      - link "test-results/" [ref=e66] [cursor=pointer]:
+        - /url: test-results/
+    - listitem [ref=e67]:
+      - link "tests/" [ref=e68] [cursor=pointer]:
+        - /url: tests/
+  - separator [ref=e69]
+```
+
+# Test source
+
+```ts
+  1  | import { test, expect } from '@playwright/test';
+  2  | 
+  3  | test.describe('Mediciones y Escalas', () => {
+  4  |   test.beforeEach(async ({ page }) => {
+  5  |     await page.goto('/');
+> 6  |     await page.fill('input[type="email"]', 'admin@uci.local');
+     |                ^ Error: page.fill: Test timeout of 30000ms exceeded.
+  7  |     await page.fill('input[type="password"]', 'admin123');
+  8  |     await page.click('button[type="submit"]');
+  9  |     await page.waitForURL('**/pacientes');
+  10 |     
+  11 |     // Navigate to first patient
+  12 |     const firstRow = page.locator('tbody tr').first();
+  13 |     await firstRow.locator('button:has-text("Ver")').click();
+  14 |     await page.waitForURL(/\/pacientes\/\d+/);
+  15 |   });
+  16 | 
+  17 |   test('should show patient scales', async ({ page }) => {
+  18 |     await expect(page.locator('text=APACHE II')).toBeVisible();
+  19 |     await expect(page.locator('text=SOFA')).toBeVisible();
+  20 |     await expect(page.locator('text=NEWS2')).toBeVisible();
+  21 |     await expect(page.locator('text=SAPS III')).toBeVisible();
+  22 |     await expect(page.locator('text=GCS')).toBeVisible();
+  23 |   });
+  24 | 
+  25 |   test('should calculate APACHE II', async ({ page }) => {
+  26 |     await page.click('button:has-text("APACHE II")');
+  27 |     await expect(page.locator('h2')).toContainText('APACHE II');
+  28 |     
+  29 |     // Fill required fields
+  30 |     await page.fill('input[name="temperatura"]', '38.5');
+  31 |     await page.fill('input[name="presion_arterial_media"]', '85');
+  32 |     await page.fill('input[name="frecuencia_cardiaca"]', '110');
+  33 |     await page.fill('input[name="frecuencia_respiratoria"]', '25');
+  34 |     await page.fill('input[name="fio2"]', '0.5');
+  35 |     await page.fill('input[name="pao2"]', '120');
+  36 |     await page.fill('input[name="ph_arterial"]', '7.35');
+  37 |     await page.fill('input[name="sodio_serico"]', '140');
+  38 |     await page.fill('input[name="potasio_serico"]', '4.0');
+  39 |     await page.fill('input[name="creatinina"]', '1.2');
+  40 |     await page.fill('input[name="hematocrito"]', '35');
+  41 |     await page.fill('input[name="leucocitos"]', '12');
+  42 |     await page.selectOption('select[name="gcs_ojos"]', '4');
+  43 |     await page.selectOption('select[name="gcs_verbal"]', '5');
+  44 |     await page.selectOption('select[name="gcs_motor"]', '6');
+  45 |     await page.selectOption('select[name="edad"]', '65');
+  46 |     
+  47 |     await page.click('button[type="submit"]:has-text("Calcular")');
+  48 |     await expect(page.locator('text=Score:')).toBeVisible();
+  49 |   });
+  50 | 
+  51 |   test('should calculate GCS', async ({ page }) => {
+  52 |     await page.click('button:has-text("GCS")');
+  53 |     await expect(page.locator('h2')).toContainText('Glasgow');
+  54 |     
+  55 |     await page.selectOption('select[name="gcs_ojos"]', '3');
+  56 |     await page.selectOption('select[name="gcs_verbal"]', '4');
+  57 |     await page.selectOption('select[name="gcs_motor"]', '5');
+  58 |     
+  59 |     await page.click('button[type="submit"]:has-text("Calcular")');
+  60 |     await expect(page.locator('text=Total:')).toBeVisible();
+  61 |   });
+  62 | 
+  63 |   test('should show animated score bars', async ({ page }) => {
+  64 |     // Check that score bars have animation classes
+  65 |     const scoreBars = page.locator('.score-pulse-normal, .score-pulse-warning, .score-pulse-critical');
+  66 |     await expect(scoreBars.first()).toBeVisible();
+  67 |   });
+  68 | });
+  69 | 
+```

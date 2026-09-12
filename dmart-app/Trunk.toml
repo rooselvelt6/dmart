@@ -1,7 +1,7 @@
 [build]
 target = "index.html"
 dist = "../dist"
-wasm_opt = true
+wasm_opt = false
 
 [[proxy]]
 backend = "http://127.0.0.1:3000/api"
