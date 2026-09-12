@@ -27,11 +27,14 @@ module.exports = {
           muted:    'var(--uci-muted)',
         }
       },
-      animation: {
+animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'glow': 'glow 2s ease-in-out infinite alternate',
         'slide-in': 'slideIn 0.3s ease-out',
         'fade-in': 'fadeIn 0.4s ease-out',
+        'score-pulse-normal': 'scorePulse 3s ease-in-out infinite',
+        'score-pulse-warning': 'scorePulse 2s ease-in-out infinite',
+        'score-pulse-critical': 'scorePulse 1s ease-in-out infinite',
       },
       keyframes: {
         glow: {
@@ -45,7 +48,11 @@ module.exports = {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
-        }
+        },
+        scorePulse: {
+          '0%, 100%': { opacity: '1', box-shadow: '0 0 10px rgba(0,0,0,0.1)' },
+          '50%': { opacity: '0.8', box-shadow: '0 0 25px rgba(239,68,68,0.4)' },
+        },
       }
     }
   },

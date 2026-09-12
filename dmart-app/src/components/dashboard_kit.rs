@@ -53,16 +53,47 @@ pub fn ScoreBar(label: &'static str, value: f32, max: f32) -> impl IntoView {
     } else {
         "#10B981"
     };
+    let color_lighten = |c: &str, pct: u32| {
+        let hex = c.trim_start_matches('#');
+        let r = hex[0..2].parse::<u8>().unwrap_or(0);
+        let g = hex[2..4].parse::<u8>().unwrap_or(0);
+        let b = hex[4..6].parse::<u8>().unwrap_or(0);
+        let w = (255 - pct) as f32 / 255.0;
+        format!(
+            "#{:02x}{:02x}{:02x}",
+            (r as f32 * w) as u8,
+            (g as f32 * w) as u8,
+            (b as f32 * w) as u8
+        )
+    };
+
+    let color_l = color_lighten(color, 40);
+    let color_l2 = color_lighten(color, 80);
+    let animation_name = match pct {
+        p if p >= 70.0 => "critical",
+        p if p >= 40.0 => "warning",
+        _ => "normal",
+    };
 
     view! {
-        <div>
+        <div class="relative">
             <div class="flex justify-between text-sm">
                 <span style="color:var(--uci-text);">{label}</span>
                 <span style="color:var(--uci-muted);">{format!("{:.1}", value)}</span>
             </div>
             <div class="h-2 mt-1 rounded-full" style="background:var(--uci-border);">
-                <div class="h-full rounded-full transition-all duration-500" style=format!("width:{}%; background:{};", pct, color)></div>
+                <div
+                    class=format!("h-full rounded-full transition-all duration-500 ease-out score-pulse-{}", animation_name)
+                    style=format!(
+                        "width:{}%; background:conic-gradient(from 90deg at 50% {}, {}, {});",
+                        pct, color, color_l, color_l2
+                    )
+                ></div>
             </div>
+            <div
+                class="absolute inset-0 rounded-full opacity-10"
+                style=format!("background: radial-gradient(circle at 30% 20%, {} 0%, transparent 50%);", color_l2)
+            />
         </div>
     }
 }
