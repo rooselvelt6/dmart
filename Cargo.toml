@@ -3,6 +3,7 @@ members = [
     "dmart-shared",
     "dmart-server",
     "dmart-app",
+    "dmart-server/fuzz",
 ]
 resolver = "2"
 

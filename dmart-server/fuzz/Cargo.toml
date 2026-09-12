@@ -1,0 +1,28 @@
+[package]
+name = "dmart-server-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+
+[dependencies.dmart-server]
+path = ".."
+
+[dependencies.dmart-shared]
+path = "../../dmart-shared"
+
+[[bin]]
+name = "fuzz_api_json"
+path = "fuzz_targets/fuzz_api_json.rs"
+
+[[bin]]
+name = "fuzz_hl7_parser"
+path = "fuzz_targets/fuzz_hl7_parser.rs"
+
+[[bin]]
+name = "fuzz_scales"
+path = "fuzz_targets/fuzz_scales.rs"
