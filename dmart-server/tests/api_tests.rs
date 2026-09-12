@@ -271,7 +271,7 @@ async fn test_egreso_libera_cama_y_equipos_transaccional() {
     .await
     .expect("create tx");
 
-    dmart_server::db::egresar_paciente(&db, &created)
+    dmart_server::db::egresar_paciente(&db, &created, "Mejorado")
         .await
         .expect("egreso");
 
@@ -993,6 +993,91 @@ async fn test_e2e_fhir_observation_returns_scores_bundle() {
         &http,
         Method::GET,
         "/fhir/Patient/no-existe/Observation",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_e2e_fhir_condition_returns_diagnoses_bundle() {
+    use dmart_shared::models::{Patient, SeverityLevel};
+
+    let (db, _dir) = test_db().await;
+    dmart_server::db::seed_diagnosticos(&db)
+        .await
+        .expect("seed cie-10");
+    seed_user(
+        &db,
+        "fhir_cond",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Medico,
+        "FHIR Cond",
+    )
+    .await;
+    let http = build_app(&db).await;
+    let token = login_token(&http, "fhir_cond", "SuperSecreto_01!").await;
+
+    let mut p = Patient::new();
+    p.diagnostico_uci = "Sepsis por Klebsiella, foco respiratorio".to_string();
+    p.diagnostico_hospital = "Neumonía adquirida en la comunidad; SDRA. A41.9".to_string();
+    p.estado_gravedad = SeverityLevel::Severo;
+    let created = dmart_server::db::create_patient(&db, p)
+        .await
+        .expect("create");
+
+    let (status, json) = send(
+        &http,
+        Method::GET,
+        &format!("/fhir/Patient/{}/Condition", created.patient_id),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "bundle => {}", json);
+    assert_eq!(json["resource_type"], "Bundle", "bundle => {}", json);
+    assert_eq!(json["type"], "searchset", "bundle => {}", json);
+    let entries = json["entry"].as_array().expect("entries");
+    assert!(entries.len() >= 2, "debe haber UCI + hospital => {}", json);
+
+    // El diagnóstico hospitalario contiene "A41.9" -> debe enriquecerse con coding CIE-10
+    let coded: Vec<&serde_json::Value> = entries
+        .iter()
+        .filter(|e| {
+            e["code"]["coding"]
+                .as_array()
+                .is_some_and(|c| !c.is_empty())
+        })
+        .collect();
+    assert!(
+        !coded.is_empty(),
+        "algún Condition con coding CIE-10 => {}",
+        json
+    );
+    assert!(
+        coded
+            .iter()
+            .any(|c| c["code"]["coding"][0]["code"] == "A41.9"),
+        "codificación A41.9 presente => {}",
+        json
+    );
+
+    for e in entries.iter() {
+        assert_eq!(e["resource_type"], "Condition");
+        assert_eq!(e["clinical_status"]["coding"][0]["code"], "active");
+        assert_eq!(
+            e["subject"]["reference"],
+            format!("Patient/{}", created.patient_id),
+            "referencia al sujeto => {}",
+            json
+        );
+    }
+
+    let (status, _) = send(
+        &http,
+        Method::GET,
+        "/fhir/Patient/no-existe/Condition",
         Some(&token),
         None,
     )

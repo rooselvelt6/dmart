@@ -4,6 +4,7 @@ pub mod auth;
 pub mod cache;
 pub mod crypto;
 pub mod db;
+pub mod hl7;
 pub mod mfa;
 pub mod middleware;
 pub mod migrations;

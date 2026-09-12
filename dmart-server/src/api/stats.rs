@@ -16,6 +16,7 @@ fn calculate_age(fecha_nacimiento: &str) -> u8 {
 
 #[derive(Serialize)]
 pub struct UciStats {
+    pub ejecutivo: EjecutivoKpi,
     pub total_pacientes: usize,
     pub pacientes_activos: usize,
     pub por_gravedad: GravedadStats,
@@ -40,6 +41,16 @@ pub struct PromedioScores {
     pub news2_promedio: f32,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct EjecutivoKpi {
+    pub egresados: u64,
+    pub fallecidos: u64,
+    pub mortalidad_real_pct: f64,
+    pub mortalidad_predicha_pct: f64,
+    pub los_dias_promedio: f64,
+}
+
 pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
     let agg_result = db_ops::aggregate_patient_stats(&db).await;
     let recent_result = db_ops::list_patients(&db, 50, 0).await;
@@ -55,6 +66,42 @@ pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
 
             let avg =
                 |sum: f64, n: u64| -> f32 { if n > 0 { (sum / n as f64) as f32 } else { 0.0 } };
+
+            let ejecutivo = EjecutivoKpi {
+                egresados: agg.egresados,
+                fallecidos: agg.fallecidos,
+                mortalidad_real_pct: {
+                    let pct = if agg.fallecidos > 0 {
+                        agg.fallecidos as f64 * 100.0 / agg.egresados as f64
+                    } else {
+                        0.0
+                    };
+                    if (0.0..=100.0).contains(&pct) {
+                        pct
+                    } else {
+                        0.0
+                    }
+                },
+                mortalidad_predicha_pct: {
+                    let pct = if agg.mortalidad_predicha_n > 0 {
+                        agg.mortalidad_predicha_sum / agg.mortalidad_predicha_n as f64
+                    } else {
+                        0.0
+                    };
+                    if (0.0..=100.0).contains(&pct) {
+                        pct
+                    } else {
+                        0.0
+                    }
+                },
+                los_dias_promedio: {
+                    if agg.los_dias_sum > 0.0 {
+                        agg.los_dias_sum / agg.los_dias_n as f64
+                    } else {
+                        0.0
+                    }
+                },
+            };
 
             let promedios = PromedioScores {
                 apache_promedio: avg(agg.apache_sum, agg.apache_n),
@@ -88,6 +135,7 @@ pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
                 .collect();
 
             let stats = UciStats {
+                ejecutivo,
                 total_pacientes: agg.total as usize,
                 pacientes_activos: agg.total as usize,
                 por_gravedad: gravedad,

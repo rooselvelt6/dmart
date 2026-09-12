@@ -1,5 +1,5 @@
 use crate::api;
-use crate::api::{GravedadStats, PromedioScores, UciStatsResponse};
+use crate::api::{EjecutivoKpi, GravedadStats, PromedioScores, UciStatsResponse};
 use crate::components::chart::EvolutionChart;
 use crate::components::dashboard_kit::{DonutChart, PromedioScoresCard};
 use crate::components::severity_badge::SeverityBadge;
@@ -18,6 +18,13 @@ pub fn DashboardPage() -> impl IntoView {
         async move {
             let _ = current;
             api::get_stats().await.unwrap_or_else(|_| UciStatsResponse {
+                ejecutivo: EjecutivoKpi {
+                    egresados: 0,
+                    fallecidos: 0,
+                    mortalidad_real_pct: 0.0,
+                    mortalidad_predicha_pct: 0.0,
+                    los_dias_promedio: 0.0,
+                },
                 total_pacientes: 0,
                 pacientes_activos: 0,
                 por_gravedad: GravedadStats {
@@ -61,33 +68,34 @@ pub fn DashboardPage() -> impl IntoView {
         }
     });
 
-    view! {
-        <div class="page-enter">
-            <div class="mb-5 md:mb-7">
-                <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Panel de Monitoreo UCI"</h1>
-                <p style="color:var(--uci-muted); font-size:13px; margin:0;">"Pacientes activos, scores, recursos — vision general"</p>
+view! {
+            <div class="page-enter">
+                <div class="mb-5 md:mb-7">
+                    <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Panel de Monitoreo UCI"</h1>
+                    <p style="color:var(--uci-muted); font-size:13px; margin:0;">"Pacientes activos, scores, recursos — vision general"</p>
+                </div>
+
+                <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label="Cargando panel..." /> }>
+                    {move || {
+                        stats.get().map(|s| {
+                            let pacientes = patients.get().unwrap_or_default();
+                            let admin = admin_stats.get().flatten();
+
+                            view! {
+                                <div>
+                                    <SummaryCards stats=s.clone() />
+                                    <EjecutivoKpiSection ejecutivo=s.ejecutivo.clone() />
+                                    <StatsSection stats=s.clone() />
+                                    <AdminStatsSection admin=admin.clone() />
+                                    <ActivePatientsSection patients=pacientes.clone() />
+                                    <RecentPatientsSection reciente=s.reciente.clone() />
+                                </div>
+                            }
+                        })
+                    }}
+                </Suspense>
             </div>
-
-            <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label="Cargando panel..." /> }>
-                {move || {
-                    stats.get().map(|s| {
-                        let pacientes = patients.get().unwrap_or_default();
-                        let admin = admin_stats.get().flatten();
-
-                        view! {
-                            <div>
-                                <SummaryCards stats=s.clone() />
-                                <StatsSection stats=s.clone() />
-                                <AdminStatsSection admin=admin.clone() />
-                                <ActivePatientsSection patients=pacientes.clone() />
-                                <RecentPatientsSection reciente=s.reciente.clone() />
-                            </div>
-                        }
-                    })
-                }}
-            </Suspense>
-        </div>
-    }
+        }
 }
 
 #[component]
@@ -98,6 +106,65 @@ fn SummaryCards(stats: UciStatsResponse) -> impl IntoView {
             {stat_card("Criticos", &stats.por_gravedad.criticos.to_string(), "#EF4444", "fa-skull")}
             {stat_card("Severos", &stats.por_gravedad.severos.to_string(), "#F97316", "fa-triangle-exclamation")}
             {stat_card("Estables", &format!("{}", stats.por_gravedad.moderados + stats.por_gravedad.bajos), "#10B981", "fa-check-circle")}
+        </div>
+    }
+}
+
+#[component]
+fn EjecutivoKpiSection(ejecutivo: EjecutivoKpi) -> impl IntoView {
+    let delta_mortalidad = ejecutivo.mortalidad_real_pct - ejecutivo.mortalidad_predicha_pct;
+    let delta_color = if delta_mortalidad <= 0.0 { "#10B981" } else { "#EF4444" };
+    let delta_icon = if delta_mortalidad <= 0.0 { "fa-arrow-down" } else { "fa-arrow-up" };
+
+    view! {
+        <div class="mb-6 md:mb-7">
+            <h3 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-muted);">
+                <i class="fa-solid fa-chart-line mr-2"></i>"KPIs Ejecutivos — Mortalidad Real vs Predicha & LOS"
+            </h3>
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+                {kpi_card(
+                    "Egresados".to_string(),
+                    ejecutivo.egresados.to_string(),
+                    "#6366F1".to_string(),
+                    "fa-door-open".to_string(),
+                    "Pacientes dados de alta".to_string()
+                )}
+                {kpi_card(
+                    "Fallecidos".to_string(),
+                    ejecutivo.fallecidos.to_string(),
+                    "#EF4444".to_string(),
+                    "fa-skull-crossbones".to_string(),
+                    "Pacientes fallecidos en UCI".to_string()
+                )}
+                {kpi_card(
+                    "Mortalidad Real".to_string(),
+                    format!("{:.1}%", ejecutivo.mortalidad_real_pct),
+                    "#EF4444".to_string(),
+                    "fa-heart-crack".to_string(),
+                    "Fallecidos / Egresados * 100".to_string()
+                )}
+                {kpi_card(
+                    "Mortalidad Predicha".to_string(),
+                    format!("{:.1}%", ejecutivo.mortalidad_predicha_pct),
+                    "#8B5CF6".to_string(),
+                    "fa-brain".to_string(),
+                    "Promedio risk_score Apache/SAPS".to_string()
+                )}
+                {kpi_card(
+                    "Delta (Real - Pred)".to_string(),
+                    format!("{:+.1}%", delta_mortalidad),
+                    delta_color.to_string(),
+                    delta_icon.to_string(),
+                    "Real menor que predicha = bueno".to_string()
+                )}
+                {kpi_card(
+                    "LOS Promedio (días)".to_string(),
+                    format!("{:.1}", ejecutivo.los_dias_promedio),
+                    "#06B6D4".to_string(),
+                    "fa-calendar-days".to_string(),
+                    "Longitud de estadía UCI".to_string()
+                )}
+            </div>
         </div>
     }
 }
@@ -374,6 +441,22 @@ fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView
                 <i class=format!("fa-solid {} text-base md:text-lg", icon) style=format!("color:{};", color)></i>
             </div>
             <div class="text-2xl md:text-3xl lg:text-4xl font-extrabold" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
+        </div>
+    }
+}
+
+fn kpi_card(title: String, value: String, color: String, icon: String, tooltip: String) -> impl IntoView {
+    view! {
+        <div class="glass-card p-3 md:p-4 lg:p-5 relative group"
+             style=format!("border-top:3px solid {};", color)>
+            <div class="flex justify-between items-center mb-2 md:mb-3">
+                <span class="text-[10px] md:text-xs uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
+                <i class=format!("fa-solid {} text-base md:text-lg", icon) style=format!("color:{};", color)></i>
+            </div>
+            <div class="text-2xl md:text-3xl lg:text-4xl font-extrabold" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
+            <div class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <i class="fa-solid fa-circle-info text-xs" style="color:var(--uci-muted);" title=tooltip></i>
+            </div>
         </div>
     }
 }

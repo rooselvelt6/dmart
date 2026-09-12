@@ -36,6 +36,8 @@ uuid = { workspace = true }
 # Export
 printpdf = "0.7"
 csv = "1.3"
+qrcode = "0.14"
+image = "0.25"
 
 # Environment
 dotenvy = "0.15"

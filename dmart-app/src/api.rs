@@ -79,7 +79,17 @@ pub async fn list_patients(query: Option<&str>) -> ApiResult<Vec<PatientListItem
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct EjecutivoKpi {
+    pub egresados: u64,
+    pub fallecidos: u64,
+    pub mortalidad_real_pct: f64,
+    pub mortalidad_predicha_pct: f64,
+    pub los_dias_promedio: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct UciStatsResponse {
+    pub ejecutivo: EjecutivoKpi,
     pub total_pacientes: usize,
     pub pacientes_activos: usize,
     pub por_gravedad: GravedadStats,

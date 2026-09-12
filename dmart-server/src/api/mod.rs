@@ -5,6 +5,7 @@ pub mod export;
 pub mod fhir;
 pub mod institucion;
 pub mod measurements;
+pub mod monitores;
 pub mod patients;
 pub mod sandbox;
 pub mod scales;
@@ -88,6 +89,9 @@ pub fn build_api_router(
         // Realtime (SSE)
         .route("/realtime/stream", get(crate::realtime::realtime_stream))
         .route("/realtime/ping", get(crate::realtime::realtime_ping))
+        // Monitores (HL7) — token vía query para gateways de red cerrada
+        .route("/monitores/hl7", post(monitores::hl7_ingest))
+        .route("/monitores/health", get(monitores::hl7_health))
         // Stats
         .route("/stats", get(stats::get_stats))
         // Admin
@@ -205,6 +209,18 @@ pub fn build_api_router(
         .route(
             "/fhir/Patient/{id}/Observation",
             get(fhir::fhir_observation_list),
+        )
+        .route(
+            "/fhir/Patient/{id}/Condition",
+            get(fhir::fhir_condition_list),
+        )
+        .route(
+            "/fhir/Patient/{id}/DiagnosticReport",
+            get(fhir::fhir_diagnostic_report),
+        )
+        .route(
+            "/fhir/Patient/{id}/DiagnosticReport/QR",
+            get(fhir::fhir_diagnostic_report_qr),
         )
         .with_state(database);
 

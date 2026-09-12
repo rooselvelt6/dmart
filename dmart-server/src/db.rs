@@ -114,6 +114,12 @@ pub struct PatientAggregates {
     pub saps3_n: u64,
     pub news2_sum: f64,
     pub news2_n: u64,
+    pub egresados: u64,
+    pub fallecidos: u64,
+    pub mortalidad_predicha_sum: f64,
+    pub mortalidad_predicha_n: u64,
+    pub los_dias_sum: f64,
+    pub los_dias_n: u64,
 }
 
 /// Calcula totales y promedios de scores con agregaciones SurrealQL en lugar
@@ -142,7 +148,7 @@ pub async fn aggregate_patient_stats(db: &Surreal<Db>) -> Result<PatientAggregat
 
     let scores: Vec<serde_json::Value> = db
         .query(
-            "SELECT ultimo_apache_score, ultimo_gcs_score, ultimo_sofa_score, ultimo_saps3_score, ultimo_news2_score FROM patients",
+            "SELECT ultimo_apache_score, ultimo_gcs_score, ultimo_sofa_score, ultimo_saps3_score, ultimo_news2_score, fecha_egreso_uci, fecha_ingreso_uci, desenlace_uci, mortality_risk FROM patients",
         )
         .await?
         .take(0)?;
@@ -169,6 +175,36 @@ pub async fn aggregate_patient_stats(db: &Surreal<Db>) -> Result<PatientAggregat
             agg.news2_sum += v;
             agg.news2_n += 1;
         }
+        // ── KPIs ejecutivos (5.3): egreso real, mortalidad predicha y LOS ──
+        if let Some(egreso) = row.get("fecha_egreso_uci").and_then(|v| v.as_str())
+            && !egreso.is_empty()
+        {
+            agg.egresados += 1;
+            if let Some(dl) = row.get("desenlace_uci").and_then(|v| v.as_str())
+                && dl.eq_ignore_ascii_case("Fallecido")
+            {
+                agg.fallecidos += 1;
+            }
+        }
+        if let Some(egreso) = row.get("fecha_egreso_uci").and_then(|v| v.as_str()) {
+            if !egreso.is_empty()
+                && let Some(ingreso) = row.get("fecha_ingreso_uci").and_then(|v| v.as_str())
+            {
+                use chrono::DateTime;
+                if let (Ok(e), Ok(i)) = (
+                    DateTime::parse_from_rfc3339(egreso),
+                    DateTime::parse_from_rfc3339(ingreso),
+                ) {
+                    let dias = (e - i).num_hours() as f64 / 24.0;
+                    agg.los_dias_sum += dias.max(0.0);
+                    agg.los_dias_n += 1;
+                }
+            }
+            if let Some(m) = row.get("mortality_risk").and_then(|v| v.as_f64()) {
+                agg.mortalidad_predicha_sum += m;
+                agg.mortalidad_predicha_n += 1;
+            }
+        }
     }
 
     Ok(agg)
@@ -191,6 +227,33 @@ pub async fn create_patient(db: &Surreal<Db>, mut patient: Patient) -> Result<Pa
 pub async fn get_patient(db: &Surreal<Db>, id: &str) -> Result<Option<Patient>> {
     let patient: Option<Patient> = db.select(("patients", id)).await?;
     Ok(patient)
+}
+
+/// Busca paciente por número de registro médico (historia clínica) o cédula.
+/// Usado por la integración HL7 (PID-3) para vincular monitores a pacientes.
+pub async fn get_patient_by_mrn(db: &Surreal<Db>, mrn: &str) -> Result<Option<Patient>> {
+    let q = format!("%{}%", mrn.trim());
+    let patients: Vec<Patient> = db
+        .query(
+            "SELECT * FROM patients WHERE historia_clinica = $mrn OR cedula = $mrn \
+             ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(("mrn", mrn.trim().to_string()))
+        .await?
+        .take(0)?;
+    if patients.is_empty() {
+        // búsqueda con comodines por si trae espacios/guiones distintos
+        let patients: Vec<Patient> = db
+            .query(
+                "SELECT * FROM patients WHERE historia_clinica ~= $q OR cedula ~= $q \
+                 ORDER BY created_at DESC LIMIT 1",
+            )
+            .bind(("q", q))
+            .await?
+            .take(0)?;
+        return Ok(patients.into_iter().next());
+    }
+    Ok(patients.into_iter().next())
 }
 
 /// Crea el paciente asignando cama y equipos dentro de una única transacción
@@ -250,9 +313,11 @@ LET $created = CREATE type::thing('patients', $pid) CONTENT $patient RETURN AFTE
         .ok_or_else(|| anyhow::anyhow!("Failed to create patient"))
 }
 
-/// Libera la cama y sus equipos al egresar un paciente, todo en una sola
-/// transacción SurrealQL.
-pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient) -> Result<()> {
+/// Libera la cama y sus equipos al egresar un paciente, en una sola
+/// transacción SurrealQL. `desenlace` es el resultado clínico (`Mejorado`,
+/// `Trasladado`, `Fallecido`), que se guarda en el paciente para poder
+/// comparar la mortalidad **real** contra la **predicha**.
+pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient, desenlace: &str) -> Result<()> {
     let Some(cama_id) = &patient.cama_id else {
         return Ok(());
     };
@@ -261,10 +326,18 @@ pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient) -> Result<()>
         BEGIN TRANSACTION;
         UPDATE type::table('equipos') SET cama_id = NONE WHERE cama_id = $cama_id;
         UPDATE type::thing('camas', $cama_id) SET estado = 'Libre', paciente_id = NONE, paciente_nombre = NONE;
+        UPDATE type::thing('patients', $paciente_id)
+            SET fecha_egreso_uci = time::now(),
+                desenlace_uci = $desenlace;
         COMMIT TRANSACTION;
     "#;
 
-    let mut res = db.query(sql).bind(("cama_id", cama_id.clone())).await?;
+    let mut res = db
+        .query(sql)
+        .bind(("cama_id", cama_id.clone()))
+        .bind(("paciente_id", patient.patient_id.clone()))
+        .bind(("desenlace", desenlace.to_owned()))
+        .await?;
     if let Some((_, err)) = res.take_errors().into_iter().next() {
         return Err(anyhow::anyhow!("{}", err));
     }

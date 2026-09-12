@@ -4,6 +4,7 @@ pub mod auth;
 mod cache;
 mod crypto;
 mod db;
+mod hl7;
 mod mfa;
 mod middleware;
 pub mod migrations;
@@ -232,6 +233,21 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("    Frontend: http://{}/", addr);
     tracing::info!("    Obs:      http://{}/obs/health", addr);
     tracing::info!("    Metrics:  http://localhost:9090/metrics");
+
+    // Listener HL7/MLLP para monitores de cama (opcional, se aísla por VLAN).
+    if let Some(hl7_port) = std::env::var("DMART_HL7_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+    {
+        let hl7_db = database.clone();
+        let hl7_addr = SocketAddr::from(([0, 0, 0, 0], hl7_port));
+        tokio::spawn(async move {
+            if let Err(e) = hl7::mllp::serve(hl7_addr, hl7_db).await {
+                tracing::error!("[mllp] listener cerrado: {e}");
+            }
+        });
+        tracing::info!("    HL7/MLLP: tcp://{}", hl7_addr);
+    }
 
     let shutdown_timeout = Duration::from_secs(
         std::env::var("DMART_SHUTDOWN_TIMEOUT_SECS")

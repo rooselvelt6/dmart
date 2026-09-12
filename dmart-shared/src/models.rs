@@ -314,6 +314,12 @@ pub struct Patient {
     pub fecha_ingreso_hospital: String, // ISO datetime
     #[serde(default)]
     pub fecha_ingreso_uci: String, // ISO datetime
+    /// Fecha de egreso (ISO datetime). Vacía = paciente aún activo en UCI.
+    #[serde(default)]
+    pub fecha_egreso_uci: String,
+    /// Desenlace al egreso: `Mejorado`, `Trasladado`, `Fallecido` (vacío = activo).
+    #[serde(default)]
+    pub desenlace_uci: String,
     #[serde(default)]
     pub descripcion_ingreso: String,
     #[serde(default)]
@@ -392,6 +398,8 @@ impl Patient {
             familiar_encargado: String::new(),
             fecha_ingreso_hospital: now.clone(),
             fecha_ingreso_uci: now.clone(),
+            fecha_egreso_uci: String::new(),
+            desenlace_uci: String::new(),
             descripcion_ingreso: String::new(),
             antecedentes: String::new(),
             resumen_ingreso: String::new(),

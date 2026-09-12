@@ -10,6 +10,14 @@ use axum::{
 use dmart_shared::models::*;
 use serde::Deserialize;
 
+#[derive(Deserialize, Default)]
+pub struct DesenlaceQuery {
+    /// Resultado clínico del egreso: `Mejorado`, `Trasladado`, `Fallecido`.
+    pub desenlace: Option<String>,
+}
+
+// GET /api/patients?q=<search>&limit=50&offset=0
+
 #[derive(Deserialize)]
 pub struct ListPatientsQuery {
     pub q: Option<String>,
@@ -249,8 +257,10 @@ pub async fn delete_patient(
 pub async fn egreso_paciente(
     State(db): State<Database>,
     Path(id): Path<String>,
+    Query(params): Query<DesenlaceQuery>,
     claims: Claims,
 ) -> impl IntoResponse {
+    let desenlace = params.desenlace.unwrap_or_else(|| "Mejorado".to_string());
     if let Some(audit) = crate::audit::audit() {
         let _ = audit
             .log_patient_access(
@@ -265,7 +275,7 @@ pub async fn egreso_paciente(
     let paciente = db_ops::get_patient(&db, &id).await;
 
     match paciente {
-        Ok(Some(p)) => match db_ops::egresar_paciente(&db, &p).await {
+        Ok(Some(p)) => match db_ops::egresar_paciente(&db, &p, &desenlace).await {
             Ok(_) => (
                 StatusCode::OK,
                 Json(ApiResponse::ok(
