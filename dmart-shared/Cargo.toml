@@ -11,7 +11,4 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
-
-[[bench]]
-name = "scale_bench"
-harness = false
+proptest = "1.4"

@@ -1108,3 +1108,199 @@ pub fn sofa_mortality_estimate(score: u32) -> f32 {
 }
 
 // Redundant SofaBreakdown and sofa_breakdown removed
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PropTest: Property-based testing para escalas clínicas
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use crate::models::*;
+    use proptest::prelude::*;
+
+    // Estrategia para generar ApacheIIData válido - usa valores por defecto con variaciones en campos clave
+    fn arb_apache_data() -> impl Strategy<Value = ApacheIIData> {
+        (
+            30.0f32..44.0,    // temperatura
+            0.0f32..200.0,    // presion_arterial_media
+            0.0f32..250.0,    // presion_sistolica
+            0.0f32..200.0,    // frecuencia_cardiaca
+            0.0f32..60.0,     // frecuencia_respiratoria
+            0.21f32..1.0,     // fio2
+            proptest::option::of(0.0f32..600.0), // pao2
+            proptest::option::of(0.0f32..600.0), // a_ado2
+            0.0f32..100.0,    // spo2
+            7.0f32..7.7,      // ph_arterial
+            100.0f32..200.0,  // sodio_serico
+        )
+            .prop_map(
+            |(
+                temperatura,
+                presion_arterial_media,
+                presion_sistolica,
+                frecuencia_cardiaca,
+                frecuencia_respiratoria,
+                fio2,
+                pao2,
+                a_ado2,
+                spo2,
+                ph_arterial,
+                sodio_serico,
+            )| {
+                ApacheIIData {
+                    temperatura,
+                    presion_arterial_media,
+                    presion_sistolica,
+                    frecuencia_cardiaca,
+                    frecuencia_respiratoria,
+                    fio2,
+                    pao2,
+                    a_ado2,
+                    spo2,
+                    ph_arterial,
+                    sodio_serico,
+                    ..Default::default()
+                }
+            },
+        )
+        .boxed()
+    }
+
+    // Estrategia para GcsData
+    fn arb_gcs_data() -> impl Strategy<Value = GcsData> {
+        (1u8..=4, 1u8..=5, 1u8..=6).prop_map(|(ojos, verbal, motora)| GcsData {
+            apertura_ocular: ojos,
+            respuesta_verbal: verbal,
+            respuesta_motora: motora,
+        })
+    }
+
+    proptest! {
+        #[test]
+        fn apache_score_bounded(data in arb_apache_data()) {
+            let score = calculate_apache_ii_score(&data);
+            prop_assert!(score <= 71, "APACHE II score must be <= 71, got {}", score);
+        }
+
+        #[test]
+        fn apache_score_non_negative(data in arb_apache_data()) {
+            let score = calculate_apache_ii_score(&data);
+            prop_assert!(score >= 0, "APACHE II score must be >= 0");
+        }
+
+        #[test]
+        fn apache_mortality_risk_bounded(data in arb_apache_data()) {
+            let score = calculate_apache_ii_score(&data);
+            let mort = mortality_risk(score);
+            prop_assert!((0.0..=100.0).contains(&mort), "Mortality risk must be 0-100%, got {}", mort);
+        }
+
+        #[test]
+        fn apache_mortality_monotonic(
+            a in arb_apache_data(),
+            b in arb_apache_data(),
+        ) {
+            let score_a = calculate_apache_ii_score(&a);
+            let score_b = calculate_apache_ii_score(&b);
+            let mort_a = mortality_risk(score_a);
+            let mort_b = mortality_risk(score_b);
+
+            if score_a <= score_b {
+                prop_assert!(mort_a <= mort_b + 1.0, "Mortality should be monotonic with score");
+            }
+        }
+
+        #[test]
+        fn gcs_total_bounded(data in arb_gcs_data()) {
+            let total = data.total();
+            prop_assert!((3..=15).contains(&total), "GCS total must be 3-15, got {}", total);
+        }
+
+        #[test]
+        fn saps3_score_bounded(data in arb_apache_data()) {
+            let score = calculate_saps_iii_score(&data);
+            prop_assert!(score <= 104, "SAPS III score must be <= 104, got {}", score);
+        }
+
+        #[test]
+        fn saps3_mortality_bounded(data in arb_apache_data()) {
+            let score = calculate_saps_iii_score(&data);
+            let mort = saps_iii_mortality_prediction(score);
+            prop_assert!((0.0..=100.0).contains(&mort), "SAPS III mortality must be 0-100%, got {}", mort);
+        }
+
+        #[test]
+        fn news2_score_bounded(data in arb_apache_data()) {
+            let score = calculate_news2_score(&data);
+            prop_assert!(score <= 20, "NEWS2 score should be <= 20, got {}", score);
+        }
+
+        #[test]
+        fn sofa_score_bounded(data in arb_apache_data()) {
+            let score = calculate_sofa_score(&data);
+            prop_assert!(score <= 24, "SOFA score must be <= 24, got {}", score);
+        }
+
+        #[test]
+        fn sofa_mortality_bounded(data in arb_apache_data()) {
+            let score = calculate_sofa_score(&data);
+            let mort = sofa_mortality_estimate(score);
+            prop_assert!((0.0..=100.0).contains(&mort), "SOFA mortality must be 0-100%, got {}", mort);
+        }
+
+        #[test]
+        fn all_scores_consistent(data in arb_apache_data()) {
+            let apache = calculate_apache_ii_score(&data);
+            let saps3 = calculate_saps_iii_score(&data);
+            let news2 = calculate_news2_score(&data);
+            let sofa = calculate_sofa_score(&data);
+            let gcs = data.gcs_total as u32;
+
+            // Todos los scores deben ser finitos y en rango esperado
+            prop_assert!(apache <= 71);
+            prop_assert!(saps3 <= 104);
+            prop_assert!(news2 <= 20);
+            prop_assert!(sofa <= 24);
+            prop_assert!(gcs >= 3 && gcs <= 15);
+
+            // Si Apache es muy alto, SAPS3 y SOFA también deberían ser altos
+            if apache >= 30 {
+                prop_assert!(saps3 >= 20 || sofa >= 5,
+                    "High Apache ({}) should correlate with higher SAPS3 ({}) or SOFA ({})",
+                    apache, saps3, sofa);
+            }
+        }
+
+        #[test]
+        fn acute_physiology_components_bounded(data in arb_apache_data()) {
+            let breakdown = apache_ii_breakdown(&data);
+            prop_assert!(breakdown.temperatura <= 4);
+            prop_assert!(breakdown.pam <= 4);
+            prop_assert!(breakdown.fc <= 4);
+            prop_assert!(breakdown.fr <= 4);
+            prop_assert!(breakdown.oxigenacion <= 4);
+            prop_assert!(breakdown.ph <= 4);
+            prop_assert!(breakdown.sodio <= 4);
+            prop_assert!(breakdown.potasio <= 4);
+            prop_assert!(breakdown.creatinina <= 8); // puede ser x2 por falla aguda
+            prop_assert!(breakdown.hematocrito <= 4);
+            prop_assert!(breakdown.leucocitos <= 4);
+            prop_assert!(breakdown.gcs_pts <= 12); // max 15-3
+            prop_assert!(breakdown.aps_total <= 60);
+            prop_assert!(breakdown.edad_pts <= 6);
+            prop_assert!(breakdown.cronicas_pts <= 5);
+            prop_assert!(breakdown.total <= 71);
+        }
+
+        #[test]
+        fn saps3_breakdown_consistent(data in arb_apache_data()) {
+            let breakdown = calculate_saps3_breakdown(&data);
+            let score = calculate_saps_iii_score(&data);
+            prop_assert_eq!(breakdown.total, score);
+            prop_assert!(breakdown.box1 <= 42);
+            prop_assert!(breakdown.box2 <= 14);
+            prop_assert!(breakdown.box3 <= 48);
+        }
+    }
+}

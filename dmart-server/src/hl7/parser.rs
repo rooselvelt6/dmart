@@ -534,3 +534,4 @@ OBX|6|NM|T1^Temperature||37.1|Cel||||||F|||20240821141030|||IntelliVue"#;
         assert_eq!(merged.ph_arterial, 7.40);
     }
 }
+

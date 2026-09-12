@@ -16,3 +16,4 @@
 pub mod ingest;
 pub mod mllp;
 pub mod parser;
+pub mod proptests;
