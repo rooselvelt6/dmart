@@ -312,7 +312,11 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | **SPEC-024** | Multi-tenancy (aislamiento datos) | 8 | 🟡 Media | SPEC-004 | 3 días | ⏳ PENDING |
 | **SPEC-025** | Blue/Green + Canary Deploy | 8 | 🟡 Media | SPEC-020 | 2 días | ⏳ PENDING |
 | **SPEC-026** | Cost Optimization (right-sizing) | 8 | 🟢 Baja | SPEC-019 | 1 día | ⏳ PENDING |
-| **SPEC-027** | Coverage gate en CI (`cargo llvm-cov`) para HL7 y clínica | 6 | 🟠 Alta | SPEC-003, SPEC-007 | 0.5 día | ⏳ PENDING |
+| **SPEC-027** | Coverage gate en CI (`cargo llvm-cov`) para HL7 y clínica | 6 | 🔴 Crítica | SPEC-003, SPEC-007 | 0.5 día | ⏳ PENDING |
+| **SPEC-028** | Suite de casos de referencia clínica (test vectors Knaus/GCS/NEWS2) | 6 | 🟠 Alta | scales existentes en `shared` | 2 días | ⏳ PENDING |
+| **SPEC-029** | Fingerprint + versionado del cálculo de scores (auditabilidad) | 6 | 🟡 Media | SPEC-004 | 2 días | ⏳ PENDING |
+| **SPEC-030** | Retención y downsampling de mediciones (raw → hourly → daily) | 6 | 🟡 Media | SPEC-004 | 2 días | ⏳ PENDING |
+| **SPEC-031** | Hardening ingest HL7 (rate-limit, circuit breaker, data-quality) | 6 | 🟠 Alta | SPEC-003, SPEC-005 | 2 días | ⏳ PENDING |
 
 ### Próximos 3 Specs a ejecutar (Sprint actual)
 
@@ -322,13 +326,19 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | 2 | **SPEC-005** Prometheus + Grafana | DevOps | +2 días | `/metrics` + dashboards operativos |
 | 3 | **SPEC-006** Docker multi-stage + Staging | Backend/DevOps | +2 días | Imagen ~50MB + `docker compose -f docker-compose.prod.yml up` en staging |
 
+> **Hot trail tras el sprint** (precedencia por columna):  
+> 4. **SPEC-007** CI Pipeline Completo — acoplar **SPEC-027** (gate cobertura)  
+> 5. **SPEC-031** Hardening Ingest (rate-limit, breaker, gap/fault) — conjuntamente con 005  
+> 6. **SPEC-028** Vectores clínicos (conformidad con Knaus) — antes de marcar cualquier escala DONE  
+> 7. **SPEC-008** Alertas Operativas — alimentado por 031/Grafana
+
 ---
 
 ## Métricas de Progreso SDD
 
 | Métrica | Target | Actual |
 |---------|--------|--------|
-| Specs completadas | 23/27 (85%) | 3 (11.5%) |
+| Specs completadas | 26/31 (84%) | 3 (9.7%) |
 | Specs en progreso | 0 | 0 (sprint: SPEC-004/005/006) |
 | Specs bloqueadas | 0 | 0 |
 | Cobertura HL7 (parser + MLLP + ingest) | >90% | ✅ 96.5% / 93.8% / 91.8% |
@@ -377,6 +387,13 @@ Producción hospitalaria real: k8s, GitOps, disaster recovery, compliance.
 | 8.6 | Multi-tenancy (varios hospitales, aislamiento datos) | `db.rs`, `rbac.rs` | Tenant isolation | Media → **SPEC-024** |
 | 8.7 | Blue/Green deploy + canary releases | `.github/workflows/deploy.yml` | Zero-downtime deploys | Media → **SPEC-025** |
 | 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja → **SPEC-026** |
+
+> ⚠️ **ACUERDO 2026-09-13 (decisión de arquitecto):** la Fase 8 (SPEC-019–026) queda
+> **congelada hasta que exista un contrato/piloto hospitalario real**. El sprint de
+> producción se define como *MVP de piloto*: **SPEC-004 → 005(→007) → 006 → 008 → 009 → 012**.
+> Antes de tocar Fase 8, deben cerrarse los huecos clínicos críticos: **SPEC-027 (gate
+> cobertura), SPEC-028 (vectores clínicos), SPEC-031 (ingest hardening)**. k8s/GitOps/
+> cluster no aportan valor a un piloto de 5 camas y sí suman riesgo operativo.
 
 ---
 
@@ -483,6 +500,10 @@ jobs:
 - **NUEVO**: `cargo llvm-cov` validado localmente → cobertura HL7 >90%. Recomendado: gate de cobertura en CI (**SPEC-027**).
 - **NUEVO**: los commits de Fase 5.6 entraron con drift de clippy/fmt (rotos los gates). Lección: **todo commit debe repasar los 4 gates** (`fmt --check`, `clippy -D warnings`, `test`, `build --release`) antes de pushear; el SDD ya no lo permite.
 - **NUEVO**: los tests de integración HL7 usan TCP real (`serve()` + TcpStream) en vez de únicamente mocks — cubren paths de error (parseo, UTF-8, ingestión, >1 MiB, EOF graceful) que los unit tests no alcanzaban.
+- **NUEVO**: *Cobertura ≠ corrección clínica* — los proptests prueban propiedades, no que APACHE II coincida con Knaus. Se adoptó **SPEC-028** (test vectors con cita) como requerimiento para marcar cualquier escala DONE.
+- **NUEVO**: auditabilidad médico-legal → **SPEC-029** (fingerprint + semver de algoritmos): ningún score sin versión y hash reproducer.
+- **NUEVO**: el crecimiento de `measurement` es el riesgo de largo plazo → **SPEC-030** (retención raw→hourly→daily; resta ops y backups).
+- **NUEVO**: un monitor flood/rebote no debe degradar el resto de la UCI → **SPEC-031** (token bucket + circuit breaker + gap/fault detection expuestos en Grafana via SPEC-005).
 
 ---
 
@@ -494,4 +515,4 @@ jobs:
 | Arquitectura técnica | `docs/ARQUITECTURA.md` ✅ (ADR modelo SurrealDB) |
 | API REST | `docs/API.md` ✅ |
 | Referencias clínicas | `docs/APACHE_II.md`, `docs/GCS.md` |
-| Specs SDD | `specs/` ✅ (001–006 + TEMPLATE) |
+| Specs SDD | `specs/` ✅ (001–031 + TEMPLATE; 001–003 DONE, 004–006 READY) |

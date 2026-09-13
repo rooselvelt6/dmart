@@ -24,6 +24,7 @@ Feature: Prometheus Metrics + Grafana Dashboards
       - ML: ml_model_load_duration_seconds, ml_predictions_total, ml_accuracy_gauge
       - System: process_cpu_seconds_total, process_resident_memory_bytes
       - Queue/Stream: sse_connections_active, hl7_messages_processed_total
+      - Ingest/Data-quality (SPEC-031): ingest_gap_total, ingest_invalid_total, ingest_fault_devices, ingest_throttled_total, ingest_error_avg
 
   Scenario: Grafana dashboards load and show data
     Given Grafana connected to Prometheus
@@ -34,6 +35,7 @@ Feature: Prometheus Metrics + Grafana Dashboards
       - "ML Models" (accuracy, latency, drift, predictions/day)
       - "Security" (auth failures, token refresh, RBAC denials)
       - "HL7/FHIR" (messages processed, latency, errors)
+      - "Monitor Data-Quality" (gaps, sensor faults, throttling, degraded scores)
 
   Scenario: Alerting rules fire correctly
     Given Prometheus rules loaded
@@ -90,6 +92,7 @@ grafana/dashboards/
 ├── ml-models.json               # Accuracy, latency, drift, predictions
 ├── security.json                # Auth, RBAC, token refresh
 ├── hl7-fhir.json                # Interoperabilidad HL7/FHIR
+├── monitor-data-quality.json    # Gaps de sensor, faults, throttling (SPEC-031)
 └── datasource.yaml              # Prometheus datasource config
 ```
 
@@ -140,6 +143,32 @@ groups:
       severity: warning
     annotations:
       summary: "ML model accuracy dropped >20%"
+
+- name: dmart-ingest-quality
+  rules:
+  - alert: SensorGap
+    expr: rate(ingest_gap_total[10m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Monitor sin datos por >5min (sensor offline)"
+
+  - alert: SensorFault
+    expr: ingest_fault_devices > 0
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Dispositivo marcado fault (valores inválidos)"
+
+  - alert: IngestThrottling
+    expr: rate(ingest_throttled_total[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Ingest haciendo throttling (posible flood de monitor)"
 ```
 
 ## Edge Cases
@@ -154,6 +183,7 @@ groups:
 - **Metrics exposure**: `/metrics` solo accesible desde red interna (firewall) o con auth básica
 - **No PHI en labels**: Nunca poner patient_id, MRN en labels de métricas
 - **Alert routing**: Alertas críticas → PagerDuty/Slack, warning → email
+- **Data-quality**: los events de gap/fault (SPEC-031) emiten `severity` y `daneez dev_type`, nunca datos del monitor (solo `patient_id` en canal interno SSE auditado)
 
 ## Testing Strategy
 
@@ -161,6 +191,7 @@ groups:
 - [ ] `test_metrics_endpoint_exposes_all()` — scrape `/metrics` → parse → verify keys
 - [ ] `test_histogram_buckets_correct()` — latencies fall in correct buckets
 - [ ] `test_business_metrics_updated()` — simulate actions → verify counters increment
+- [ ] `test_ingest_quality_metrics()` — gap/fault/throttle counters exponen (SPEC-031)
 
 ### Integration Tests
 - [ ] Prometheus scrape config works → targets UP
@@ -177,8 +208,8 @@ groups:
 
 ## Definition of Done
 - [ ] Spec aprobada
-- [ ] `/metrics` expone todas las métricas listadas
-- [ ] 5 dashboards Grafana JSONs en `grafana/dashboards/`
+- [ ] `/metrics` expone todas las métricas listadas (incl. ingest data-quality)
+- [ ] 6 dashboards Grafana JSONs en `grafana/dashboards/`
 - [ ] 10+ alerting rules en `prometheus/rules/`
 - [ ] `promtool test rules` pasa
 - [ ] Dashboards importados y validados en staging
