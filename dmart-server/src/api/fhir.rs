@@ -7,8 +7,8 @@ use axum::{
 };
 use base64::Engine;
 use dmart_shared::models::*;
-use image::ImageEncoder;
 use image::EncodableLayout;
+use image::ImageEncoder;
 use qrcode::QrCode;
 use qrcode::render::svg;
 use serde::Serialize;
@@ -621,7 +621,8 @@ pub async fn fhir_diagnostic_report_qr(
     let pdf_url = format!("/api/patients/{}/export/pdf", patient.patient_id);
     let qr_data = format!("https://dmart.local{}", pdf_url);
 
-    let qr_svg = generate_qr_code_svg(&qr_data).unwrap_or_else(|_| "Error generando QR".to_string());
+    let qr_svg =
+        generate_qr_code_svg(&qr_data).unwrap_or_else(|_| "Error generando QR".to_string());
     let qr_png_b64 = generate_qr_code_png_base64(&qr_data).unwrap_or_default();
 
     Ok(Json(serde_json::json!({
@@ -649,12 +650,18 @@ mod tests {
     #[test]
     fn test_generate_qr_code_png_base64() {
         let url = "https://dmart.local/api/patients/test/export/pdf";
-        let png_b64 = generate_qr_code_png_base64(url).expect("QR PNG base64 generation should succeed");
+        let png_b64 =
+            generate_qr_code_png_base64(url).expect("QR PNG base64 generation should succeed");
         assert!(!png_b64.is_empty());
         // Verificar que es base64 válido
-        let decoded = base64::engine::general_purpose::STANDARD.decode(&png_b64).expect("Should be valid base64");
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&png_b64)
+            .expect("Should be valid base64");
         // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
-        assert_eq!(&decoded[0..8], &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        assert_eq!(
+            &decoded[0..8],
+            &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        );
     }
 
     #[test]
@@ -662,7 +669,7 @@ mod tests {
         let url = "https://dmart.local/api/patients/123/export/pdf";
         let svg = generate_qr_code_svg(url).expect("SVG generation");
         let png_b64 = generate_qr_code_png_base64(url).expect("PNG generation");
-        
+
         // Ambos deberían generar sin error
         assert!(svg.len() > 100);
         assert!(png_b64.len() > 100);

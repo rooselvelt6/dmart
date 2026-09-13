@@ -452,6 +452,15 @@ pub async fn get_measurements_for_patient(
     Ok(measurements)
 }
 
+pub async fn get_all_measurements(db: &Surreal<Db>, patient_id: &str) -> Result<Vec<Measurement>> {
+    let result: Option<Vec<Measurement>> = db
+        .query("SELECT * FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC")
+        .bind(("pid", patient_id.to_string()))
+        .await?
+        .take(0)?;
+    Ok(result.unwrap_or_default())
+}
+
 pub async fn get_last_measurement(
     db: &Surreal<Db>,
     patient_id: &str,

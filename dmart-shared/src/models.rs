@@ -63,7 +63,7 @@ pub enum TipoAdmision {
     Electiva,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, strum::Display)]
 pub enum SeverityLevel {
     #[default]
     Bajo, // 0-9

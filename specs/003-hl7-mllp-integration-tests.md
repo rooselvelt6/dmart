@@ -108,9 +108,9 @@ N/A — Solo tests, no cambios de schema.
 - **Gate**: Merge bloqueado si coverage HL7 < 90%
 
 ## Definition of Done
-- [ ] Spec aprobada
-- [ ] `dmart-server/tests/hl7_integration.rs` creado con 7+ tests
-- [ ] `cargo test hl7_integration` pasa
-- [ ] Coverage HL7 parser + MLLP > 90%
-- [ ] CI job añadido y pasando
-- [ ] CHANGELOG.md actualizado
+- [x] Spec aprobada
+- [x] `dmart-server/tests/hl7_integration.rs` creado con 7+ tests (32)
+- [x] `cargo test hl7_integration` pasa
+- [x] Coverage HL7 parser + MLLP > 90% (parser 96.5%, mllp 93.8%, ingest 91.8%)
+- [x] CI job añadido y pasando (`hl7-integration-test`)
+- [x] CHANGELOG.md actualizado

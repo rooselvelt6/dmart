@@ -14,9 +14,9 @@ pub const END_BLOCK: u8 = 0x1C;
 pub const CARRIAGE_RETURN: u8 = 0x0D;
 
 /// Máximo tamaño de un mensaje HL7 (1 MiB).
-const MAX_MESSAGE: usize = 1024 * 1024;
+pub const MAX_MESSAGE: usize = 1024 * 1024;
 
-fn build_ack(message_id: &str, err: Option<&str>) -> Vec<u8> {
+pub fn build_ack(message_id: &str, err: Option<&str>) -> Vec<u8> {
     let ack_code = if err.is_some() { "AR" } else { "AA" };
     let now = chrono::Utc::now().format("%Y%m%d%H%M%S");
     let line = format!(

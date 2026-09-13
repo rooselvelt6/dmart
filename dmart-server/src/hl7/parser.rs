@@ -62,7 +62,7 @@ pub struct Vital {
 
 /// Tipo de signo vital reconocido.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum VitalKind {
+pub enum VitalKind {
     Hr,
     Rr,
     Spo2,
@@ -117,7 +117,7 @@ pub fn hl7_datetime_to_rfc3339(raw: &str) -> Option<String> {
     Some(format!("{}Z", dt.format("%Y-%m-%dT%H:%M:%S")))
 }
 
-fn detect_vendor(sending_app: &str, sending_facility: &str) -> MonitorSource {
+pub fn detect_vendor(sending_app: &str, sending_facility: &str) -> MonitorSource {
     let hay = format!("{} {}", sending_app, sending_facility).to_lowercase();
     if hay.contains("mindray") || hay.contains("benefit") || hay.contains("bene") {
         MonitorSource::Mindray
@@ -133,7 +133,7 @@ fn detect_vendor(sending_app: &str, sending_facility: &str) -> MonitorSource {
 }
 
 /// Clasifica un OBX por identificador (LOINC o mnemónico) + nombre.
-fn classify_vital(ident: &str, name: &str) -> Option<VitalKind> {
+pub fn classify_vital(ident: &str, name: &str) -> Option<VitalKind> {
     let code_upper = ident.to_uppercase();
     let name_lower = name.to_lowercase();
 
@@ -162,25 +162,36 @@ fn classify_vital(ident: &str, name: &str) -> Option<VitalKind> {
         _ => {}
     }
 
-    // 3) Fallback por nombre en español/inglés
-    if name_lower.contains("frecuencia") && name_lower.contains("card")
-        || name_lower.contains("heart rate")
+    // 3) Fallback por nombre en español/inglés (normaliza acentos).
+    let name_normalized: String = name_lower
+        .chars()
+        .map(|c| match c {
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            c => c,
+        })
+        .collect();
+    if name_normalized.contains("frecuencia") && name_normalized.contains("card")
+        || name_normalized.contains("heart rate")
     {
         return Some(VitalKind::Hr);
     }
-    if name_lower.contains("respirator")
-        || name_lower.contains("frecuencia respiratoria")
-        || name_lower.replace(' ', "").contains("frecresp")
+    if name_normalized.contains("respirator")
+        || name_normalized.contains("frecuencia respiratoria")
+        || name_normalized.replace(' ', "").contains("frecresp")
     {
         return Some(VitalKind::Rr);
     }
-    if name_lower.contains("saturacion")
-        || name_lower.contains("oxygen saturation")
-        || name_lower.contains("spo2")
+    if name_normalized.contains("saturacion")
+        || name_normalized.contains("oxygen saturation")
+        || name_normalized.contains("spo2")
     {
         return Some(VitalKind::Spo2);
     }
-    if name_lower.contains("temperatura") || name_lower.contains("temperature") {
+    if name_normalized.contains("temperatura") || name_normalized.contains("temperature") {
         return Some(VitalKind::Temp);
     }
     None
@@ -395,7 +406,9 @@ pub fn vitals_into_apache(msg: &VitalsMessage, base: &ApacheIIData) -> ApacheIID
             Some("8310-5") => out.temperatura = v.value,
             Some("8480-6") => out.presion_sistolica = v.value,
             Some("8478-0") => out.presion_arterial_media = v.value,
-            Some("8460-8") if out.presion_arterial_media <= 0.0 || out.presion_arterial_media > 250.0 => {
+            Some("8460-8")
+                if out.presion_arterial_media <= 0.0 || out.presion_arterial_media > 250.0 =>
+            {
                 out.presion_arterial_media = v.value;
             }
             _ => {}
@@ -534,4 +547,3 @@ OBX|6|NM|T1^Temperature||37.1|Cel||||||F|||20240821141030|||IntelliVue"#;
         assert_eq!(merged.ph_arterial, 7.40);
     }
 }
-

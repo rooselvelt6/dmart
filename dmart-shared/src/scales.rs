@@ -1122,33 +1122,20 @@ mod proptests {
     // Estrategia para generar ApacheIIData válido - usa valores por defecto con variaciones en campos clave
     fn arb_apache_data() -> impl Strategy<Value = ApacheIIData> {
         (
-            30.0f32..44.0,    // temperatura
-            0.0f32..200.0,    // presion_arterial_media
-            0.0f32..250.0,    // presion_sistolica
-            0.0f32..200.0,    // frecuencia_cardiaca
-            0.0f32..60.0,     // frecuencia_respiratoria
-            0.21f32..1.0,     // fio2
+            30.0f32..44.0,                       // temperatura
+            0.0f32..200.0,                       // presion_arterial_media
+            0.0f32..250.0,                       // presion_sistolica
+            0.0f32..200.0,                       // frecuencia_cardiaca
+            0.0f32..60.0,                        // frecuencia_respiratoria
+            0.21f32..1.0,                        // fio2
             proptest::option::of(0.0f32..600.0), // pao2
             proptest::option::of(0.0f32..600.0), // a_ado2
-            0.0f32..100.0,    // spo2
-            7.0f32..7.7,      // ph_arterial
-            100.0f32..200.0,  // sodio_serico
+            0.0f32..100.0,                       // spo2
+            7.0f32..7.7,                         // ph_arterial
+            100.0f32..200.0,                     // sodio_serico
         )
             .prop_map(
-            |(
-                temperatura,
-                presion_arterial_media,
-                presion_sistolica,
-                frecuencia_cardiaca,
-                frecuencia_respiratoria,
-                fio2,
-                pao2,
-                a_ado2,
-                spo2,
-                ph_arterial,
-                sodio_serico,
-            )| {
-                ApacheIIData {
+                |(
                     temperatura,
                     presion_arterial_media,
                     presion_sistolica,
@@ -1160,11 +1147,24 @@ mod proptests {
                     spo2,
                     ph_arterial,
                     sodio_serico,
-                    ..Default::default()
-                }
-            },
-        )
-        .boxed()
+                )| {
+                    ApacheIIData {
+                        temperatura,
+                        presion_arterial_media,
+                        presion_sistolica,
+                        frecuencia_cardiaca,
+                        frecuencia_respiratoria,
+                        fio2,
+                        pao2,
+                        a_ado2,
+                        spo2,
+                        ph_arterial,
+                        sodio_serico,
+                        ..Default::default()
+                    }
+                },
+            )
+            .boxed()
     }
 
     // Estrategia para GcsData
@@ -1181,12 +1181,6 @@ mod proptests {
         fn apache_score_bounded(data in arb_apache_data()) {
             let score = calculate_apache_ii_score(&data);
             prop_assert!(score <= 71, "APACHE II score must be <= 71, got {}", score);
-        }
-
-        #[test]
-        fn apache_score_non_negative(data in arb_apache_data()) {
-            let score = calculate_apache_ii_score(&data);
-            prop_assert!(score >= 0, "APACHE II score must be >= 0");
         }
 
         #[test]
@@ -1262,7 +1256,7 @@ mod proptests {
             prop_assert!(saps3 <= 104);
             prop_assert!(news2 <= 20);
             prop_assert!(sofa <= 24);
-            prop_assert!(gcs >= 3 && gcs <= 15);
+            prop_assert!((3..=15).contains(&gcs));
 
             // Si Apache es muy alto, SAPS3 y SOFA también deberían ser altos
             if apache >= 30 {

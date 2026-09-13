@@ -68,34 +68,34 @@ pub fn DashboardPage() -> impl IntoView {
         }
     });
 
-view! {
-            <div class="page-enter">
-                <div class="mb-5 md:mb-7">
-                    <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Panel de Monitoreo UCI"</h1>
-                    <p style="color:var(--uci-muted); font-size:13px; margin:0;">"Pacientes activos, scores, recursos — vision general"</p>
-                </div>
-
-                <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label="Cargando panel..." /> }>
-                    {move || {
-                        stats.get().map(|s| {
-                            let pacientes = patients.get().unwrap_or_default();
-                            let admin = admin_stats.get().flatten();
-
-                            view! {
-                                <div>
-                                    <SummaryCards stats=s.clone() />
-                                    <EjecutivoKpiSection ejecutivo=s.ejecutivo.clone() />
-                                    <StatsSection stats=s.clone() />
-                                    <AdminStatsSection admin=admin.clone() />
-                                    <ActivePatientsSection patients=pacientes.clone() />
-                                    <RecentPatientsSection reciente=s.reciente.clone() />
-                                </div>
-                            }
-                        })
-                    }}
-                </Suspense>
+    view! {
+        <div class="page-enter">
+            <div class="mb-5 md:mb-7">
+                <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Panel de Monitoreo UCI"</h1>
+                <p style="color:var(--uci-muted); font-size:13px; margin:0;">"Pacientes activos, scores, recursos — vision general"</p>
             </div>
-        }
+
+            <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label="Cargando panel..." /> }>
+                {move || {
+                    stats.get().map(|s| {
+                        let pacientes = patients.get().unwrap_or_default();
+                        let admin = admin_stats.get().flatten();
+
+                        view! {
+                            <div>
+                                <SummaryCards stats=s.clone() />
+                                <EjecutivoKpiSection ejecutivo=s.ejecutivo.clone() />
+                                <StatsSection stats=s.clone() />
+                                <AdminStatsSection admin=admin.clone() />
+                                <ActivePatientsSection patients=pacientes.clone() />
+                                <RecentPatientsSection reciente=s.reciente.clone() />
+                            </div>
+                        }
+                    })
+                }}
+            </Suspense>
+        </div>
+    }
 }
 
 #[component]
@@ -113,8 +113,16 @@ fn SummaryCards(stats: UciStatsResponse) -> impl IntoView {
 #[component]
 fn EjecutivoKpiSection(ejecutivo: EjecutivoKpi) -> impl IntoView {
     let delta_mortalidad = ejecutivo.mortalidad_real_pct - ejecutivo.mortalidad_predicha_pct;
-    let delta_color = if delta_mortalidad <= 0.0 { "#10B981" } else { "#EF4444" };
-    let delta_icon = if delta_mortalidad <= 0.0 { "fa-arrow-down" } else { "fa-arrow-up" };
+    let delta_color = if delta_mortalidad <= 0.0 {
+        "#10B981"
+    } else {
+        "#EF4444"
+    };
+    let delta_icon = if delta_mortalidad <= 0.0 {
+        "fa-arrow-down"
+    } else {
+        "fa-arrow-up"
+    };
 
     view! {
         <div class="mb-6 md:mb-7">
@@ -445,7 +453,13 @@ fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView
     }
 }
 
-fn kpi_card(title: String, value: String, color: String, icon: String, tooltip: String) -> impl IntoView {
+fn kpi_card(
+    title: String,
+    value: String,
+    color: String,
+    icon: String,
+    tooltip: String,
+) -> impl IntoView {
     view! {
         <div class="glass-card p-3 md:p-4 lg:p-5 relative group"
              style=format!("border-top:3px solid {};", color)>

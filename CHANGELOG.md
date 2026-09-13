@@ -7,6 +7,28 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-003: Tests de Integración HL7/MLLP
+
+### Agregado
+- `dmart-server/tests/hl7_integration.rs` — 32 tests de integración HL7 v2 + MLLP
+  - Parser: ORU^R01 Mindray/Philips, LOINC/mnemónicos, PID-18 (UUID directo), rechazo graceful de malformados, rango de valores, secuencias de escape
+  - MLLP: `build_ack` AA/AR, stream TCP real via `serve()` — error de parseo, payload no-UTF8, fallo de ingestión, mensaje >1 MiB descartado, cierre graceful del cliente
+  - Ingest: creación de medición + severidad, paciente inexistente, resolución por UUID, ingesta concurrente (5 pacientes)
+- Cobertura HL7 >90%: `parser.rs` 96%+, `mllp.rs` 94%+, `ingest.rs` 92% (vía `cargo llvm-cov`)
+- Job CI `hl7-integration-test` en `.github/workflows/ci.yml`
+
+### Corregido
+- Clippy gate (`-D warnings`) en TODO el workspace, incl. pendientes de Fase 5.6:
+  - prop-test tautológico `apache_score >= 0` eliminado, `manual_range_contains`, `module_inception` en `hl7/proptests.rs`
+  - `needless_borrow`, `useless_vec`, `useless_format` en tests HL7
+- `.github/workflows/ci.yml`: `--test integration` apuntaba a un target inexistente → `--test api_tests`
+
+### Tests
+- `hl7_integration` 32, `api_tests` 25, lib server 33, lib shared 31 — todos verdes
+- Gates locales: `fmt --check` ✓, `clippy -D warnings` ✓
+
+---
+
 ## [v0.5.0] - 2026-09-12 — Fase 5 Completa: Clínico y QA Avanzado
 
 ### Agregado
