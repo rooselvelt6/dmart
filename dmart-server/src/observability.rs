@@ -67,8 +67,15 @@ pub fn init_tracing() -> anyhow::Result<()> {
 pub fn init_metrics() -> anyhow::Result<PrometheusHandle_> {
     crate::metrics::register();
 
-    // Prometheus handle para exponer /metrics via axum
-    let handle = PrometheusBuilder::new().install_recorder()?;
+    // Buckets finos para latencias <10ms (SPEC-005, edge case #3): el default
+    // solo tenía 5ms como tope fino; aquí añadimos 0.1/0.5/1/2.5/5ms para que las
+    // p50/p95/p99 de UCI sean fiables en el rango clínico (telemetría cada ~1s).
+    let handle = PrometheusBuilder::new()
+        .set_buckets(&[
+            0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            1.0, 2.5, 5.0, 10.0,
+        ])?
+        .install_recorder()?;
 
     // OpenTelemetry metrics (opcional) - simplificado para evitar breaking changes
     if std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok() {
@@ -78,7 +85,10 @@ pub fn init_metrics() -> anyhow::Result<PrometheusHandle_> {
         );
     }
 
-    info!("📊 Prometheus metrics available at /metrics");
+    info!(
+        "📊 Prometheus metrics available at /metrics (METRICS_EXTENDED={})",
+        if crate::metrics::extended_enabled() { "true" } else { "false" }
+    );
     Ok(handle)
 }
 
@@ -170,14 +180,19 @@ pub fn observability_router(db: Database, prometheus_handle: PrometheusHandle_) 
 
 /// GET /metrics — Expone el scrape Prometheus. Antes de renderizar recalcula
 /// las métricas de estado (patients/measurements/process) consultando la BD.
+///
+/// Si `METRICS_EXTENDED=false` (default ON), solo se exponen métricas de
+/// sistema/HTTP/infraestructura; KPIs clínicos/ML/ingest quedan ocultos
+/// (rollout switch de SPEC-005).
 async fn metrics_handler(State(state): State<ObservabilityState>) -> Response {
+    let extended = crate::metrics::extended_enabled();
     state.db_healthy().await; // ping DB (también alimenta health)
     metrics::gauge!("uptime_seconds").set(state.start_time.elapsed().as_secs_f64());
     metrics::gauge!("db_connections_active").set(1.0);
     metrics::gauge!("cache_connected").set(if crate::cache::cache_available() { 1.0 } else { 0.0 });
 
-    crate::metrics::touch_zero_counters();
-    crate::metrics::survey_db(&state.db).await;
+    crate::metrics::touch_zero_counters(extended);
+    crate::metrics::survey_db(&state.db, extended).await;
 
     let body = state.prometheus.render();
     (

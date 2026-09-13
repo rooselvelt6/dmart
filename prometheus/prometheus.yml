@@ -22,6 +22,13 @@ scrape_configs:
   - job_name: dmart-server
     metrics_path: /obs/metrics
     scheme: http
+    # SPEC-005 edge case #2: métricas de alta cardinalidad (p.ej. user_id en
+    # labels) se rechazan en el ingest. El server ya ACOTA labels a
+    # method/status/route/escala/result, esto es defensa en profundidad.
+    label_limit: 30
+    label_name_length_limit: 200
+    label_value_length_limit: 200
+    sample_limit: 5000
     static_configs:
       - targets: ["dmart-server:8080"]
         labels:

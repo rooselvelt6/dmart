@@ -188,6 +188,28 @@ fn proc_self() -> (f64, i64) {
 
 // ─── Survey en scrape ────────────────────────────────────────────────────
 
+/// Feature flag de rollout (SPEC-005): `METRICS_EXTENDED` (default ON).
+/// Cuando es `false` el endpoint solo expone métricas de sistema/HTTP y se
+/// ocultan los KPIs de negocio, ML, interop HL7 e ingest.
+pub fn extended_enabled() -> bool {
+    extended_flag(
+        std::env::var("METRICS_EXTENDED")
+            .ok()
+            .as_deref(),
+    )
+}
+
+/// Lógica pura del flag, testeable sin tocar el entorno.
+fn extended_flag(value: Option<&str>) -> bool {
+    match value {
+        None => true,
+        Some(v) => {
+            let v = v.trim().to_ascii_lowercase();
+            !(v == "false" || v == "0" || v == "no" || v == "off")
+        }
+    }
+}
+
 /// Ejecuta un `SELECT count() AS count FROM <tabla> [WHERE ...]` y devuelve el
 /// número, o `None` si la consulta falla (el scrape nunca debe romperse).
 async fn survey_count(db: &Database, table: &str, where_clause: &str) -> Option<f64> {
@@ -206,27 +228,35 @@ async fn survey_count(db: &Database, table: &str, where_clause: &str) -> Option<
 /// Recalcula métricas de estado consultando la BD y leyendo /proc. Lo ejecuta
 /// el handler de `/metrics` en cada scrape para no depender del signo de vida
 /// de contadores en memoria (evita desincronización tras reinicios).
-pub async fn survey_db(db: &Database) {
+pub async fn survey_db(db: &Database, extended: bool) {
     let start = std::time::Instant::now();
 
-    if let Some(n) = survey_count(db, "patients", "").await {
-        gauge!("patients_total", "status" => "all").set(n);
-    }
-    if let Some(n) = survey_count(
-        db,
-        "patients",
-        "(fecha_egreso_uci IS NONE OR fecha_egreso_uci = '')",
-    )
-    .await
-    {
-        gauge!("patients_total", "status" => "active").set(n);
-    }
-    if let Some(n) = survey_count(db, "measurements", "").await {
-        gauge!("measurements_total").set(n);
-    }
+    if extended {
+        if let Some(n) = survey_count(db, "patients", "").await {
+            gauge!("patients_total", "status" => "all").set(n);
+        }
+        if let Some(n) = survey_count(
+            db,
+            "patients",
+            "(fecha_egreso_uci IS NONE OR fecha_egreso_uci = '')",
+        )
+        .await
+        {
+            gauge!("patients_total", "status" => "active").set(n);
+        }
+        if let Some(n) = survey_count(db, "measurements", "").await {
+            gauge!("measurements_total").set(n);
+        }
+        if let Some(n) = survey_count(db, "camas", "").await {
+            gauge!("camas_total").set(n);
+        }
+        if let Some(n) = survey_count(db, "camas", "estado = 'Ocupada'").await {
+            gauge!("camas_ocupadas").set(n);
+        }
 
-    histogram!("surreal_query_duration_seconds").record(start.elapsed().as_secs_f64());
-    gauge!("surreal_connection_pool").set(1.0);
+        histogram!("surreal_query_duration_seconds").record(start.elapsed().as_secs_f64());
+        gauge!("surreal_connection_pool").set(1.0);
+    }
 
     let (cpu, rss) = proc_self();
     gauge!("process_cpu_seconds_total").set(cpu);
@@ -236,7 +266,9 @@ pub async fn survey_db(db: &Database) {
 
 /// Garantiza que las métricas de evento existan en la primera exposición
 /// (Prometheus solo emite series que se han registrado al menos una vez).
-pub fn touch_zero_counters() {
+/// `extended=false` deja fuera los KPIs de negocio/ML/HL7/ingest para que el
+/// flag `METRICS_EXTENDED` controle la superficie expuesta.
+pub fn touch_zero_counters(extended: bool) {
     // `.increment(0)` garantiza que la serie exista en la primera exposición
     // sin resetear contadores que ya hayan acumulado eventos.
     for result in ["success", "failure"] {
@@ -245,23 +277,52 @@ pub fn touch_zero_counters() {
     }
     counter!("auth_failures_total", "reason" => "none".to_string()).increment(0);
     counter!("rbac_denials_total", "permission" => "none".to_string()).increment(0);
-    counter!("patients_created_total").increment(0);
-    counter!("patients_deleted_total").increment(0);
-    counter!("measurements_created_total").increment(0);
-    for scale in ["apache", "gcs", "news2", "sofa", "saps3"] {
-        counter!("scales_calculated_total", "scale" => scale.to_string()).increment(0);
-    }
-    counter!("ml_predictions_total", "model" => "apache_mortality_v1".to_string()).increment(0);
-    histogram!("ml_model_load_duration_seconds").record(0.0);
-    gauge!("ml_accuracy_gauge", "model" => "apache_mortality_v1".to_string()).set(0.0);
-    for source in ["Mindray", "Philips", "Genérico", "unknown"] {
-        counter!("hl7_messages_processed_total", "source" => source.to_string()).increment(0);
-        counter!("hl7_messages_errors_total", "source" => source.to_string()).increment(0);
-    }
-    counter!("ingest_gap_total").increment(0);
-    counter!("ingest_invalid_total").increment(0);
-    gauge!("ingest_fault_devices").set(0.0);
-    counter!("ingest_throttled_total").increment(0);
-    gauge!("ingest_error_avg").set(0.0);
     counter!("http_requests_errors_total").increment(0);
+
+    if extended {
+        counter!("patients_created_total").increment(0);
+        counter!("patients_deleted_total").increment(0);
+        counter!("measurements_created_total").increment(0);
+        for scale in ["apache", "gcs", "news2", "sofa", "saps3"] {
+            counter!("scales_calculated_total", "scale" => scale.to_string()).increment(0);
+        }
+        counter!("ml_predictions_total", "model" => "apache_mortality_v1".to_string()).increment(0);
+        histogram!("ml_model_load_duration_seconds").record(0.0);
+        gauge!("ml_accuracy_gauge", "model" => "apache_mortality_v1".to_string()).set(0.0);
+        for source in ["Mindray", "Philips", "Genérico", "unknown"] {
+            counter!("hl7_messages_processed_total", "source" => source.to_string()).increment(0);
+            counter!("hl7_messages_errors_total", "source" => source.to_string()).increment(0);
+        }
+        counter!("ingest_gap_total").increment(0);
+        counter!("ingest_invalid_total").increment(0);
+        gauge!("ingest_fault_devices").set(0.0);
+        counter!("ingest_throttled_total").increment(0);
+        gauge!("ingest_error_avg").set(0.0);
+    }
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extended_flag_defaults_to_true() {
+        assert!(extended_flag(None));
+        assert!(extended_flag(Some("")));
+        assert!(extended_flag(Some("true")));
+        assert!(extended_flag(Some("1")));
+        assert!(extended_flag(Some(" TRUE ")));
+        assert!(extended_flag(Some("yes")));
+    }
+
+    #[test]
+    fn extended_flag_off_values() {
+        assert!(!extended_flag(Some("false")));
+        assert!(!extended_flag(Some("0")));
+        assert!(!extended_flag(Some("no")));
+        assert!(!extended_flag(Some("off")));
+        assert!(!extended_flag(Some(" False ")));
+    }
 }

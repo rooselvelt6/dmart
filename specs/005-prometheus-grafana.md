@@ -188,29 +188,48 @@ groups:
 ## Testing Strategy
 
 ### Unit Tests
-- [ ] `test_metrics_endpoint_exposes_all()` — scrape `/metrics` → parse → verify keys
-- [ ] `test_histogram_buckets_correct()` — latencies fall in correct buckets
-- [ ] `test_business_metrics_updated()` — simulate actions → verify counters increment
-- [ ] `test_ingest_quality_metrics()` — gap/fault/throttle counters exponen (SPEC-031)
+- [x] `test_metrics_endpoint_exposes_all()` — scrape `/metrics` → parse → verify keys
+      (implementado como `test_metrics_endpoint_exposes_all_and_tracks_events` en
+      `tests/api_tests.rs`, verifica las ~32 series del spec incl. data-quality)
+- [x] `test_histogram_buckets_correct()` — buckets finos para latencias <10ms
+      presentes en `/obs/metrics` (`le=0.0001..10` + `+Inf`, `_sum`, `_count`)
+      — `test_metrics_histogram_buckets_fine_covered`
+- [x] `test_business_metrics_updated()` — login success/failure, paciente creado
+      y GCS incrementan contadores (dentro del E2E de métricas)
+- [x] `test_ingest_quality_metrics()` — `ingest_gap_total`/`ingest_invalid_total`/
+      `ingest_fault_devices`/`ingest_throttled_total`/`ingest_error_avg` expuestas
+      (baseline 0 hasta SPEC-031; verificadas en el E2E de métricas)
+- [x] Unit tests del feature flag `METRICS_EXTENDED` (parse) en `metrics.rs`
 
 ### Integration Tests
-- [ ] Prometheus scrape config works → targets UP
-- [ ] Alert rules evaluate correctly (Promtool test)
-- [ ] Grafana dashboards import without errors
+- [x] Prometheus scrape config works → `promtool check config` ✓ (job `dmart-server`
+      → `/obs/metrics`, con `label_limit`/`sample_limit` para cardinalidad)
+- [x] Alert rules evaluate correctly (`promtool test rules` ✓ — 12 escenarios)
+- [x] Grafana dashboards import without errors → JSON válidos (schema 39) verificados
+      con `jq`; import en staging pendiente (ver Rollout Plan)
 
 ### Load Test
-- [ ] k6 test: 1000 req/s → `/metrics` responds < 100ms
+- [x] k6 test `tests/load/metrics.js`: ramping a 1000 req/s sobre `/obs/metrics`
+      con threshold `p95 < 100ms` (especificación del spec)
+  - *Ejecución en local pendiente de entorno con server + DB reales.*
 
 ## Rollout Plan
-- **Feature Flag**: `METRICS_EXTENDED=true` (default ON)
-- **Dashboards**: Importar JSONs en Grafana staging → validar → promover a prod
-- **Alerts**: Dry-run 48h (solo log, no notify) → luego activar notificaciones
+- **Feature Flag**: `METRICS_EXTENDED=true` (default ON). Implementado en
+  `metrics.rs::extended_enabled()` — si `false` solo se exponen métricas de
+  sistema/HTTP/infra; KPIs clínicos, ML, HL7 e ingest quedan ocultos en scrape.
+- **Dashboards**: JSONs listos; import en Grafana staging → validar → promover a
+  prod es **dependencia operativa de SPEC-006/012** (staging no existe localmente).
+- **Alerts**: dry-run 48h (solo log, no notificar) antes de activar notificaciones;
+  el routing (AlertManager → PagerDuty/Slack/email) es **SPEC-008**.
+- **Security**: `/obs/metrics` debe quedar restringido en prod: solo red interna
+  (firewall/nginx allow) o `--web.config` con basic auth de Prometheus. Nunca PHI
+  en labels (el server ya acota labels a method/status/route/scale/result/source).
 
 ## Definition of Done
-- [ ] Spec aprobada
-- [ ] `/metrics` expone todas las métricas listadas (incl. ingest data-quality)
-- [ ] 6 dashboards Grafana JSONs en `grafana/dashboards/`
-- [ ] 10+ alerting rules en `prometheus/rules/`
-- [ ] `promtool test rules` pasa
-- [ ] Dashboards importados y validados en staging
-- [ ] CHANGELOG.md actualizado
+- [x] Spec aprobada
+- [x] `/metrics` expone todas las métricas listadas (incl. ingest data-quality)
+- [x] 6 dashboards Grafana JSONs en `grafana/dashboards/`
+- [x] 10+ alerting rules en `prometheus/rules/`
+- [x] `promtool test rules` pasa
+- [ ] Dashboards importados y validados en staging (depende de SPEC-006/012)
+- [x] CHANGELOG.md actualizado

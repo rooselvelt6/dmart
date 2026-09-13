@@ -34,6 +34,13 @@ export const options = {
       iterations: 1,
       startTime: '30s',
     },
+    metrics: {
+      executor: 'per-vu-iterations',
+      exec: 'metrics',
+      vus: 1,
+      iterations: 1,
+      startTime: '40s',
+    },
   },
 };
 
@@ -195,6 +202,15 @@ export function hl7() {
   check(http.get(`${BASE_URL}/health`), {
     'health 200': (r) => r.status === 200,
     'db ok': (r) => r.json('database') === 'ok',
+  });
+  sleep(0.5);
+}
+
+export function metrics() {
+  // Prometheus scrape endpoint (SPEC-005)
+  check(http.get(`http://127.0.0.1:3000/obs/metrics`), {
+    'metrics 200': (r) => r.status === 200,
+    'contiene http_requests_total': (r) => r.body.includes('http_requests_total'),
   });
   sleep(0.5);
 }

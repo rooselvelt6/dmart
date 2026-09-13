@@ -644,6 +644,8 @@ const SPEC_METRICS: &[&str] = &[
     "measurements_total",
     "measurements_created_total",
     "scales_calculated_total",
+    "camas_total",
+    "camas_ocupadas",
     "ml_predictions_total",
     "ml_model_load_duration_seconds",
     "ml_accuracy_gauge",
@@ -689,9 +691,19 @@ async fn test_metrics_endpoint_exposes_all_and_tracks_events() {
     // 1) Scrape base: todas las métricas del spec deben estar expuestas.
     let (status, body) = scrape_metrics(&http).await;
     assert_eq!(status, StatusCode::OK);
+    // Snap del formato de texto de Prometheus: un histograma puede aparecer
+    // como `name{quantile=...}` (exporter en modo summary por defecto en 0.13)
+    // o como `name_bucket/name_sum/name_count` (cuando se configuran buckets
+    // explícitos, SPEC-005 edge case #3). El check acepta ambos.
     let present = |name: &str| {
-        body.lines()
-            .any(|l| !l.starts_with('#') && (l.starts_with(&format!("{name} ")) || l.starts_with(&format!("{name}{{"))))
+        body.lines().any(|l| {
+            if l.starts_with('#') {
+                return false;
+            }
+            l.strip_prefix(name).is_some_and(|rest| {
+                rest.starts_with(' ') || rest.starts_with('{') || rest.starts_with('_')
+            })
+        })
     };
     for name in SPEC_METRICS {
         assert!(present(name), "métrica ausente en /obs/metrics: {name}");
@@ -760,6 +772,44 @@ async fn test_metrics_endpoint_exposes_all_and_tracks_events() {
         body2.contains("sse_connections_active"),
         "gauge SSE ausente tras scrape"
     );
+}
+
+#[tokio::test]
+async fn test_metrics_histogram_buckets_fine_covered() {
+    let (db, _dir) = test_db().await;
+    let http = build_obs_app(&db).await;
+
+    // Calentamos el histograma con un par de peticiones HTTP reales.
+    for _ in 0..3 {
+        let req = axum::http::Request::builder()
+            .method(Method::GET)
+            .uri("/obs/health")
+            .body(Body::from(""))
+            .expect("http");
+        let _ = http.clone().oneshot(req).await.expect("health");
+    }
+
+    let (status, body) = scrape_metrics(&http).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // SPEC-005 edge case #3: buckets finos para latencias <10ms deben existir
+    // (0.1ms, 0.5ms, 1ms, 2.5ms, 5ms) además del bucket +Inf de cierre.
+    for le in [
+        "0.0001", "0.0005", "0.001", "0.0025", "0.005", "0.01", "0.025", "0.05",
+        "0.1", "0.25", "0.5", "1", "2.5", "5", "10", "+Inf",
+    ] {
+        let has_histogram = body
+            .lines()
+            .any(|l| l.contains("http_request_duration_seconds_bucket"));
+        let has_le = body.lines().any(|l| l.contains(&format!("le=\"{le}\"")));
+        assert!(
+            has_histogram && has_le,
+            "bucket le={le} ausente (buckets finos no configurados)"
+        );
+    }
+    // El histograma también debe existir como serie `_sum` y `_count`.
+    assert!(body.contains("http_request_duration_seconds_sum"));
+    assert!(body.contains("http_request_duration_seconds_count"));
 }
 
 #[tokio::test]

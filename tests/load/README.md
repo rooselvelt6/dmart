@@ -28,6 +28,7 @@ k6 run tests/load/run_all.js     # Todos secuenciales
 | scales.js | /scales/apache, /scales/sofa, /scales/news2, /scales/saps3, /scales/gcs | 100 |
 | fhir.js | /fhir/Patient, /fhir/Patient/{id}, /fhir/Patient/{id}/DiagnosticReport, /fhir/Patient/{id}/DiagnosticReport/QR | 100 |
 | hl7.js | /health (simula carga MLLP) | 50 |
+| metrics.js | /obs/metrics (scrape Prometheus) | 1000 rps (target SPEC-005: p95 < 100ms) |
 
 ## Métricas clave
 

@@ -63,11 +63,31 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 - Dos instancias del crate `metrics` (0.21 en app vs 0.22 requerido por exporter)
   → `/metrics` vacío. Bump a `metrics = "0.22"`.
 
+### Añadido en finalización (rollout)
+- **Buckets finos de latencia** (`PrometheusBuilder::set_buckets`): le de
+  0.1/0.5/1/2.5/5 ms (antes el tope fino era 5 ms) para p50/p95/p99 fiables en
+  el rango clínico UCI (edge case #3). `test_metrics_histogram_buckets_fine_covered`
+  lo verifica.
+- **Feature flag `METRICS_EXTENDED`** (default ON): si `false`, `/obs/metrics`
+  solo expone sistema/HTTP/infra y oculta KPIs clínicos/ML/HL7/ingest — switch
+  de rollout de la spec (con tests unitarios del parseo).
+- **Ocupación de camas**: nuevas series `camas_total` y `camas_ocupadas`
+  (survey en cada scrape) + paneles "Ocupación (%)" y "Camas ocupadas" en
+  `grafana/dashboards/clinical-kpis.json`.
+- **Protección de cardinalidad** en `prometheus/prometheus.yml`: `label_limit`,
+  `label_name_length_limit`, `label_value_length_limit`, `sample_limit` (edge
+  case #2, defensa en profundidad sobre labels ya acotados).
+- **Load test k6** `tests/load/metrics.js`: ramping a ~1000 req/s sobre
+  `/obs/metrics` con threshold `p95 < 100ms` (objetivo del spec) + escenario en
+  `tests/load/run_all.js`.
+- Spec 005 actualizada: checklists de Testing Strategy/Done marcados y notas
+  operativas (dependencia de staging = SPEC-006/012, alerts dry-run y routing =
+  SPEC-008, restricción de red en `/obs/metrics` en prod).
+
 ### Tests
-- `api_tests` 30 (incl. nuevo `test_metrics_endpoint_exposes_all_and_tracks_events`
-  que scrapea `/obs/metrics`, comprueba las ~32 series del spec y verifica que
-  login success/failure, creación de paciente y score GCS incrementan contadores),
-  `hl7_integration` 32, lib server 39. Todos verdes.
+- `api_tests` 31 (3 nuevos: buckets finos, ocupación de camas e ingest en el
+  E2E de métricas), `hl7_integration` 32, lib server 41 (incl. parse de flag).
+  Todos verdes.
 - Gates solo `-p dmart-server` (nunca workspace por WASM/fuzz).
 
 ---
