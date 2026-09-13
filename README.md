@@ -1,1037 +1,250 @@
-# dMart - Sistema de Gestión de Unidad de Cuidados Intensivos
+<div align="center">
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
-  <img src="https://img.shields.io/badge/WebAssembly-654FF0?style=for-the-badge&logo=webassembly&logoColor=white" alt="WASM">
-  <img src="https://img.shields.io/badge/Leptos-FF4B4B?style=for-the-badge&logo=leptos&logoColor=white" alt="Leptos">
-  <img src="https://img.shields.io/badge/SurrealDB-FF00A0?style=for-the-badge&logo=surrealdb&logoColor=white" alt="SurrealDB">
-</p>
+<img src="dmart-app/icon.svg" alt="dMart UCI" width="110"/>
 
----
+# dMart UCI
 
-## 📋 Descripción
+### Sistema de Gestión de Unidad de Cuidados Intensivos, 100% en Rust
 
-**dMart** es un sistema integral para la gestión de pacientes en Unidades de Cuidados Intensivos (UCI), desarrollado completamente en **Rust** con tecnología WebAssembly. El sistema proporciona cálculo automático de scores de severidad **APACHE II** y **Glasgow Coma Scale (GCS)**, junto con estimación de riesgo de mortalidad hospitalaria.
+**Cuidados intensivos impulsados por código clínico compilado a WebAssembly.**
 
-Este proyecto fue diseñado siguiendo los estándares clínicos internacionales y cuenta con una suite completa de pruebas de validación que garantizan la precisión de los cálculos médicos.
+[![CI](https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml/badge.svg)](https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/Rust-1.98-000000?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![WASM](https://img.shields.io/badge/Frontend-WebAssembly-654FF0?style=flat-square&logo=webassembly&logoColor=white)](https://webassembly.org/)
+[![Leptos](https://img.shields.io/badge/UI-Leptos%200.8-FF4B4B?style=flat-square)](https://leptos.dev/)
+[![Axum](https://img.shields.io/badge/Backend-Axum%200.8-99A0AA?style=flat-square)](https://github.com/tokio-rs/axum)
+[![SurrealDB](https://img.shields.io/badge/DB-SurrealKV-FF00A0?style=flat-square&logo=surrealdb)](https://surrealdb.com/)
+[![Tests](https://img.shields.io/badge/tests-136%2B-10B981?style=flat-square)](.)
+[![Coverage HL7](https://img.shields.io/badge/coverage%20HL7-%3E90%25-22c55e?style=flat-square)](./dmart-server/tests/hl7_integration.rs)
+[![License](https://img.shields.io/badge/license-MIT-3B82F6?style=flat-square)](#licencia)
 
-### Destacados
-
-- ✅ Cálculo automático de **APACHE II** (12 variables fisiológicas)
-- ✅ **GCS** integrado (Ojos + Verbal + Motor) + **GCS Animado** (input visual interactivo)
-- ✅ Estimación de **mortalidad hospitalaria** + **ML Piloto** (DecisionTree ApacheII→riesgo, ~85-90% accuracy)
-- ✅ Puntuación por **edad** (estándar Knaus)
-- ✅ **Enfermedades crónicas** (6 toggles)
-- ✅ **122+ tests** de validación pasando (31 lib + 66 prop + 25 e2e)
-- ✅ **NEWS2**, SAPS III, SOFA, GCS
-- ✅ Seguridad: Argon2id, RBAC, Zeroize, **Fuzzing (cargo-fuzz)**, **Property-Based Testing (proptest)**
-- ✅ Frontend **WASM responsivo** (Leptos 0.8) + **ScoreBar Animado** (gradiente cónico + pulse)
-- ✅ **Responsive design** para móvil/escritorio
-- ✅ **Dark/Light Mode** con variables CSS adaptativas
-- ✅ **WASM optimizado** (2.2MB)
-- ✅ **Persistencia SurrealKV** - datos sobreviven reinicios
-- ✅ **Admin auto-seed** - usuario `admin` creado en primer inicio con `DMART_ADMIN_PASSWORD` (o contraseña aleatoria generada)
-- ✅ **Graceful shutdown** - cierre limpio del servidor
-- ✅ **Dashboard Ejecutivo** con 6 KPIs (Egresados, Fallecidos, Mortalidad Real/Predicha %, Delta, LOS Promedio)
-- ✅ **Admin CRUD** camas (con tipo), equipos y personal
-- ✅ **Configuración de Institución** (nombre, RIF, dirección, teléfono, email, logo)
-- ✅ **Tablas de registro** en panel admin (camas, equipos, staff)
-- ✅ **FHIR R4** - Pacientes, Observaciones, Condiciones (CIE-10), **DiagnosticReport + QR Codes** (SVG/PNG Base64)
-- ✅ **Sandbox de datos** - Población automática con datos sintéticos
-- ✅ **Docker Compose** para despliegue en producción
-- ✅ **E2E Playwright** (15 tests: login → pacientes → mediciones → admin)
-- ✅ **Load Testing k6** (4 escenarios: auth, scales, fhir, hl7)
-- ✅ **Prop-testing proptest** (66 tests: bounds, monotonicidad, consistencia, HL7 parser)
-- ✅ **Fuzzing cargo-fuzz** (3 targets: JSON, HL7 parser, escalas)
+</div>
 
 ---
 
-## 🏗️ Stack Tecnológico
+## 🧬 ¿Qué es dMart?
 
-| Capa | Tecnología | Versión | Descripción |
-|------|------------|---------|-------------|
-| **Lenguaje** | Rust | 1.98+ | Sistema de tipos seguros, sin GC |
-| **Backend** | Axum | 0.8 | Framework web async, alto rendimiento |
-| **Frontend** | Leptos | **0.8** | Framework reactivo WASM |
-| **WASM Build** | Trunk | 0.21 | Build tool para aplicaciones WASM |
-| **Estilos** | TailwindCSS | 3.x | CSS utilitario moderno |
-| **Base de Datos** | SurrealDB | 2.x | Base de datos embebida (**SurrealKV**) |
-| **Cache** | Valkey/Redis | 6+ | Cache de sesiones y datos |
-| **Serialización** | Serde | 1.x | Serialización/deserialización JSON |
+**dMart** es una plataforma integral de gestión para **Unidades de Cuidados Intensivos (UCI)**
+construida de punta a punta en **Rust** y compilada a **WebAssembly** con Leptos. No es una app "clínica en papel": es un sistema de registro de vida real que calcula automáticamente scores de severidad, estima riesgo de mortalidad e ingiere datos directamente desde los **monitores de cama**.
 
-### Diagrama de Arquitectura
+> **Rust + WASM + SurrealKV**: un solo binario, sin infraestructura externa, que funciona incluso **sin internet** en la red hospitalaria.
+
+### Cálculo clínico serio
+Cumple estándares internacionales de referencia:
+- **APACHE II** (Knaus 1985) — 12 variables fisiológicas + edad + crónicos, máx **71 pts** con desglose `APS · Edad · Crónicos`
+- **GCS**, **NEWS2**, **SOFA**, **SAPS III** — todos con validación de rangos clínicos
+- **Riesgo de mortalidad hospitalaria** + **ML piloto** (linfa `DecisionTree`) con precisión ~85–90 %
+
+---
+
+## ✨ Características
+
+| Área | Qué hace dMart |
+|------|----------------|
+| 🏥 **Gestión UCI** | Registro demográfico, ingreso/egreso con **desenlace** (Mejorado/Trasladado/Fallecido), historial y evolución |
+| 📟 **Monitores de cama** | Parser **HL7 v2 (ORU^R01)** + transporte **MLLP** y **MQTT** — Mindray & Philips → mediciones automáticas |
+| 🩺 **Scores clínicos** | APACHE II, GCS animado, NEWS2, SOFA, SAPS III y mortalidad en tiempo real |
+| 📊 **Dashboard ejecutivo** | Heatmap de camas, mortalidad **predicha vs. real**, LOS, 6 KPIs de unidad |
+| 🛏️ **Recursos** | Camas tipadas (General/Aislamiento/Pediátrica/Coronaria/Quemados), equipos asignados, staff |
+| 🔄 **Interoperabilidad** | **FHIR R4**: Patient, Observation, Condition **CIE-10**, DiagnosticReport + **Código QR** |
+| 🧾 **Exportación** | CSV y **PDF** por paciente |
+| 🔌 **Operación offline** | **PWA**+Service Worker, base SurrealKV embebida, sin conexión requerida |
+| 🌙 **UX moderna** | Glassmorphism, modo **dark/light**, responsive, severidad con animaciones |
+
+---
+
+## 🔒 Seguridad de grado hospitalario (HIPAA)
+
+| Pilar | Implementación |
+|-------|----------------|
+| **Autenticación** | Argon2id (19 MiB por defecto), **JWT** revocable, **MFA TOTP** con códigos de respaldo |
+| **Autorización** | **RBAC**: `Admin · Médico · Enfermero · Viewer`, permiso por ruta (`rbac.rs`) |
+| **Cifrado** | **ChaCha20-Poly1305** + zeroización de secretos en memoria |
+| **Auditoría PHI** | Log de acceso con retención de **6 años** |
+| **Abuso** | Rate limiting por IP real, throttling de login, sanitización de entrada, **HSTS** |
+| **QA defensivo** | **cargo-fuzz** (3 targets), **proptest** (bounds/monotonicidad/robustez), E2E Playwright, k6 |
+
+### Matriz de permisos (resumen)
 
 ```
-                              dMart UCI System
-================================================================================
-
-  BROWSER (WASM/Leptos)              BACKEND SERVER (Rust + Axum)
-  ┌─────────┐                   ┌─────────────────────────────┐
-  │ Router │ ◄── HTTP ────────► │  API REST  │  /health     │
-  │   UI   │                   │  SECURITY LAYER            │
-  └─────────┘                   │  - Argon2id (auth)        │
-                               │  - RBAC (roles)           │
-                               │  - JWT (tokens)          │
-                               │  - Audit (PHI log)       │
-                               │  - Crypto               │
-                               ├───────────────────────────┤
-                               │  BUSINESS LOGIC          │
-                               │  - APACHE II, GCS       │
-                               │  - NEWS2/SOFA/SAPS3     │
-                               │  - Validation, Export   │
-                               └───────────────────────────┘
-                                       │
-                            ┌─────────┴─────────┐
-                            │                   │
-SurrealDB            Valkey
-                        (SurrealKV)          (Cache)
-```
-
-### Diagrama de Seguridad
-
-```
-                              SECURITY LAYER
-================================================================================
-
-  AUTHENTICATION
-  ┌──────────┐   ┌──────────┐   ┌──────────┐
-  │ Argon2id │   │   MFA    │   │   JWT    │
-  │(password)│   │  (TOTP)  │   │ (token)  │
-  └──────────┘   └──────────┘   └──────────┘
-
-  RBAC - Role Based Access Control
-  ┌────────────┬───────┬───────┬─────────┬────────┐
-  │ Permission│ ADMIN│ MEDICO│ENFERMERO│ VIEWER │
-  ├────────────┼───────┼───────┼─────────┼────────┤
-  │ patients  │   ✓  │   ✓   │    -    │   -    │
-  │measure:rw│   ✓  │   ✓   │    ✓    │   -    │
-  │ users    │   ✓  │   -   │    -    │   -    │
-  │ audit    │   ✓  │   -   │    -    │   -    │
-  └────────────┴───────┴───────┴─────────┴────────┘
-
-  ENCRYPTION
-  ┌──────────────────┐   ┌──────────────────┐
-  │ ChaCha20-Poly1305 │   │     AES-256      │
-  │  (data at rest)  │   │   (optional)    │
-  └──────────────────┘   └──────────────────┘
-
-AUDIT LOG - HIPAA 6 years retention
-  - Login/Logout attempts
-  - PHI data access
-  - Data exports
+┌─────────────┬────────┬────────┬──────────┬────────┐
+│ Permiso     │ Admin  │ Médico │ Enfermero│ Viewer │
+├─────────────┼────────┼────────┼──────────┼────────┤
+│ patients    │  ✅    │  ✅    │   —      │   —    │
+│ measurements│  ✅    │  ✅    │   ✅     │   —    │
+│ admin/BCK   │  ✅    │  —     │   —      │   —    │
+│ audit       │  ✅    │  —     │   —      │   —    │
+└─────────────┴────────┴────────┴──────────┴────────┘
 ```
 
 ---
 
-## 🎯 Características Principales
+## 🏗️ Arquitectura
 
-### Gestión de Pacientes
-- Registro completo de datos demográficos
-- Historial clínico completo
-- Seguimiento de ingreso hospitalario y UCI
-- Soporte para diversidad de tono de piel
-- Datos de contacto de familiares responsables
+```mermaid
+flowchart TB
+    subgraph FE["Frontend — Leptos 0.8 (WASM, PWA)"]
+        UI["UI Reactiva + GCS animado"]:::fe
+        SSE["SSE · Scores en tiempo real"]:::fe
+        UI --> SSE
+    end
 
-### Evaluación Clínica
-- **12 variables fisiológicas** para APACHE II:
-  - Temperatura, Presión arterial media
-  - Frecuencia cardíaca, Frecuencia respiratoria
-  - Oxigenación (PaO2 / A-aDO2)
-  - pH arterial, Sodio, Potasio
-  - Creatinina, Hematocrito, Leucocitos
-  - Glasgow Coma Scale (GCS)
-- **Puntuación por edad** (0-6 puntos según estándar Knaus)
-- **Evaluación de enfermedades crónicas severas** (5 puntos):
-  - Insuficiencia hepática, cardiovascular, respiratoria, renal
-  - Inmunocomprometido
-  - Cirugía de emergencia/no operado
-- **Score máximo: 71 puntos**
-- **Resultados separados**: APS, Gravedad, Mortalidad
+    subgraph BE["Backend — Rust · Axum 0.8"]
+        API["REST API"]:::be
+        SEC["Auth · RBAC · MFA · Rate-limit"]:::be
+        SCORES["APACHE II · GCS · NEWS2 · SOFA · SAPS III"]:::be
+        FHIR["FHIR R4 · CIE-10 · QR"]:::be
+        HL7["HL7 v2 ORU^R01 · MLLP / MQTT"]:::be
+        ML["ML Piloto · linfa DecisionTree"]:::be
+        API --> SEC
+        API --> SCORES --> ML
+        API --> FHIR
+        API --> HL7
+    end
 
-### Scores y Métricas
-- Cálculo automático de APACHE II con desglose:
-  - **APS** (Acute Physiology Score): 12 variables fisiológicas
-  - **Puntos por Edad**: 0-6 según estándar Knaus
-  - **Puntos Crónicos**: 0-5 por enfermedades severas
-- Cálculo automático de GCS (3-15 puntos)
-- Estimación de riesgo de mortalidad hospitalaria
-- Clasificación de severidad (Bajo/Moderado/Severo/Crítico)
-- Evolución temporal del paciente con gráficos
+    UI -->|HTTP + WSS| API
+    MON("Monitores de cama"):::dev ==>|MLLP / MQTT| HL7
+    SCORES --> DB[(SurrealKV<br/>embebido)]
+    FHIR --> DB
+    HL7 --> DB
+    ML --> DB
+    API --> CACHE[(Valkey / Redis)]
 
-### Gestión de Recursos
-- Camas UCI con tipos (General, Aislamiento, Pediátrica, Coronaria, Quemados)
-- Estados de cama (Libre, Ocupada, Mantenimiento, Limpieza)
-- Equipos clínicos con asignación a camas
-- Personal médico (Admin, Médico, Enfermero, Viewer)
-- CRUD completo en panel de administración
-
-### Dashboard Unificado
-- Cards de resumen de pacientes (Total, Críticos, Severos, Estables)
-- Promedio de scores clínicos (APACHE II, GCS, SOFA, SAPS3, NEWS2)
-- Distribución de gravedad con gráfico
-- Estadísticas de recursos (camas, equipos, staff)
-- Grid de pacientes activos con evolución temporal
-- Tabla de pacientes recientes
-
-### Exportación
-- Reportes en formato CSV
-- Reportes en formato PDF
-- Historial completo de mediciones
+    classDef fe fill:#FF4B4B22,stroke:#FF4B4B,color:#fff
+    classDef be fill:#654FF022,stroke:#654FF0,color:#fff
+    classDef dev fill:#0EA5E922,stroke:#0EA5E9,color:#fff
+```
 
 ---
 
-## 📊 Pruebas y Validación
+## 🧰 Stack
 
-### Suite de Tests: 75+ Tests + Benchmarks
+| Capa | Tecnología | Nota |
+|------|-----------|------|
+| **Lenguaje** | Rust `1.98` · edition 2024 | MSRV fijada en `rust-toolchain.toml` |
+| **Backend** | Axum `0.8` · Tokio | Async, streaming SSE, graceful shutdown |
+| **Frontend** | Leptos `0.8` → WASM | CSR con PWA, TailwindCSS 3 |
+| **Base de datos** | SurrealDB `2.x` (SurrealKV) | Embebida, migraciones SurrealQL idempotentes |
+| **Cache** | Valkey / Redis `8+` | Sesiones y rate-limit |
+| **ML** | linfa `0.7` · ndarray | Persistencia del modelo con bincode |
+| **QA** | cargo-fuzz · proptest · k6 · Playwright | 3 targets / 136+ tests / 4 escenarios / 15 E2E |
 
-El sistema cuenta con una suite completa de pruebas que validan:
+---
+
+## 🚀 Puesta en marcha
+
+### Opción A — Docker (recomendado)
 
 ```bash
-cargo test -p dmart-shared              # Tests unitarios de escalas (66)
-cargo test -p dmart-server              # Tests de integración API (3)
-cargo bench -p dmart-shared             # Benchmarks de escalas clínicas (8)
-cargo doc --workspace --no-deps         # Generar documentación rustdoc
+docker compose up --build -d          # dev (server + valkey)
+docker compose -f docker-compose.prod.yml up -d   # prod (Caddy + backup)
 ```
 
-| Categoría | Tests | Descripción |
-|----------|-------|-------------|
-| **APACHE II** | 40+ | Validación de cada variable fisiológica |
-| **GCS** | 7 | Cálculo de coma de Glasgow |
-| **Mortalidad** | 5 | Fórmula de riesgo hospitalario |
-| **Validación** | 9 | Rangos clínicos válidos |
-| **Integración API** | 3 | CRUD pacientes, paginación, auth |
-| **Benchmarks** | 8 | Criterion: APACHE II, GCS, SOFA, NEWS2, SAPS III |
-
-### Tests de Variables APACHE II
-
-| Variable | Tests |
-|----------|-------|
-| Temperatura | Normal, Fiebre alta, Hipotermia |
-| Presión Arterial | Normal, Alta, Baja |
-| Frecuencia Cardíaca | Normal, Taquicardia, Bradicardia |
-| Frecuencia Respiratoria | Normal, Alta |
-| Oxigenación (PaO2) | Normal, Bajo, Crítico |
-| Oxigenación (A-aDO2) | Normal, Alto |
-| pH Arterial | Normal, Acidosis, Alcalosis |
-| Sodio | Normal, Alto |
-| Potasio | Normal, Alto, Bajo |
-| Creatinina | Normal, Alta, Con falla aguda |
-| Hematocrito | Normal, Bajo |
-| Leucocitos | Normal, Alto |
-| Edad | Joven, Mediana, Anciano, Muy anciano |
-| GCS | Normal, Moderado, Coma |
-
-### Validación Clínica
-
-El módulo de validación (`validation.rs`) verifica:
-- Rangos físicos posibles para cada variable
-- Valores críticos (warnings)
-- Valores inválidos (errors)
-- Consistencia del GCS
-
-```rust
-// Ejemplo de validación
-use dmart_shared::validation::{validate_apache_measurement, ValidationResult};
-
-let result = validate_apache_measurement(&data);
-if !result.valid {
-    for error in result.errors {
-        println!("Error: {} - {}", error.field, error.message);
-    }
-}
-```
-
----
-
-## 🔒 Seguridad
-
-### Seguridad Implementada
-
-| Seguridad | Estado | Descripción |
-|-----------|--------|-------------|
-| **Argon2id** | ✅ Implementado | Hashing de contraseñas (HIPAA compliant) |
-| **RBAC** | ✅ Implementado | Roles: Admin, Médico, Enfermero, Viewer |
-| **ChaCha20-Poly1305** | ✅ Implementado | Cifrado de datos |
-| **JWT Tokens** | ✅ Implementado | Autenticación stateless |
-| **Auditoría PHI** | ✅ Implementado | Logging con retención 6 años |
-| **CORS** | ✅ Configurado | Cross-Origin Resource Sharing |
-| **Validación de Entrada** | ✅ Implementado | Sanitización de datos |
-| **Typesafe** | ✅ Implementado | Rust previene bugs en compilación |
-| **WASM** | ✅ Implementado | Frontend compilado |
-| **Base de Datos Embebida** | ✅ Implementado | Datos locales (**SurrealKV**) |
-
-### Módulos de Seguridad
-
-```rust
-// Autenticación con Argon2id
-use crate::auth::{AuthService, RegisterRequest, LoginRequest};
-
-let auth_service = AuthService::new(db);
-auth_service.register(RegisterRequest {
-    username: "admin".to_string(),
-    password: "password123".to_string(),
-    nombre: "Administrador".to_string(),
-    rol: "admin".to_string(),
-}).await;
-
-// Login
-let response = auth_service.authenticate("admin", "password123").await;
-
-// RBAC - Verificar permisos
-let role = Role::Admin;
-role.can("patients:create");  // true para Admin
-role.can("users:delete");   // true solo para Admin
-```
-
-### Endpoints de Seguridad
-
-| Endpoint | Método | Descripción |
-|----------|--------|-------------|
-| `/api/auth/login` | POST | Login con Argon2id (401 si las credenciales son inválidas) |
-| `/api/auth/logout` | POST | Cerrar sesión (revoca el token JWT) |
-| `/api/auth/me` | GET | Usuario autenticado actual (requiere token) |
-| `/api/auth/users` | GET | Listar usuarios (solo Admin) |
-| `/api/auth/register` | POST | Crear usuario (solo Admin) |
-
-### Auditoría PHI
-
-El sistema incluye logging de auditoría para cumplimiento HIPAA:
-- Retención de logs: 6 años
-- Eventos registrados: login, logout, acceso a datos, exportaciones
-- Almacenamiento en SurrealDB
-
-### Logging
-
-Sistema de logging configurable:
+### Opción B — Manual
 
 ```bash
-RUST_LOG=debug cargo run    # Verboso
-RUST_LOG=info cargo run    # Normal
-RUST_LOG=warn cargo run    # Solo advertencias
-```
-
----
-
-## 🚀 Instalación y Ejecución
-
-### Requisitos
-
-- **Rust 1.70+**: https://rustup.rs/
-- **Node.js 18+** (opcional, para desarrollo frontend)
-- **Trunk**: `cargo install trunk`
-
-### Compilación Rápida
-
-```bash
-# Compilar todo el proyecto
+# 1. Clona y compila
 cargo build --release
 
-# Compilar frontend
-cd dmart-app && trunk build
-```
+# 2. Frontend WASM (CI usa cargo + wasm-bindgen; local Trunk)
+cd dmart-app && trunk build && cd ..
 
-### Ejecución
-
-```bash
-# Ejecutar servidor
+# 3. Genera tu clave maestra (obligatoria) y arranca
+export DMART_MASTER_KEY=$(openssl rand -hex 32)
 ./target/release/dmart-server
 ```
 
-El servidor estará disponible en: **http://localhost:3000**
+El servidor queda en **http://localhost:3000** con el usuario `admin`
+(pasado por `DMART_ADMIN_PASSWORD`, o autogenerado y mostrado una vez en logs).
 
-### Desarrollo
+> Requisitos: Rust 1.98 (`rustup toolchain install 1.98.0 --component clippy,rustfmt`) · `trunk`
 
-```bash
-# Terminal 1: Frontend
-cd dmart-app && trunk serve
-
-# Terminal 2: Backend
-cd dmart-server && cargo run
-```
-
----
-
-## ⚙️ Configuración
-
-### Variables de Entorno
+### Variables clave
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `DMART_PORT` | `3000` | Puerto del servidor HTTP |
-| `DMART_DB_PATH` | `./data/dmart.db` | Ruta de la base de datos |
-| `DMART_DIST_PATH` | `./dist` | Ruta de archivos estáticos (WASM) |
-| `DMART_VALKEY_URL` | `redis://127.0.0.1:6379` | URL de cache (opcional) |
-| `DMART_MASTER_KEY` | *(obligatorio)* | Clave maestra de cifrado; el servidor **no arranca** si falta o usa el valor por defecto. Generar con `openssl rand -hex 32` |
-| `DMART_ADMIN_PASSWORD` | *(vacío)* | Contraseña del admin inicial (primer arranque). Vacío = se genera aleatoria y se muestra una sola vez en los logs |
-| `DMART_ARGON2_M_COST` | `19456` | Coste de memoria Argon2id (~19 MiB) |
-| `DMART_ARGON2_T_COST` | `3` | Iteraciones Argon2id |
-| `DMART_ARGON2_P_COST` | `1` | Paralelismo Argon2id |
-| `DMART_TRUST_PROXY` | `false` | Confiar en `X-Forwarded-For` (solo tras un proxy de confianza que lo sobrescriba) |
-| `DMART_ENABLE_HSTS` | `true` | Emitir cabecera Strict-Transport-Security |
-| `DMART_CORS_ORIGIN` | `http://localhost:3000` | Origen permitido para CORS |
-| `JWT_SECRET` | (autogenerado) | Secreto para firmar tokens JWT |
-| `JWT_EXPIRY_HOURS` | `1` | Horas de expiración del JWT |
-| `RUST_LOG` | `info` | Nivel de logging |
+| `DMART_MASTER_KEY` | *(obligatorio)* | Clave de cifrado — el server **no arranca** sin ella |
+| `DMART_PORT` | `3000` | Puerto HTTP |
+| `DMART_DB_PATH` | `./data/dmart.db` | Ruta SurrealKV |
+| `DMART_ADMIN_PASSWORD` | *(vacío)* | Password inicial del admin |
+| `DMART_VALKEY_URL` · `DMART_CORS_ORIGIN` · `RUST_LOG` | … | Ver `.env.example` |
 
-### Ejemplo de Configuración
+---
 
-```bash
-export DMART_PORT=3000
-export DMART_DB_PATH=./data/dmart.db
-export DMART_DIST_PATH=./dist
-export DMART_MASTER_KEY=$(openssl rand -hex 32)
-export RUST_LOG=info
-./target/release/dmart-server
+## ✅ Calidad y gates
+
+| Gate | Estado |
+|------|--------|
+| `cargo fmt --all -- --check` | ✅ limpio |
+| `cargo clippy --workspace --all-targets -- -D warnings` | ✅ 0 warnings |
+| `cargo test --workspace` | ✅ 121 tests Rust |
+| Playwright E2E | ✅ 15 tests (login → pacientes → mediciones → admin) |
+| k6 load | ✅ 4 escenarios · 100 VUs |
+| cargo-fuzz | ✅ JSON / HL7 / escalas |
+| Cobertura HL7 (parser + MLLP + ingest) | ✅ > 90 % |
+
+```
+Mantenimiento: 121 Rust tests + 8 benchmarks (criterion) + 15 E2E
 ```
 
 ---
 
-## 📡 API REST
+## ⚡ Rendimiento
 
-### Endpoints Disponibles
-
-#### Health Check
-```http
-GET /api/health
-```
-
-#### Pacientes
-```http
-GET    /api/patients              # Listar todos
-POST   /api/patients              # Crear
-GET    /api/patients/:id          # Obtener uno
-PUT    /api/patients/:id          # Actualizar
-DELETE /api/patients/:id          # Eliminar
-```
-
-#### Mediciones
-```http
-GET  /api/patients/:id/measurements         # Listar
-POST /api/patients/:/measurements           # Crear
-GET  /api/patients/:id/measurements/last    # Última medición
-```
-
-##### Estadísticas
-```http
-GET /api/stats              # Stats UCI (scores, gravedad, recientes)
-```
-
-#### Administración
-```http
-GET    /api/admin/stats               # Stats de recursos
-POST   /api/admin/camas/init          # Inicializar camas
-GET    /api/admin/camas               # Listar camas
-POST   /api/admin/camas               # Crear cama
-GET    /api/admin/camas/:id           # Obtener cama
-PUT    /api/admin/camas/:id           # Actualizar cama
-DELETE /api/admin/camas/:id           # Eliminar cama
-GET    /api/admin/equipos             # Listar equipos
-POST   /api/admin/equipos             # Crear equipo
-GET    /api/admin/equipos/:id         # Obtener equipo
-PUT    /api/admin/equipos/:id         # Actualizar equipo
-DELETE /api/admin/equipos/:id         # Eliminar equipo
-GET    /api/admin/equipos/disponibles # Equipos disponibles
-GET    /api/admin/staff               # Listar personal (StaffInfo)
-POST   /api/admin/staff               # Crear personal: {"username","nombre","rol","password"}
-GET    /api/admin/staff/:id           # Obtener personal (StaffInfo)
-PUT    /api/admin/staff/:id           # Actualizar: campos opcionales {"nombre","rol","password","activo"}
-DELETE /api/admin/staff/:id           # Eliminar personal
-POST   /api/admin/staff/:id/toggle    # Activar/desactivar
-GET    /api/admin/check-camas         # Verificar cama libre
-GET    /api/admin/institucion         # Obtener configuración de institución
-PUT    /api/admin/institucion         # Actualizar configuración de institución
-```
-
-> **Nota (Fase 1):** los endpoints `/admin/staff`, `/admin/institucion`, `/auth/register` y `/auth/users` solo aceptan token de **Admin**; las respuestas de staff usan `StaffInfo` y nunca exponen `password_hash`. Los endpoints clínicos (`/admin/check-camas`, `/admin/camas/disponibles`, `/admin/equipos/disponibles`, `/admin/equipos/cama/:id`) siguen disponibles para cualquier rol autenticado.
-
-#### Exportación
-```http
-GET /api/patients/:id/export/csv   # Exportar CSV
-GET /api/patients/:id/export/pdf  # Exportar PDF
-```
-
-### Formato de Respuesta
-
-```json
-{
-  "success": true,
-  "data": { ... },
-  "error": null
-}
-```
+| Operación | Tiempo (bench) |
+|-----------|----------------|
+| APACHE II | **~4 ns** |
+| GCS | ~1 ns |
+| SOFA / NEWS2 | ~6 ns |
+| SAPS III | ~32 ns |
+| WASM bundle | **2.2 MB** optimizado |
+| Crear / listar / obtener paciente | ~10 ms / ~5 ms / ~2 ms |
 
 ---
 
-## 📂 Estructura del Proyecto
+## 📂 Estructura
 
 ```
 dmart/
-├── Cargo.toml                  # Workspace raíz
-├── README.md                  # Este archivo
-│
-├── dmart-shared/             # Biblioteca compartida
-│   ├── src/
-│   │   ├── lib.rs            # Exports públicos
-│   │   ├── models.rs        # Estructuras de datos
-│   │   ├── scales.rs         # Algoritmos clínicos
-│   │   └── validation.rs     # Validación de datos
-│   └── tests/
-│       └── scale_tests.rs    # Suite de pruebas (66 tests)
-│
-├── dmart-server/             # Servidor backend
-│   ├── src/
-│   │   ├── main.rs           # Punto de entrada
-│   │   ├── api/              # Endpoints REST
-│   │   │   ├── institucion.rs # Configuración de institución
-│   │   │   └── ...
-│   │   ├── db.rs             # Conexión SurrealDB
-│   │   └── cache.rs          # Cache Valkey/Redis
-│   └── Cargo.toml
-│
-├── dmart-app/                # Frontend WASM
-│   ├── src/
-│   │   ├── main.rs           # Entry point
-│   │   ├── app.rs            # Router + NavSidebar
-│   │   ├── api.rs            # Cliente HTTP
-│   │   ├── pages/            # Páginas UI
-│   │   │   ├── dashboard.rs  # Dashboard unificado
-│   │   │   ├── admin.rs      # Admin CRUD (camas/equipos/staff/institucion)
-│   │   │   ├── patients.rs   # Listado de pacientes
-│   │   │   ├── register.rs   # Registro de paciente
-│   │   │   ├── measurement.rs# Toma de mediciones
-│   │   │   ├── patient_detail.rs  # Perfil paciente
-│   │   │   ├── patient_edit.rs    # Editar paciente
-│   │   │   └── login.rs      # Inicio de sesión
-│   │   └── components/       # Componentes
-│   │       ├── chart.rs      # EvolutionChart SVG
-│   │       ├── radar_chart.rs# RadarChart (scores multi-eje)
-│   │       ├── clinical_alerts.rs # Alertas clínicas
-│   │       ├── dashboard_kit.rs   # ScoreBar, DonutChart, StatCard
-│   │       ├── severity_badge.rs  # Badge de gravedad
-│   │       ├── skin_picker.rs     # Selector piel Fitzpatrick
-│   │       ├── theme_toggle.rs    # Dark/Light mode
-│   │       └── scales/       # Componentes de escalas
-│   ├── index.html
-│   ├── Trunk.toml
-│   └── Cargo.toml
-│
-├── dist/                     # Frontend compilado (WASM)
-├── data/                     # Base de datos
-└── docs/                     # Documentación técnica
-    ├── API.md
-    ├── APACHE_II.md
-    ├── GCS.md
-    └── ARQUITECTURA.md
+├─ dmart-shared/   # Escalas clínicas, modelos, validación, ML
+├─ dmart-server/   # Axum API · auth/RBAC · HL7+MLLP · FHIR · auditoría
+│  ├─ hl7/         #   parser ORU^R01 · mllp · ingest (MQTT)
+│  ├─ migrations/  #   SurrealQL versionado
+│  └─ fuzz/        #   cargo-fuzz (json, hl7, scales)
+├─ dmart-app/      # Frontend Leptos/WASM (PWA, Tailwind)
+├─ specs/          # Spec-Driven Development (SPEC-001…006)
+├─ tests/          # E2E (Playwright) · load (k6)
+└─ docs/           # ARQUITECTURA (ADR) · API · APACHE_II · GCS
 ```
 
 ---
 
-## 🔄 Flujo de Datos
-
-### Arquitectura del Flujo
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              FRONTEND (WASM/Leptos)                          │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
-│  │  Register    │    │ Measurements │    │   Dashboard  │                   │
-│  │   Patient    │    │     Entry     │    │   & Charts   │                   │
-│  └──────┬───────┘    └──────┬───────┘    └──────▲───────┘                   │
-└─────────┼────────────────────┼────────────────────┼────────────────────────┘
-          │                    │                    │
-          ▼                    ▼                    │
-    ┌─────────────────────────────────────────────────┐
-    │              HTTP API (Axum Router)              │
-    │  POST /api/patients  │  POST /api/measurements   │
-    │  GET  /api/patients  │  GET  /api/stats          │
-    └──────────┬───────────┴──────────┬───────────────┘
-               │                      │
-               ▼                      ▼
-    ┌─────────────────────────────────────────────────┐
-    │              SECURITY LAYER                       │
-    │  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-    │  │  JWT Auth │  │   RBAC   │  │  Audit   │       │
-    │  │  & Login  │  │  Check   │  │   Log    │       │
-    │  └──────────┘  └──────────┘  └──────────┘       │
-    └─────────────────────┬─────────────────────────────┘
-                          │
-               ┌──────────┴──────────┐
-               ▼                      ▼
-    ┌──────────────────────┐  ┌──────────────────────┐
-    │    VALIDATION        │  │     CALCULATION      │
-    │  ┌────────────────┐  │  │  ┌────────────────┐  │
-    │  │ Range Check   │  │  │  │  APACHE II     │  │
-    │  │ Physiological │  │  │  │  GCS           │  │
-    │  │ Clinical      │  │  │  │  NEWS2/SAPS3   │  │
-    │  └────────────────┘  │  │  │  SOFA          │  │
-    └──────────────────────┘  │  │  Mortality %   │  │
-                              │  └────────────────┘  │
-                              └──────────────────────┘
-                                        │
-                                        ▼
-    ┌─────────────────────────────────────────────────┐
-│              STORAGE LAYER                       │
-│  ┌──────────────────┐  ┌──────────────────┐     │
-│  │   SurrealDB      │  │   Valkey/Redis  │     │
-│  │   (SurrealKV)   │  │   (Sessions)     │     │
-│  │   pacientes      │  │   Cache          │     │
-    │  │   mediciones     │  │                  │     │
-    │  └──────────────────┘  └──────────────────┘     │
-    └─────────────────────────────────────────────────┘
-```
-
-### Flujo Detallado por Componente
-
-#### 1. Registro de Paciente
-
-```
-Usuario llena formulario
-    ↓
-Frontend (pages/register.rs)
-    → Valida campos requeridos
-    → Crea objeto Patient
-    ↓
-API POST /api/patients
-    → Middleware: JWT Auth + RBAC
-    → Handler: patients.rs::create_patient()
-        → db_ops::create_patient()
-        → SurrealDB (tabla: pacientes)
-    ↓
-Respuesta: Patient creado con ID
-    → Frontend actualiza store
-    → Redirige a dashboard
-```
-
-#### 2. Registro de Medición
-
-```
-Usuario ingresa 12+ variables fisiológicas
-    ↓
-Frontend (pages/measurement.rs)
-    → Cada campo con validación en tiempo real
-    → Calcula GCS parcialmente
-    ↓
-API POST /api/patients/{id}/measurements
-    → Middleware: JWT Auth + RBAC
-    → Handler: measurements.rs::create_measurement()
-        │
-        ├→ validation.rs::validate_apache_measurement()
-        │   - Verifica rangos físicos (ej: temp 25-45°C)
-        │   - Verifica valores críticos (warnings)
-        │   - Detecta valores inválidos (errors)
-        │
-        ├→ scales.rs::calculate_apache_ii()
-        │   - 12 variables fisiológicas (0-252 pts)
-        │   - Edad (0-6 pts)
-        │   - GCS (0-12 pts)
-        │   - Chronic health (0-5 pts)
-        │   - Total: 0-71 pts
-        │
-        ├→ scales.rs::calculate_gcs()
-        │   - Eye (1-4) + Verbal (1-5) + Motor (1-6)
-        │   - Total: 3-15 pts
-        │
-        ├→ scales.rs::calculate_mortality()
-        │   - Logit = -0.286 + 0.146 × APACHEII + 0.808 × chronic
-        │   - Mortality = 100 × e^logit / (1 + e^logit)
-        │
-        ├→ scales.rs::calculate_news2(), calculate_saps3(), calculate_sofa()
-        │
-        └→ db_ops::create_measurement()
-            → SurrealDB (tabla: mediciones)
-    ↓
-Respuesta: Measurement con scores calculados
-    → Frontend actualiza gráficos temporales
-    → Muestra alertas si valores críticos
-```
-
-### Puntos de Entrada de Datos
-
-| Punto | Método | Datos | Validación |
-|-------|--------|-------|------------|
-| Registro Paciente | `POST /api/patients` | Demográficos, Admisión | Campos requeridos |
-| Nueva Medición | `POST /api/measurements` | 12 fisiológicas + GCS | Rangos clínicos |
-| Login | `POST /api/auth/login` | Username, Password | Argon2id |
-
-### Procesamiento de Scores Clínicos
-
-| Score | Archivo | Entrada | Salida | Puntos |
-|-------|---------|---------|--------|--------|
-| **APACHE II** | `scales.rs` | 12 vars + edad + chronic | Total | 0-71 |
-| **GCS** | `scales.rs` | Eye + Verbal + Motor | Total | 3-15 |
-| **NEWS2** | `scales.rs` | 7 vars + O2 | Total | 0-20 |
-| **SAPS III** | `scales.rs` | 20 vars | Total | 0-100 |
-| **SOFA** | `scales.rs` | 6 órganos | Total | 0-24 |
-| **Mortalidad** | `scales.rs` | APACHE II + chronic | % | 0-100% |
-
-### Validación de Datos
-
-```
-validation.rs::validate_apache_measurement()
-├── Validación de Rangos Físicos
-│   ├── Temperatura: 25-45°C
-│   ├── Presión Arterial: 0-300 mmHg
-│   ├── Frecuencia Cardíaca: 0-300 lpm
-│   ├── Frecuencia Respiratoria: 0-100
-│   ├── PaO2: 0-500 mmHg
-│   ├── pH: 6.5-8.0
-│   ├── Sodio: 100-180 mEq/L
-│   ├── Potasio: 1.5-10 mEq/L
-│   └── Creatinina: 0-15 mg/dL
-│
-├── Validación de Consistencia GCS
-│   └── Eye + Verbal + Motor = 3-15
-│
-└── Retorno: ValidationResult
-    ├── valid: bool
-    ├── errors: Vec<ValidationError>
-    └── warnings: Vec<ValidationWarning>
-```
-
-### Almacenamiento
-
-| Componente | Datos | Persistencia |
-|------------|-------|--------------|
-| **SurrealDB** | Pacientes, Mediciones, Usuarios | SurrealKV (embebido) |
-| **Valkey** | Sessiones HTTP, Cache queries | Memoria + disco |
-
----
-
-## 📚 Referencias Clínicas
-
-### APACHE II (Implementado)
-- **Knaus WA**, Draper EA, Wagner DP, Zimmerman JE (1985). APACHE II: a severity of disease classification system. Crit Care Med. 13(10):818-29.
-
-### Glasgow Coma Scale (Implementado)
-- **Teasdale GM**, Jennett B (1974). Assessment of coma and impaired consciousness. Lancet. 2(7872):81-4.
-
-### NEWS2 (Implementado)
-- **Royal College of Physicians** (2017). National Early Warning Score (NEWS) 2. Updated Report of a Working Party. London: RCP.
-- **Smith GB**, et al. (2012). Validation of NEWS. BMJ 2012;345:e5717.
-
-### SAPS III (Implementado)
-- **Metnitz PGH**, et al. (2005). SAPS 3—From evaluation of the patient to evaluation of the intensive care unit. Intensive Care Med.
-
-### SOFA (Implementado)
-- **Vincent JL**, et al. (1996). The SOFA (Sepsis-related Organ Failure Assessment) score to describe organ dysfunction/failure. Intensive Care Med.
-
-### Seguridad (Futuro)
-- **AES-256**: NIST FIPS 197 (Advanced Encryption Standard)
-- **Argon2**: Winternitz P, et al. (2015). Password Hashing Competition
-- **ChaCha20-Poly1305**: Bernstein D.J. (2008). ChaCha, a variant of Salsa20
-
-### Seguridad Empresarial
-- **HIPAA Compliance**: U.S. Department of Health and Human Services
-- **NIST SP 800-53**: Security and Privacy Controls
-- **ISO 27001**: Information Security Management
-- **GDPR**: General Data Protection Regulation (EU patients)
-
-### HL7 FHIR
-- **HL7 FHIR R4**: HL7 International, 2019
-- **SMART on FHIR**: Health IT Standards
-
-### Machine Learning
-- **Burn Framework**: https://burn.dev/
-- **SHAP**: Lundberg & Lee (2017). Nature Methods
-
----
-
-## 📈 Métricas de Rendimiento
-
-| Operación | Tiempo Típico |
-|-----------|---------------|
-| Cálculo APACHE II | ~4ns (benchmark) |
-| Cálculo GCS | ~1ns (benchmark) |
-| Cálculo SOFA | ~6ns (benchmark) |
-| Cálculo NEWS2 | ~6ns (benchmark) |
-| Cálculo SAPS III | ~32ns (benchmark) |
-| Crear paciente | ~10ms |
-| Listar pacientes | ~5ms |
-| Obtener paciente | ~2ms |
-| Export CSV | ~50ms |
-| Export PDF | ~100ms |
-| **WASM** | **2.2MB (optimizado)** |
-
----
-
-## 🔧 Cambios Recientes (Junio 2026)
-
-### Fix: Paginación en listado de pacientes (frontend)
-
-Se corrigió el frontend para manejar correctamente la respuesta paginada del backend (`PaginatedResponse`) en lugar del formato plano anterior.
-
-**Archivo modificado:** `dmart-app/src/api.rs`
-- `list_patients()` ahora deserializa `ApiResponse<PaginatedResponse<PatientListItem>>` y extrae `.items`
-
-### Sprint 4: Infraestructura y Documentación — COMPLETADO
-
-Se finalizaron los 4 sprints del roadmap Junio 2026, completando las 28 tareas planificadas.
-
-**Tests de Integración:**
-Se agregaron 3 tests de integración en `dmart-server/tests/api_tests.rs`:
-- CRUD pacientes (crear, obtener, listar, actualizar, eliminar)
-- Paginación (limit/offset)
-- Auth (registrar, autenticar, refresh token)
-
-**Benchmarks de Escalas Clínicas:**
-Se agregaron 8 benchmarks con Criterion en `dmart-shared/benches/scale_bench.rs`:
-- APACHE II score, breakdown, mortality risk
-- GCS, SOFA, NEWS2, SAPS III breakdown y score
-- Todos ejecutándose en ~1–32ns
-
-**Sidebar reactiva corregida:**
-El sidebar ahora se renderiza automáticamente después del login sin necesidad de refrescar la página. Se cambió `is_auth` de closure plana a `ReadSignal<bool>` con `signal()`, proporcionando `set_is_auth` via `provide_context` y llamándolo desde `login.rs` tras guardar el token.
-
-**Auth middleware corregido:**
-Las rutas públicas (`/health`, `/auth/login`) ahora se reconocen correctamente porque Axum remueve el prefijo `/api` antes del middleware. Desde la Fase 1 el resto de rutas exigen token, y `/admin/*` (salvo helpers clínicos), `/auth/register`, `/auth/users` y `/sandbox` exigen rol Admin.
-
-**Health check corregido:**
-Se reemplazó `SELECT 1` (no soportado por SurrealKV) por `SELECT * FROM patients LIMIT 1`.
-
-**CSP headers actualizados:**
-Se agregó `'wasm-unsafe-eval'` para compatibilidad WASM y dominios CDN (Google Fonts, Font Awesome).
-
-**Documentación técnica actualizada:**
-`docs/ARQUITECTURA.md` refleja SurrealKV, estructura real del proyecto, todos los endpoints API, capas de seguridad, variables de entorno, conteo de tests y formato del health check.
-
-**Rustdoc generado:**
-`cargo doc --workspace --no-deps` genera documentación completa del proyecto.
-
-**WASM recompilado:**
-Frontend compilado con `trunk build --release` con wasm_opt activado.
-
-## 🔧 Cambios Recientes (22 Mayo 2026)
-
-### Panel de Configuración de Institución
-
-Se agregó una nueva pestaña "Institución" en el panel de administración para configurar los datos del hospital.
-
-**Nuevo endpoint:**
-```http
-GET /api/admin/institucion    # Obtener config
-PUT /api/admin/institucion    # Actualizar config
-```
-
-**Campos disponibles:**
-- Nombre, RIF, Dirección, Teléfono, Email, URL del Logo
-
-**Componentes agregados:**
-- `InstitucionPanel` en `dmart-app/src/pages/admin.rs`
-- `api/institucion.rs` en el servidor (handlers GET/PUT)
-- `db.rs`: funciones `get_institucion_config` / `upsert_institucion_config`
-- Seed automático de configuración por defecto al iniciar
-
-### Cero Warnings
-
-Se eliminaron las funciones no utilizadas `parse_tipo_cama` y `parse_estado_cama` del frontend. El proyecto compila con 0 errores y 0 warnings.
-
-## 🔧 Cambios Recientes (26 Abril 2026)
-
-### Migración de RocksDB a SurrealKV
-
-**Problema:** El servidor usaba RocksDB y tenía problemas de estabilidad (crashes aleatorios).
-
-**Solución:** Migración completa a SurrealDB con storage SurrealKV (puro Rust).
-
-```toml
-# Antes (RocksDB)
-dmart-server/Cargo.toml
-surrealdb = { version = "2", features = ["kv-rocksdb"] }
-
-# Después (SurrealKV)
-surrealdb = { version = "2", features = ["kv-rods"] }
-# O mejor aún - usar feature default (SurrealKV)
-surrealdb = "2"  # Usa SurrealKV por defecto
-```
-
-**Beneficios:**
-- Storage 100% Rust (sin dependencias C)
-- Compilación más rápida
-- Datos persisten correctamente entre reinicios
-- Menos dependencias externas
-
-### Implementaciones Realizadas
-
-| Cambio | Descripción | Archivo |
-|--------|-------------|---------|
-| **Persistencia garantizada** | `fs::create_dir_all()` para asegurar directorio de datos | `db.rs` |
-| **Seed automático admin** | Usuario `admin` creado en primer inicio con `DMART_ADMIN_PASSWORD` (vacío = aleatoria generada y mostrada una vez) | `auth.rs`, `main.rs` |
-| **Panic handler global** | Log detallado antes de crashes | `main.rs` |
-| **Graceful shutdown** | Manejo de SIGINT/SIGTERM | `main.rs` |
-| **Ruta absoluta DB** | Detecta `current_dir()` para path correcto | `main.rs` |
-| **Fix Auth API** | Registro retorna `UserInfo` en vez de `User` | `api/auth.rs` |
-
-### Comando de Inicio
-
-```bash
-# El servidor ahora:
-# 1. Crea data/dmart.db automáticamente
-# 2. Seedea admin con DMART_ADMIN_PASSWORD (o aleatoria generada) si es primer inicio
-# 3. Limpia SIGINT/SIGTERM
-# 4. Log de errores antes de panic
-
-cargo run --package dmart-server
-```
-
-### Verificación de Persistencia
-
-```bash
-# 1. Iniciar servidor
-cargo run --package dmart-server
-
-# 2. Login con admin (usa tu DMART_ADMIN_PASSWORD de .env)
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"TU-PASSWORD-ADMIN"}'
-
-# 3. Crear pacientes
-curl -X POST http://localhost:3000/api/patients \
-  -H "Content-Type: application/json" \
-  -d '{"nombre":"Test","sexo":"M","edad":50}'
-
-# 4. Verificar stats
-curl http://localhost:3000/api/stats | jq '.data.total_pacientes'
-
-# 5. Reiniciar servidor
-pkill dmart-server
-cargo run --package dmart-server
-
-# 6. Login funciona, datos persisten
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"TU-PASSWORD-ADMIN"}'
-# ✅ JWT token recibido
-```
-
-### Fix de UI Stats (Leptos 0.8)
-
-**Problema:** La página de estadísticas no renderizaba datos.
-
-**Causa:** El `view!` macro de Leptos no permite `match` con diferentes tipos de views.
-
-**Solución:** Usar el patrón de `patients.rs` con `LocalResource` y `unwrap_or_else`:
-
-```rust
-// Antes (fallaba)
-let stats = LocalResource::new(|| async {
-    match api::get_stats().await {
-        Ok(s) => s,
-        Err(e) => return Err(e)  // ❌ Tipos incompatibles en match
-    }
-});
-
-// Después (funciona)
-let stats_resource = LocalResource::new(|| {
-    async move {
-        api::get_stats().await.unwrap_or_else(|_| UciStatsResponse {
-            // ... default
-        })
-    }
-});
-```
-
-### Tema Claro/Oscuro Adaptativo
-
-**Problema:** Los colores de estadísticas eran fijos (oscuros) y no se adaptaban al tema.
-
-**Solución:** Uso de variables CSS `var(--uci-*)`:
-
-```rust
-// Antes
-<div style="background:#1e293b;">  // Siempre oscuro
-
-// Después
-<div style="background:var(--uci-surface);">  // Se adapta automáticamente
-```
-
-**Variables CSS usadas:**
-- `var(--uci-surface)` → fondo del card
-- `var(--uci-text)` → texto principal
-- `var(--uci-muted)` → texto secundario
-- `var(--uci-border)` → bordes
-
----
-
-## 🏆 Logros del Proyecto
-
-| Logro | Descripción |
-|-------|-------------|
-| ✅ Sistema completo | Gestión total de UCI desde cero |
-| ✅ Estándar clínico | APACHE II según Knaus 1985 (71 puntos máx) |
-| ✅ **69+ tests** | Validación de cálculos médicos + integración API |
-| ✅ **8 benchmarks** | Criterion para escalas clínicas (~1–32ns) |
-| ✅ Tipado seguro | Rust previene errores en compilación |
-| ✅ Documentación | Docs técnicas + rustdoc + ARQUITECTURA.md |
-| ✅ UI moderna | Glassmorphism responsiva |
-| ✅ WASM | Frontend compilado, alto rendimiento |
-| ✅ Empotrado | Base de datos local, sin infraestructura |
-| ✅ 6 scores clínicos | APACHE II, GCS, NEWS2, SAPS3, SOFA, Mortalidad |
-| ✅ Responsive | Funciona en móvil y escritorio |
-| ✅ Zeroize | Protección de datos sensibles |
-| ✅ **SurrealKV** | Storage nativo Rust (sin RocksDB) |
-| ✅ **Dashboard unificado** | Scores, gráficos, recursos en una vista |
-| ✅ **Admin CRUD** | Camas con tipo, equipos, staff, stats |
-| ✅ **Configuración Institución** | Nombre, RIF, dirección, contacto, logo |
-| ✅ **Cero warnings** | Proyecto compila sin errores ni advertencias |
-| ✅ **Registro auto-asignación** | Paciente asigna cama libre + equipos |
-| ✅ **Sidebar reactiva** | Login sin refresh, señal reactiva Leptos |
-| ✅ **Auth middleware** | JWT en todas las rutas, open_paths corregido |
-| ✅ **CSP headers** | wasm-unsafe-eval, Google Fonts, Font Awesome |
-| ✅ **CI/CD listo** | GitHub Actions, Docker Compose producción |
-| ✅ **4 sprints completados** | 28/28 tareas, 100% roadmap Junio 2026 |
-
----
-
-Este sistema está diseñado para usarse en **Unidades de Cuidados Intensivos** de hospitales:
-
-### Instalación:
-```bash
-# Compilar
-cargo build --release
-
-# Frontend WASM
-cd dmart-app && trunk build
-
-# Optimizar WASM (-73%)
-./scripts/optimize-wasm.sh
-
-# Ejecutar servidor
-DMART_PORT=3000 ./target/release/dmart-server
-```
-
-### Acceso:
-- **Local**: http://localhost:3000
-- **Red hospitalaria**: http://IP_SERVIDOR:3000
-
-### Características para uso hospitalario:
-- ✅ Funciona **sin internet** (base de datos local)
-- ✅ Cálculo automático APACHE II
-- ✅ Historial de pacientes
-- ✅ Gráficos de evolución
-- ✅ Exportación CSV/PDF
-- ✅ Dark Mode
-- ✅ WASM optimizado (2.2MB)
+## 🗺️ Estado del proyecto
+
+- **Fase 0–5 completadas** · v0.5.0 — núcleo clínico, seguridad, frontend, interoperabilidad y QA
+- **En curso** — Fase 6: hardening y CI/CD (SPEC-003 HL7 done ✅)
+- Detalles en [ROADMAP.md](./ROADMAP.md) y [CHANGELOG.md](./CHANGELOG.md)
+- Cada feature nueva se desarrolla bajo [especificaciones SDD](./specs/) con criterios de aceptación Gherkin
 
 ---
 
 ## 🤝 Contribución
 
-Este proyecto está bajo licencia MIT. Siéntete libre de:
+¿Bug, idea o mejora clínica? ¡Bienvenida! Revisa [ROADMAP.md](./ROADMAP.md), abre un *issue*
+o un PR siguiendo el flujo SDD (*spec → implementación → tests → changelog*).
 
-- Reportar bugs
-- Sugerir nuevas características
-- Enviar pull requests
-- Utilizar para proyectos académicos
+Reporta bugs · Sugiere features · Envía PRs · Úsalo libremente en proyectos académicos.
 
 ---
 
 ## 📄 Licencia
 
-MIT License - Copyright (c) 2026
+**MIT** — Copyright © 2026 · [rooselvelt6](https://github.com/rooselvelt6)
 
 ---
 
-<p align="center">
-  <strong>dMart UCI</strong> - Sistema de Gestión de Cuidados Intensivos<br>
-  Desarrollado con ❤️ en Rust
-</p>
+<div align="center">
+
+*Hecho con ❤️ y Rust · Un solo binario para una UCI completa.*
+
+</div>
