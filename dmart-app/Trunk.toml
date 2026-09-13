@@ -2,6 +2,7 @@
 target = "index.html"
 dist = "../dist"
 wasm_opt = false
+minify = "never"
 
 [[proxy]]
 backend = "http://127.0.0.1:3000/api"

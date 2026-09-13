@@ -199,10 +199,10 @@ jobs:
           path: results/
 
   # ──────────────────────────────────────────────────────────────
-  # WASM BUILD (Frontend)
+  # WASM BUILD (Frontend) — cargo + wasm-bindgen (bypass trunk lightningcss/wasm-opt issues)
   # ──────────────────────────────────────────────────────────────
   wasm-build:
-    name: WASM Build (trunk)
+    name: WASM Build (cargo + wasm-bindgen)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -211,24 +211,24 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
-      - name: Install trunk (binary)
-        run: |
-          curl -L https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin/
-      - name: Cache trunk
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/trunk
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: trunk-${{ runner.os }}-${{ hashFiles('dmart-app/Cargo.lock', 'dmart-app/Trunk.toml') }}
+      - name: Install wasm-bindgen-cli (pinned to 0.2.118 for compatibility)
+        run: cargo install wasm-bindgen-cli --version 0.2.118 --locked
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
       - name: Build WASM release
         run: |
           cd dmart-app
-          trunk build --release
+          cargo build --target wasm32-unknown-unknown --release
+          wasm-bindgen --out-dir ../dist --target web ../target/wasm32-unknown-unknown/release/dmart_app.wasm
+          # Copy static assets
+          cp index.html ../dist/
+          cp input.css ../dist/
+          cp manifest.webmanifest ../dist/
+          cp sw.js ../dist/
+          cp icon.svg ../dist/
       - name: Verify WASM size
         run: |
-          WASM_SIZE=$(stat -c%s dmart-app/dist/*.wasm 2>/dev/null | head -1 || stat -c%s dmart-app/dist/dmart_app_bg.wasm)
+          WASM_SIZE=$(stat -c%s dmart-app/dist/dmart_app_bg.wasm 2>/dev/null || stat -c%s dmart/dist/dmart_app_bg.wasm)
           echo "WASM size: $WASM_SIZE bytes"
           if [ $WASM_SIZE -gt 1048576 ]; then
             echo "❌ WASM too large (>1MB): $WASM_SIZE"
