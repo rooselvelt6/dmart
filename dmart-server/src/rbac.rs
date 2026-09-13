@@ -200,6 +200,7 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
         return Some("patients:read");
     }
 
+    // Rutas de cuidado clínico: accesibles para cualquier rol clínico autenticado.
     if path.starts_with("/admin/check-camas")
         || path.starts_with("/admin/camas/disponibles")
         || path.starts_with("/admin/equipos/disponibles")
@@ -209,6 +210,16 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
     }
 
     if path.starts_with("/patients") {
+        let rest = path.strip_prefix("/patients").unwrap_or(path);
+
+        // Exportación: permisos específicos por formato.
+        if rest.ends_with("/export/csv") && m == "GET" {
+            return Some("export:csv");
+        }
+        if rest.ends_with("/export/pdf") && m == "GET" {
+            return Some("export:pdf");
+        }
+
         match m.as_str() {
             "GET" => Some("patients:read"),
             "POST" | "PUT" | "DELETE" => {
@@ -224,6 +235,53 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
             }
             _ => None,
         }
+    } else if path.starts_with("/admin") {
+        if path.starts_with("/admin/staff") {
+            return match m.as_str() {
+                "GET" => Some("users:read"),
+                "PUT" => Some("users:update"),
+                "DELETE" => Some("users:delete"),
+                // POST: creación de personal, salvo el toggle de estado.
+                "POST" if path.ends_with("/toggle") => Some("users:update"),
+                "POST" => Some("users:create"),
+                _ => None,
+            };
+        }
+        if path.starts_with("/admin/audit") {
+            return Some("audit:read");
+        }
+        if path.starts_with("/admin/camas") {
+            return match m.as_str() {
+                "GET" => Some("config:read"),
+                _ => Some("config:write"),
+            };
+        }
+        if path.starts_with("/admin/equipos") {
+            return match m.as_str() {
+                "GET" => Some("config:read"),
+                _ => Some("config:write"),
+            };
+        }
+        if path == "/admin/institucion" {
+            return match m.as_str() {
+                "GET" => Some("config:read"),
+                _ => Some("config:write"),
+            };
+        }
+        // /admin/stats — panel de operaciones (solo administradores).
+        Some("config:read")
+    } else if path.starts_with("/auth/users") {
+        match m.as_str() {
+            "GET" => Some("users:read"),
+            "POST" => Some("users:create"),
+            "PUT" => Some("users:update"),
+            "DELETE" => Some("users:delete"),
+            _ => None,
+        }
+    } else if path.starts_with("/auth/register") {
+        Some("users:create")
+    } else if path.starts_with("/sandbox") {
+        Some("config:write")
     } else {
         None
     }
@@ -242,10 +300,6 @@ mod tests {
         );
         assert_eq!(
             permission_for("GET", "/patients/abc/measurements/last"),
-            Some("patients:read")
-        );
-        assert_eq!(
-            permission_for("GET", "/patients/abc/export/pdf"),
             Some("patients:read")
         );
         assert_eq!(permission_for("GET", "/stats"), Some("patients:read"));
@@ -289,6 +343,96 @@ mod tests {
     }
 
     #[test]
+    fn permission_for_admin_areas() {
+        assert_eq!(permission_for("GET", "/admin/staff"), Some("users:read"));
+        assert_eq!(permission_for("POST", "/admin/staff"), Some("users:create"));
+        assert_eq!(
+            permission_for("PUT", "/admin/staff/abc"),
+            Some("users:update")
+        );
+        assert_eq!(
+            permission_for("DELETE", "/admin/staff/abc"),
+            Some("users:delete")
+        );
+        assert_eq!(
+            permission_for("POST", "/admin/staff/abc/toggle"),
+            Some("users:update")
+        );
+        assert_eq!(permission_for("GET", "/admin/audit"), Some("audit:read"));
+        assert_eq!(
+            permission_for("GET", "/admin/audit/critical"),
+            Some("audit:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/admin/institucion"),
+            Some("config:read")
+        );
+        assert_eq!(
+            permission_for("PUT", "/admin/institucion"),
+            Some("config:write")
+        );
+        assert_eq!(
+            permission_for("POST", "/admin/camas/init"),
+            Some("config:write")
+        );
+        assert_eq!(
+            permission_for("POST", "/admin/equipos/asignar"),
+            Some("config:write")
+        );
+        assert_eq!(permission_for("GET", "/admin/equipos"), Some("config:read"));
+        assert_eq!(permission_for("GET", "/admin/stats"), Some("config:read"));
+    }
+
+    #[test]
+    fn permission_for_care_paths_remain_clinical() {
+        assert_eq!(
+            permission_for("GET", "/admin/check-camas"),
+            Some("patients:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/admin/camas/disponibles"),
+            Some("patients:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/admin/equipos/disponibles"),
+            Some("patients:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/admin/equipos/cama/abc"),
+            Some("patients:read")
+        );
+    }
+
+    #[test]
+    fn permission_for_auth_users_and_sandbox() {
+        assert_eq!(permission_for("GET", "/auth/users"), Some("users:read"));
+        assert_eq!(
+            permission_for("POST", "/auth/register"),
+            Some("users:create")
+        );
+        assert_eq!(
+            permission_for("POST", "/sandbox/generate"),
+            Some("config:write")
+        );
+        assert_eq!(
+            permission_for("POST", "/sandbox/clear"),
+            Some("config:write")
+        );
+    }
+
+    #[test]
+    fn permission_for_exports_is_format_specific() {
+        assert_eq!(
+            permission_for("GET", "/patients/abc/export/csv"),
+            Some("export:csv")
+        );
+        assert_eq!(
+            permission_for("GET", "/patients/abc/export/pdf"),
+            Some("export:pdf")
+        );
+    }
+
+    #[test]
     fn role_permissions_are_coherent() {
         assert!(Role::Admin.can("*"));
         assert!(Role::Doctor.can("patients:create"));
@@ -300,5 +444,17 @@ mod tests {
         assert!(Role::Viewer.can("patients:read"));
         assert!(!Role::Viewer.can("patients:create"));
         assert!(!Role::Viewer.can("scales:write"));
+        // Permisos administrativos restringidos a Admin.
+        assert!(Role::Admin.can("users:create"));
+        assert!(Role::Admin.can("users:update"));
+        assert!(Role::Admin.can("users:delete"));
+        assert!(Role::Admin.can("users:read"));
+        assert!(Role::Admin.can("audit:read"));
+        assert!(Role::Admin.can("config:read"));
+        assert!(Role::Admin.can("config:write"));
+        assert!(!Role::Doctor.can("users:read"));
+        assert!(!Role::Doctor.can("audit:read"));
+        assert!(!Role::Doctor.can("config:write"));
+        assert!(!Role::Nurse.can("users:read"));
     }
 }

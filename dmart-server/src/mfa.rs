@@ -290,18 +290,39 @@ pub async fn verify(
     };
 
     let service = MfaService::new((*db).clone());
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
     match service
         .verify(&claims.sub, req.code.as_deref(), req.backup_code.as_deref())
         .await
     {
-        Ok(true) => match auth_service.complete_mfa_login(&claims.sub).await {
-            Ok(login) => (StatusCode::OK, Json(ApiResponse::ok(login))).into_response(),
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<LoginResponse>::err(e)),
-            )
-                .into_response(),
-        },
+        Ok(true) => {
+            match auth_service
+                .complete_mfa_login(&claims.sub, user_agent, None)
+                .await
+            {
+                Ok(login) => {
+                    let mut resp =
+                        (StatusCode::OK, Json(ApiResponse::ok(login.clone()))).into_response();
+                    if !login.refresh_token.is_empty()
+                        && let Ok(value) = axum::http::HeaderValue::from_str(
+                            &crate::auth::refresh_cookie(&login.refresh_token),
+                        )
+                    {
+                        resp.headers_mut()
+                            .insert(axum::http::header::SET_COOKIE, value);
+                    }
+                    resp
+                }
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<LoginResponse>::err(e)),
+                )
+                    .into_response(),
+            }
+        }
         Ok(false) => (
             StatusCode::UNAUTHORIZED,
             Json(ApiResponse::<LoginResponse>::err(

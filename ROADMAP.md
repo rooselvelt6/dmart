@@ -289,7 +289,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | **SPEC-001** | WASM Build Fix (cargo + wasm-bindgen) | 6 | 🔴 Crítica | — | 1 día | ✅ DONE |
 | **SPEC-002** | ML Model Persistence (bincode) | 6 | 🟠 Alta | SPEC-001 | 1 día | ✅ DONE |
 | **SPEC-003** | HL7 MLLP Integration Tests | 6 | 🟠 Alta | — | 2 días | ✅ DONE |
-| **SPEC-004** | Auth/Autz Hardening (JWT refresh, RBAC granular) | 6 | 🟠 Alta | — | 3 días | 📋 READY |
+| **SPEC-004** | Auth/Autz Hardening (JWT refresh, RBAC granular) | 6 | 🟠 Alta | — | 3 días | ✅ DONE |
 | **SPEC-005** | Prometheus `/metrics` + Grafana Dashboards | 6 | 🟠 Alta | SPEC-004 | 2 días | 📋 READY |
 | **SPEC-006** | Docker Multi-stage + Healthcheck + Staging Compose | 6 | 🔴 Crítica | SPEC-001 | 2 días | 📋 READY |
 | **SPEC-007** | CI Pipeline Completo (activar jobs fuzz/k6/e2e) | 6 | 🔴 Crítica | SPEC-001, SPEC-006 | 1 día | 📋 READY |
@@ -322,7 +322,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 
 | Orden | Spec | Responsable | Deadline | Criterio Go/No-Go |
 |-------|------|-------------|----------|-------------------|
-| 1 | **SPEC-004** Auth/Autz Hardening | Backend/Security | +3 días | JWT refresh + RBAC granular verde |
+| 1 | **SPEC-004** Auth/Autz Hardening | Backend/Security | +3 días | ✅ JWT refresh + RBAC granular + 0 advisories |
 | 2 | **SPEC-005** Prometheus + Grafana | DevOps | +2 días | `/metrics` + dashboards operativos |
 | 3 | **SPEC-006** Docker multi-stage + Staging | Backend/DevOps | +2 días | Imagen ~50MB + `docker compose -f docker-compose.prod.yml up` en staging |
 
@@ -338,11 +338,11 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 
 | Métrica | Target | Actual |
 |---------|--------|--------|
-| Specs completadas | 26/31 (84%) | 3 (9.7%) |
+| Specs completadas | 26/31 (84%) | 4 (12.9%) |
 | Specs en progreso | 0 | 0 (sprint: SPEC-004/005/006) |
 | Specs bloqueadas | 0 | 0 |
 | Cobertura HL7 (parser + MLLP + ingest) | >90% | ✅ 96.5% / 93.8% / 91.8% |
-| Cobertura tests críticos | >90% | ~85% (falta auth hardening) |
+| Cobertura tests críticos | >90% | ✅ ~91% (auth hardening + PDF export cubiertos) |
 | Deuda técnica Fase 3 | 0 | 8 items pendientes (6.1–6.8) |
 
 ---
@@ -515,4 +515,4 @@ jobs:
 | Arquitectura técnica | `docs/ARQUITECTURA.md` ✅ (ADR modelo SurrealDB) |
 | API REST | `docs/API.md` ✅ |
 | Referencias clínicas | `docs/APACHE_II.md`, `docs/GCS.md` |
-| Specs SDD | `specs/` ✅ (001–031 + TEMPLATE; 001–003 DONE, 004–006 READY) |
+| Specs SDD | `specs/` ✅ (001–031 + TEMPLATE; 001–004 DONE, 005–006 READY) |

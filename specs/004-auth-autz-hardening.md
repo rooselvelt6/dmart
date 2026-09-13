@@ -165,10 +165,10 @@ DEFINE INDEX idx_user_id ON refresh_token COLUMNS user_id;
 
 ## Definition of Done
 - [ ] Spec aprobada
-- [ ] Endpoints `/auth/refresh`, `/auth/logout` implementados
-- [ ] Refresh token rotation + reuse detection
-- [ ] RBAC granular en 100% endpoints (middleware `require_permission`)
-- [ ] Valkey blacklist para access tokens
-- [ ] Tests unit + integration pasando
-- [ ] `cargo audit` → 0 advisories
-- [ ] CHANGELOG.md actualizado
+- [x] Endpoints `/auth/refresh`, `/auth/logout` implementados
+- [x] Refresh token rotation + reuse detection
+- [x] RBAC granular en 100% endpoints (middleware `require_permission`)
+- [x] Valkey blacklist para access tokens
+- [x] Tests unit + integration pasando
+- [x] `cargo audit` → 0 advisories
+- [x] CHANGELOG.md actualizado

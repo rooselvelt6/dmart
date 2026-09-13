@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use dmart_shared::models::*;
+use printpdf::*;
 
 // GET /api/patients/:id/export/csv
 pub async fn export_csv(
@@ -133,50 +134,76 @@ pub async fn export_pdf(
     }
 }
 
+/// Emite una línea de texto en el PDF (coordenadas `y_top` estilo "desde arriba",
+/// convertidas a las coordenadas desde abajo-izquierda de printpdf 0.12).
+fn push_text(
+    ops: &mut Vec<Op>,
+    left: Mm,
+    page_h: f32,
+    y_top: f32,
+    text: &str,
+    bold: bool,
+    size: f32,
+) {
+    let y_bottom = Mm(page_h - y_top);
+    ops.push(Op::StartTextSection);
+    ops.push(Op::SetTextCursor {
+        pos: Point::new(left, y_bottom),
+    });
+    ops.push(Op::SetFont {
+        font: if bold {
+            PdfFontHandle::Builtin(BuiltinFont::HelveticaBold)
+        } else {
+            PdfFontHandle::Builtin(BuiltinFont::Helvetica)
+        },
+        size: Pt(size),
+    });
+    ops.push(Op::ShowText {
+        items: vec![TextItem::Text(text.to_string())],
+    });
+    ops.push(Op::EndTextSection);
+}
+
 fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Result<Vec<u8>> {
-    use printpdf::*;
-
-    let (doc, page1, layer1) = PdfDocument::new(
-        format!("UCI — {} {}", patient.nombre, patient.apellido),
-        Mm(210.0),
-        Mm(297.0),
-        "Datos del Paciente",
-    );
-
-    let page_ref = doc.get_page(page1);
-    let layer = page_ref.get_layer(layer1);
-    let font = doc.add_builtin_font(BuiltinFont::HelveticaBold)?;
-    let font_reg = doc.add_builtin_font(BuiltinFont::Helvetica)?;
+    let mut doc = PdfDocument::new(&format!("UCI — {} {}", patient.nombre, patient.apellido));
+    let mut pages: Vec<Vec<Op>> = Vec::new();
+    let mut ops: Vec<Op> = Vec::new();
+    let left = Mm(15.0);
+    let page_h = 297.0_f32;
 
     let mut y = 270.0_f32;
-    let left = 15.0_f32;
-
-    let write_line = |text: &str, bold: bool, size: f32, y_pos: f32| {
-        let f = if bold { &font } else { &font_reg };
-        layer.use_text(text, size, Mm(left), Mm(y_pos), f);
-    };
 
     // Header
-    write_line("SISTEMA UCI — REGISTRO DE PACIENTE", true, 14.0, y);
+    push_text(&mut ops, left, page_h, y, "SISTEMA UCI — REGISTRO DE PACIENTE", true, 14.0);
     y -= 8.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!(
             "Historia Clínica: {}   Cédula: {}",
             patient.historia_clinica, patient.cedula
         ),
         false,
         10.0,
-        y,
     );
     y -= 6.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!("Paciente: {} {}", patient.nombre, patient.apellido),
         true,
         12.0,
-        y,
     );
     y -= 6.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!(
             "Sexo: {:?}   Color de Piel: {}",
             patient.sexo,
@@ -184,27 +211,36 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
         ),
         false,
         9.0,
-        y,
     );
     y -= 5.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!(
             "Fecha Nacimiento: {}   Ingreso UCI: {}",
             patient.fecha_nacimiento, patient.fecha_ingreso_uci
         ),
         false,
         9.0,
-        y,
     );
     y -= 5.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!("Diagnóstico UCI: {}", patient.diagnostico_uci),
         false,
         9.0,
-        y,
     );
     y -= 5.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!(
             "Tipo Admisión: {:?}   VM: {}   Procesos Invasivos: {}",
             patient.tipo_admision,
@@ -213,25 +249,25 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
         ),
         false,
         9.0,
-        y,
     );
 
     y -= 8.0;
-    write_line("─── EVOLUCIÓN APACHE II ───", true, 11.0, y);
+    push_text(&mut ops, left, page_h, y, "─── EVOLUCIÓN APACHE II ───", true, 11.0);
     y -= 6.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         "  Fecha/Hora              Apache II   GCS   Severidad       Mortalidad",
         true,
         9.0,
-        y,
     );
     y -= 5.0;
 
     for m in measurements {
         if y < 20.0 {
-            let (new_page, new_layer) = doc.add_page(Mm(210.0), Mm(297.0), "Continuación");
-            let _pl = doc.get_page(new_page);
-            let _ll = _pl.get_layer(new_layer);
+            pages.push(std::mem::take(&mut ops));
             y = 270.0;
         }
         let line = format!(
@@ -242,32 +278,47 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
             m.severity.label(),
             m.mortality_risk,
         );
-        write_line(&line, false, 8.0, y);
+        push_text(&mut ops, left, page_h, y, &line, false, 8.0);
         y -= 4.5;
     }
 
     y -= 5.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!(
             "Estado actual de gravedad: {}",
             patient.estado_gravedad.label()
         ),
         true,
         10.0,
-        y,
     );
     y -= 4.0;
-    write_line(
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
         &format!(
             "Mortalidad estimada: {}",
             patient.estado_gravedad.mortality_estimate()
         ),
         false,
         9.0,
-        y,
     );
 
-    let bytes = doc.save_to_bytes()?;
+    pages.push(ops);
+
+    let pages: Vec<PdfPage> = pages
+        .into_iter()
+        .map(|ops| PdfPage::new(Mm(210.0), Mm(page_h), ops))
+        .collect();
+    let mut warnings = Vec::new();
+    let bytes = doc
+        .with_pages(pages)
+        .save(&PdfSaveOptions::default(), &mut warnings);
     Ok(bytes)
 }
 
@@ -280,4 +331,44 @@ fn error_response(msg: &str) -> Response {
             msg
         )))
         .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dmart_shared::models::{Patient, SeverityLevel};
+
+    #[test]
+    fn generate_pdf_produces_valid_document() {
+        let mut patient = Patient::new();
+        patient.nombre = "María".into();
+        patient.apellido = "González".into();
+        patient.historia_clinica = "HC-001".into();
+        patient.cedula = "88010112345".into();
+        patient.diagnostico_uci = "Neumonía severa".into();
+        patient.estado_gravedad = SeverityLevel::Critico;
+
+        let mut m = dmart_shared::models::Measurement::new(
+            &patient.patient_id,
+            dmart_shared::models::ApacheIIData::default(),
+            dmart_shared::models::GcsData::default(),
+        );
+        m.timestamp = "2026-09-13T10:00:00Z".into();
+        m.apache_score = 25;
+        m.gcs_score = 9;
+        m.severity = SeverityLevel::Severo;
+        m.mortality_risk = 0.45;
+
+        let bytes = generate_pdf(&patient, &[m]).expect("pdf gen");
+        assert!(bytes.len() > 1000, "PDF demasiado corto");
+        assert!(bytes.starts_with(b"%PDF"), "debe empezar con cabecera PDF");
+
+        // El contenido de texto viaja comprimido (FlateDecode); la validación
+        // estructural fiable es re-parsear el documento que acabamos de emitir
+        // (bytes propios, trusted, no input de terceros).
+        let mut warnings = Vec::new();
+        let parsed = PdfDocument::parse(&bytes, &PdfParseOptions::default(), &mut warnings)
+            .expect("el PDF generado debe re-parsear como documento válido");
+        assert_eq!(parsed.page_count(), 1, "debe tener una página");
+    }
 }

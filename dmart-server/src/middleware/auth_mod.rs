@@ -23,6 +23,7 @@ impl AuthMiddlewareConfig {
                 "/health".to_string(),
                 "/auth/login".to_string(),
                 "/auth/mfa/verify".to_string(),
+                "/auth/refresh".to_string(),
             ],
         }
     }
@@ -30,26 +31,6 @@ impl AuthMiddlewareConfig {
     pub fn is_path_open(&self, path: &str) -> bool {
         self.open_paths.iter().any(|p| path.starts_with(p))
     }
-}
-
-/// Returns true for paths that require the Admin role (permission `*`).
-///
-/// Staff management, user creation and the sandbox/generator are restricted,
-/// while the patient-care helpers (`check-camas`, `disponibles`, equipo de
-/// cama) remain available to any authenticated clinician.
-pub fn is_admin_only_path(path: &str) -> bool {
-    const CARE_PATHS: [&str; 4] = [
-        "/admin/check-camas",
-        "/admin/camas/disponibles",
-        "/admin/equipos/disponibles",
-        "/admin/equipos/cama/",
-    ];
-    let is_care_path = CARE_PATHS.iter().any(|p| path.starts_with(p));
-    let is_admin_area = path.starts_with("/admin")
-        || path.starts_with("/auth/register")
-        || path.starts_with("/auth/users")
-        || path.starts_with("/sandbox");
-    is_admin_area && !is_care_path
 }
 
 pub async fn auth_middleware(
@@ -94,7 +75,9 @@ pub async fn auth_middleware(
 
     match state.auth_service.verify_token(&token) {
         Ok(claims) => {
-            if crate::auth::is_token_revoked_in_cache(&token).await {
+            if crate::auth::is_jti_revoked_in_cache(&claims.jti).await
+                || crate::auth::is_user_access_revoked_in_cache(&claims.sub, claims.iat).await
+            {
                 let response = Json(ApiResponse::<String>::err("Token revocado".to_string()));
                 return Response::builder()
                     .status(401)
@@ -108,16 +91,6 @@ pub async fn auth_middleware(
                 ));
                 return Response::builder()
                     .status(401)
-                    .body(response.into_response().into_body())
-                    .unwrap();
-            }
-
-            if is_admin_only_path(&path) && !claims.has_permission("*") {
-                let response = Json(ApiResponse::<String>::err(
-                    "Forbidden: se requiere rol Admin".to_string(),
-                ));
-                return Response::builder()
-                    .status(403)
                     .body(response.into_response().into_body())
                     .unwrap();
             }
@@ -152,25 +125,42 @@ pub async fn auth_middleware(
 
 #[cfg(test)]
 mod tests {
-    use super::is_admin_only_path;
+    use crate::auth::Claims;
+
+    fn test_claims(scope: &str) -> Claims {
+        Claims {
+            sub: "u1".into(),
+            username: "tester".into(),
+            rol: "Viewer".into(),
+            permissions: vec!["patients:read".into()],
+            exp: chrono::Utc::now().timestamp() + 3600,
+            iat: chrono::Utc::now().timestamp(),
+            jti: "jti-test-001".into(),
+            scope: scope.into(),
+        }
+    }
 
     #[test]
-    fn admin_only_detection() {
-        assert!(is_admin_only_path("/admin/staff"));
-        assert!(is_admin_only_path("/admin/stats"));
-        assert!(is_admin_only_path("/admin/equipos"));
-        assert!(is_admin_only_path("/admin/camas"));
-        assert!(is_admin_only_path("/admin/equipos/asignar"));
-        assert!(is_admin_only_path("/auth/register"));
-        assert!(is_admin_only_path("/auth/users"));
-        assert!(is_admin_only_path("/sandbox/generate"));
+    fn claims_scope_session_required() {
+        let session = test_claims("session");
+        assert_eq!(session.scope, "session");
 
-        assert!(!is_admin_only_path("/admin/check-camas"));
-        assert!(!is_admin_only_path("/admin/camas/disponibles"));
-        assert!(!is_admin_only_path("/admin/equipos/disponibles"));
-        assert!(!is_admin_only_path("/admin/equipos/cama/abc"));
-        assert!(!is_admin_only_path("/patients"));
-        assert!(!is_admin_only_path("/auth/login"));
-        assert!(!is_admin_only_path("/health"));
+        let mfa = test_claims("mfa");
+        assert_eq!(mfa.scope, "mfa");
+        assert_ne!(mfa.scope, "session");
+    }
+
+    #[test]
+    fn claims_permission_check() {
+        let viewer = test_claims("session");
+        assert!(viewer.has_permission("patients:read"));
+        assert!(!viewer.has_permission("users:create"));
+
+        let admin = Claims {
+            permissions: vec!["*".into()],
+            ..test_claims("session")
+        };
+        assert!(admin.has_permission("users:create"));
+        assert!(admin.has_permission("anything"));
     }
 }

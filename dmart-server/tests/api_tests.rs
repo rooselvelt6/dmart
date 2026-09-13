@@ -371,16 +371,54 @@ async fn test_auth_register() {
     assert_eq!(reg.username, "testdoc");
 
     let login = auth
-        .authenticate("testdoc", "TestPass123!")
+        .authenticate("testdoc", "TestPass123!", None, None)
         .await
         .expect("authenticate failed");
     assert!(!login.token.is_empty());
+    assert!(!login.access_token.is_empty());
+    assert_eq!(login.access_token, login.token);
+    assert!(!login.mfa_required, "no MFA configured => full session");
+    assert!(
+        !login.refresh_token.is_empty(),
+        "login must issue a refresh token"
+    );
 
-    let refresh = auth.refresh_token(&login.token).await;
-    assert!(refresh.is_ok());
+    let refresh = auth
+        .rotate_refresh_token(&login.refresh_token, None, None)
+        .await;
+    assert!(refresh.is_ok(), "refresh rotation must succeed");
+    let rotated = refresh.unwrap();
+    assert_ne!(
+        rotated.access_token, login.token,
+        "rotated session must mint a new access token"
+    );
+    assert_ne!(
+        rotated.refresh_token, login.refresh_token,
+        "refresh token must rotate (single-use)"
+    );
+    assert!(!rotated.refresh_token.is_empty());
 
-    let revoked = auth.verify_token(login.token.as_str());
-    assert!(revoked.is_ok());
+    // El refresh token original ya fue consumido: reusarlo debe fallar.
+    let reuse = auth
+        .rotate_refresh_token(&login.refresh_token, None, None)
+        .await;
+    assert!(
+        reuse.is_err(),
+        "reusing a consumed refresh token must be rejected (reuse detection)"
+    );
+    // Y el nuevo token de la sesión robada ha sido revocado junto con la familia.
+    let family_claims = auth.verify_token(&rotated.access_token);
+    assert!(
+        family_claims.is_err(),
+        "reuse detection must revoke the whole session family"
+    );
+
+    // La familia incluye también el access token original del login.
+    let original = auth.verify_token(login.token.as_str());
+    assert!(
+        original.is_err(),
+        "original access token belongs to the revoked family"
+    );
 }
 
 #[tokio::test]
@@ -409,7 +447,7 @@ async fn test_password_hash_not_plaintext_and_revocation() {
     );
 
     let login = auth
-        .authenticate("hashcheck", "Secreto_123!")
+        .authenticate("hashcheck", "Secreto_123!", None, None)
         .await
         .expect("authenticate failed");
     assert_eq!(login.user.rol, dmart_shared::models::UserRole::Enfermero);
@@ -430,6 +468,7 @@ async fn test_password_hash_not_plaintext_and_revocation() {
 use axum::body::Body;
 use axum::http::{Method, StatusCode, header};
 use http_body_util::BodyExt;
+use std::net::SocketAddr;
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use tower::ServiceExt;
@@ -463,7 +502,9 @@ async fn build_app(db: &TestDb) -> axum::Router {
     let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
     let security_state = dmart_server::security::create_security_state();
     let database = std::sync::Arc::new(db.clone());
-    dmart_server::api::build_api_router(database, auth_config, security_state)
+    dmart_server::api::build_api_router(database, auth_config, security_state).layer(
+        axum::extract::connect_info::MockConnectInfo("127.0.0.1:0".parse::<SocketAddr>().unwrap()),
+    )
 }
 
 async fn send(
@@ -1338,4 +1379,322 @@ async fn test_realtime_broadcast_single_instance() {
         "el evento contiene el tipo esperado: {}",
         msg
     );
+}
+
+// ─── SPEC-004: Refresh tokens + RBAC granular ────────────────────────────
+
+#[tokio::test]
+async fn test_e2e_refresh_token_rotation_and_reuse_detection() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "refresh_e2e",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Refresh E2E",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("refresh_e2e", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let access1 = json["data"]["access_token"]
+        .as_str()
+        .expect("access_token")
+        .to_string();
+    let rt1 = json["data"]["refresh_token"]
+        .as_str()
+        .expect("refresh_token")
+        .to_string();
+    assert!(!access1.is_empty());
+    assert!(!rt1.is_empty());
+
+    // Rotación vía cuerpo JSON
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/refresh",
+        None,
+        Some(serde_json::json!({ "refresh_token": rt1 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "refresh must succeed: {}", json);
+    let access2 = json["data"]["access_token"]
+        .as_str()
+        .expect("access_token")
+        .to_string();
+    let rt2 = json["data"]["refresh_token"]
+        .as_str()
+        .expect("refresh_token")
+        .to_string();
+    assert_ne!(access2, access1, "access token must rotate");
+    assert_ne!(rt2, rt1, "refresh token must rotate");
+
+    // Reuso del token consumido → 401
+    let (status, _) = send(
+        &http,
+        Method::POST,
+        "/auth/refresh",
+        None,
+        Some(serde_json::json!({ "refresh_token": rt1 })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "reused refresh token must be rejected"
+    );
+
+    // La familia de la sesión robada fue revocada: access2 ya no sirve
+    let (status, _) = send(&http, Method::GET, "/auth/me", Some(&access2), None).await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "reuse detection must revoke the whole session family"
+    );
+}
+
+#[tokio::test]
+async fn test_e2e_logout_revokes_refresh_token() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "logout_e2e",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Logout E2E",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    // Login — capturamos el Set-Cookie (cookie httpOnly) y el access token.
+    let app = http.clone();
+    let request = axum::http::Request::builder()
+        .method(Method::POST)
+        .uri("/auth/login")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(login_body("logout_e2e", "SuperSecreto_01!").to_string()))
+        .expect("build login");
+    let response = app.oneshot(request).await.expect("oneshot login");
+    assert_eq!(response.status(), StatusCode::OK);
+    let set_cookie = response
+        .headers()
+        .get(header::SET_COOKIE)
+        .expect("Set-Cookie")
+        .to_str()
+        .expect("ascii")
+        .to_string();
+    assert!(
+        set_cookie.contains("refresh_token="),
+        "login must set the refresh cookie: {}",
+        set_cookie
+    );
+    assert!(set_cookie.contains("HttpOnly"), "cookie must be HttpOnly");
+    assert!(
+        set_cookie.contains("SameSite=Strict"),
+        "cookie must be SameSite=Strict"
+    );
+    assert!(
+        set_cookie.contains("Path=/api/auth"),
+        "cookie Path must be restricted to /api/auth"
+    );
+    let rt = set_cookie
+        .split(';')
+        .next()
+        .expect("first cookie pair")
+        .trim_start_matches("refresh_token=")
+        .to_string();
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).expect("login json");
+    let access = json["data"]["access_token"]
+        .as_str()
+        .expect("access_token")
+        .to_string();
+
+    // Logout con access token + cookie httpOnly.
+    let app2 = http.clone();
+    let request2 = axum::http::Request::builder()
+        .method(Method::POST)
+        .uri("/auth/logout")
+        .header("authorization", format!("Bearer {access}"))
+        .header(header::COOKIE, format!("refresh_token={rt}"))
+        .body(Body::empty())
+        .expect("build logout");
+    let response2 = app2.oneshot(request2).await.expect("oneshot logout");
+    assert_eq!(response2.status(), StatusCode::OK);
+    let clear_cookie = response2
+        .headers()
+        .get(header::SET_COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        clear_cookie.contains("Max-Age=0"),
+        "logout must clear the refresh cookie: {}",
+        clear_cookie
+    );
+
+    // El refresh token ya fue revocado al hacer logout.
+    let (status, _) = send(
+        &http,
+        Method::POST,
+        "/auth/refresh",
+        None,
+        Some(serde_json::json!({ "refresh_token": rt })),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "refresh token must be revoked after logout"
+    );
+}
+
+#[tokio::test]
+async fn test_e2e_revoke_all_kills_all_sessions() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "revokeall_e2e",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "RevokeAll E2E",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("revokeall_e2e", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let access = json["data"]["access_token"].as_str().unwrap().to_string();
+
+    let (status, _) = send(&http, Method::POST, "/auth/revoke-all", Some(&access), None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = send(&http, Method::GET, "/auth/me", Some(&access), None).await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "revoke-all must invalidate the calling session"
+    );
+}
+
+#[tokio::test]
+async fn test_e2e_granular_rbac_permissions() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "admin_rbac",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Admin RBAC",
+    )
+    .await;
+    seed_user(
+        &db,
+        "doc_rbac",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Medico,
+        "Doc RBAC",
+    )
+    .await;
+    seed_user(
+        &db,
+        "viewer_rbac",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Viewer,
+        "Viewer RBAC",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    let admin = login_token(&http, "admin_rbac", "SuperSecreto_01!").await;
+    let doc = login_token(&http, "doc_rbac", "SuperSecreto_01!").await;
+    let viewer = login_token(&http, "viewer_rbac", "SuperSecreto_01!").await;
+
+    // Viewer: lectura clínica sí, administración no
+    let (s, _) = send(
+        &http,
+        Method::GET,
+        "/admin/check-camas",
+        Some(&viewer),
+        None,
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "viewer can read clinical data");
+
+    let (s, _) = send(&http, Method::GET, "/admin/audit", Some(&viewer), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "viewer cannot read audit");
+
+    let (s, _) = send(&http, Method::GET, "/admin/staff", Some(&viewer), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "viewer cannot list staff");
+
+    let (s, _) = send(
+        &http,
+        Method::POST,
+        "/sandbox/generate",
+        Some(&viewer),
+        Some(serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(
+        s,
+        StatusCode::FORBIDDEN,
+        "viewer cannot generate sandbox data"
+    );
+
+    // Médico: administración de personal no, auditoría no
+    let (s, _) = send(&http, Method::GET, "/admin/staff", Some(&doc), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "medico cannot list staff");
+
+    let (s, _) = send(&http, Method::GET, "/admin/audit", Some(&doc), None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "medico cannot read audit");
+
+    let (s, _) = send(
+        &http,
+        Method::PUT,
+        "/admin/institucion",
+        Some(&doc),
+        Some(serde_json::json!({ "nombre": "x" })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "medico cannot edit config");
+
+    let (s, _) = send(
+        &http,
+        Method::POST,
+        "/sandbox/generate",
+        Some(&doc),
+        Some(serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "medico cannot generate sandbox");
+
+    // Admin: todo permitido
+    let (s, _) = send(&http, Method::GET, "/admin/stats", Some(&admin), None).await;
+    assert_eq!(s, StatusCode::OK, "admin reads admin stats");
+
+    let (s, _) = send(&http, Method::GET, "/admin/staff", Some(&admin), None).await;
+    assert_eq!(s, StatusCode::OK, "admin lists staff");
+
+    let (s, _) = send(&http, Method::GET, "/admin/institucion", Some(&admin), None).await;
+    assert_eq!(s, StatusCode::OK, "admin reads institucion");
 }

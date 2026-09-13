@@ -7,6 +7,37 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-004: Auth/Autz Hardening (JWT Refresh + RBAC Granular)
+
+### Agregado
+- **Refresh tokens rotativos (single-use)**: `POST /auth/login` emite par
+  `access_token` (15min) + `refresh_token` (7d, cookie httpOnly `Secure`
+  `SameSite=Strict`); `POST /auth/refresh` rota el refresh token en cada uso y
+  revoca el anterior en DB (`refresh_token` con `token_hash` SHA-256, indexado
+  UNIQUE).
+- **Detección de reuso**: reutilizar un refresh token ya consumido revoca toda
+  la familia de sesiones del usuario (posible robo → `revoke-all` de la familia).
+- **Logout inmediato**: `POST /auth/logout` revoca access token (blacklist JWT
+  en Valkey con TTL restante, fail-open si cache caída) + refresh token en DB;
+  `POST /auth/revoke-all` revoca todas las sesiones del usuario.
+- **RBAC granular**: middleware `require_permission` aplica la matriz
+  `resource:action` (`rbac.rs`) al 100% de los endpoints autenticados vía
+  tabla única `permission_for(method, path)`.
+- Migración `003_refresh_tokens.surql` (tabla `refresh_token` SCHEMAFULL).
+
+### Corregido
+- `cargo audit` → **0 advisories**: actualización de `ammonia`, `crossbeam-*`,
+  `quinn-proto`, `rustls-webpki` y `printpdf` (0.7 → 0.12, lopdf 0.44 parcheado
+  del RUSTSEC-2026-0187). El generador de PDF de exportación se reescribió al
+  nuevo API de ops de printpdf 0.12.
+
+### Tests
+- `api_tests` 29 (incl. refresh rotation, reuse detection, logout/revoke-all y
+  RBAC granular), `hl7_integration` 32, lib server 39 (incl. nuevo
+  `generate_pdf_produces_valid_document`). Todos verdes.
+
+---
+
 ## [Unreleased] — SPEC-003: Tests de Integración HL7/MLLP
 
 ### Agregado

@@ -27,6 +27,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "002_mfa_users_indexes",
         include_str!("../migrations/002_mfa_users_indexes.surql"),
     ),
+    (
+        "003_refresh_tokens",
+        include_str!("../migrations/003_refresh_tokens.surql"),
+    ),
 ];
 
 pub async fn applied_versions(db: &Surreal<Db>) -> Result<Vec<u64>> {
@@ -88,7 +92,7 @@ mod tests {
         let first = run_migrations(&db).await.expect("first run");
         assert_eq!(first.len(), MIGRATIONS.len());
         let applied = applied_versions(&db).await.expect("applied");
-        assert_eq!(applied, vec![1, 2]);
+        assert_eq!(applied, vec![1, 2, 3]);
 
         let second = run_migrations(&db).await.expect("second run");
         assert!(second.is_empty(), "no pending migrations after first run");
