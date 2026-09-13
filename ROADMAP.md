@@ -279,6 +279,62 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 
 ---
 
+## 📋 SPEC BACKLOG PRIORIZADO (Master List)
+
+> **Orden de ejecución recomendado** — Cada spec debe seguir SDD: Spec PR → Review → Implement PR → Verify → Document.
+> **Leyenda**: 🔴 Crítica (bloquea staging/prod) | 🟠 Alta (deuda técnica / seguridad) | 🟡 Media (mejora incremental) | 🟢 Baja (nice-to-have)
+
+| Spec | Título | Fase | Prioridad | Dependencias | Esfuerzo | Estado |
+|------|--------|------|-----------|--------------|----------|--------|
+| **SPEC-001** | WASM Build Fix (cargo + wasm-bindgen) | 6 | 🔴 Crítica | — | 1 día | ✅ DONE |
+| **SPEC-002** | ML Model Persistence (bincode) | 6 | 🟠 Alta | SPEC-001 | 1 día | ✅ DONE |
+| **SPEC-003** | HL7 MLLP Integration Tests | 6 | 🟠 Alta | — | 2 días | 📋 READY |
+| **SPEC-004** | Auth/Autz Hardening (JWT refresh, RBAC granular) | 6 | 🟠 Alta | — | 3 días | 📋 READY |
+| **SPEC-005** | Prometheus `/metrics` + Grafana Dashboards | 6 | 🟠 Alta | SPEC-004 | 2 días | 📋 READY |
+| **SPEC-006** | Docker Multi-stage + Healthcheck + Staging Compose | 6 | 🔴 Crítica | SPEC-001 | 2 días | 📋 READY |
+| **SPEC-007** | CI Pipeline Completo (activar jobs fuzz/k6/e2e) | 6 | 🔴 Crítica | SPEC-001, SPEC-006 | 1 día | 📋 READY |
+| **SPEC-008** | Alertas Operativas (webhook/email) | 6 | 🟡 Media | SPEC-005 | 1 día | ⏳ PENDING |
+| **SPEC-009** | Backup Automático SurrealKV (cron + retención) | 6 | 🟡 Media | SPEC-006 | 1 día | ⏳ PENDING |
+| **SPEC-010** | Semantic Versioning + git-cliff Changelog | 6 | 🟡 Media | SPEC-007 | 0.5 día | ⏳ PENDING |
+| **SPEC-011** | WASM Opt en CI (wasm-opt 2.2MB → 600KB) | 6 | 🟡 Media | SPEC-001 | 1 día | ⏳ PENDING |
+| **SPEC-012** | Staging Environment (docker-compose.prod.yml) | 6 | 🔴 Crítica | SPEC-006, SPEC-007 | 1 día | ⏳ PENDING |
+| **SPEC-013** | Web Push Notificaciones (VAPID) | 4 | 🟡 Media | — | 2 días | ⏳ PENDING |
+| **SPEC-014** | ML Feature Store (SurrealDB) | 7 | 🟠 Alta | SPEC-002 | 3 días | ⏳ PENDING |
+| **SPEC-015** | ML Ensemble (DecisionTree + LR + XGBoost) | 7 | 🟠 Alta | SPEC-014 | 3 días | ⏳ PENDING |
+| **SPEC-016** | ML A/B Testing Framework | 7 | 🟡 Media | SPEC-015 | 2 días | ⏳ PENDING |
+| **SPEC-017** | ML SHAP Explainability | 7 | 🟡 Media | SPEC-015 | 2 días | ⏳ PENDING |
+| **SPEC-018** | ML Retraining Pipeline (drift detection) | 7 | 🟡 Media | SPEC-015 | 2 días | ⏳ PENDING |
+| **SPEC-019** | Kubernetes Helm Chart | 8 | 🔴 Crítica | SPEC-006, SPEC-012 | 3 días | ⏳ PENDING |
+| **SPEC-020** | GitOps ArgoCD/Flux | 8 | 🔴 Crítica | SPEC-019 | 2 días | ⏳ PENDING |
+| **SPEC-021** | SurrealDB Cluster (3+ nodos) | 8 | 🔴 Crítica | SPEC-019 | 2 días | ⏳ PENDING |
+| **SPEC-022** | Disaster Recovery (RPO<1h, RTO<4h) | 8 | 🟠 Alta | SPEC-021 | 2 días | ⏳ PENDING |
+| **SPEC-023** | HIPAA/NIST/ISO 27001 Evidence Pack | 8 | 🟠 Alta | SPEC-019 | 3 días | ⏳ PENDING |
+| **SPEC-024** | Multi-tenancy (aislamiento datos) | 8 | 🟡 Media | SPEC-004 | 3 días | ⏳ PENDING |
+| **SPEC-025** | Blue/Green + Canary Deploy | 8 | 🟡 Media | SPEC-020 | 2 días | ⏳ PENDING |
+| **SPEC-026** | Cost Optimization (right-sizing) | 8 | 🟢 Baja | SPEC-019 | 1 día | ⏳ PENDING |
+
+### Próximos 3 Specs a ejecutar (Sprint actual)
+
+| Orden | Spec | Responsable | Deadline | Criterio Go/No-Go |
+|-------|------|-------------|----------|-------------------|
+| 1 | **SPEC-003** HL7 MLLP Integration Tests | Backend | +2 días | Parser + framer coverage > 90% |
+| 2 | **SPEC-004** Auth/Autz Hardening | Backend/Security | +3 días | JWT refresh + RBAC granular verde |
+| 3 | **SPEC-005** Prometheus + Grafana | DevOps | +2 días | `/metrics` + dashboards operativos |
+
+---
+
+## Métricas de Progreso SDD
+
+| Métrica | Target | Actual |
+|---------|--------|--------|
+| Specs completadas | 22/26 | 2 (7.7%) |
+| Specs en progreso | 0 | 0 |
+| Specs bloqueadas | 0 | 0 |
+| Cobertura tests críticos | >90% | ~75% (falta HL7 integration, auth hardening) |
+| Deuda técnica Fase 3 | 0 | 8 items pendientes |
+
+---
+
 ## Fase 7 — ML & Analytics v2 🔄 **PLANIFICADA**
 
 ### Objetivo
@@ -288,11 +344,11 @@ Evolucionar el piloto ML a producción: modelos ensemble, feature store, A/B tes
 
 | # | Tarea | Archivos | Criterio | Prioridad |
 |---|-------|----------|----------|-----------|
-| 7.1 | Feature Store (Feast o custom SurrealDB) | `dmart-shared/src/ml_features.rs` | Features versionadas, reproducible | Alta |
-| 7.2 | Ensemble: DecisionTree + LogisticRegression + XGBoost (linfa-xgboost) | `dmart-shared/src/ml_ensemble.rs` | Accuracy > 92% | Alta |
-| 7.3 | A/B testing framework (traffic split, metric tracking) | `dmart-server/src/ml_ab.rs` | Comparación modelos en producción | Media |
-| 7.4 | SHAP explainability para predicciones | `dmart-shared/src/ml_explain.rs` | Feature importance por predicción | Media |
-| 7.5 | Retraining pipeline (cron semanal, drift detection) | `scripts/ml_retrain.rs` | Modelo actualizado automáticamente | Media |
+| 7.1 | Feature Store (Feast o custom SurrealDB) | `dmart-shared/src/ml_features.rs` | Features versionadas, reproducible | Alta → **SPEC-014** |
+| 7.2 | Ensemble: DecisionTree + LogisticRegression + XGBoost (linfa-xgboost) | `dmart-shared/src/ml_ensemble.rs` | Accuracy > 92% | Alta → **SPEC-015** |
+| 7.3 | A/B testing framework (traffic split, metric tracking) | `dmart-server/src/ml_ab.rs` | Comparación modelos en producción | Media → **SPEC-016** |
+| 7.4 | SHAP explainability para predicciones | `dmart-shared/src/ml_explain.rs` | Feature importance por predicción | Media → **SPEC-017** |
+| 7.5 | Retraining pipeline (cron semanal, drift detection) | `scripts/ml_retrain.rs` | Modelo actualizado automáticamente | Media → **SPEC-018** |
 | 7.6 | Dashboard ML (metrics, drift, feature importance) | `dmart-app/src/pages/ml_dashboard.rs` | Observabilidad ML | Baja |
 
 ### Criterios de éxito
@@ -311,14 +367,14 @@ Producción hospitalaria real: k8s, GitOps, disaster recovery, compliance.
 
 | # | Tarea | Archivos | Criterio | Prioridad |
 |---|-------|----------|----------|-----------|
-| 8.1 | Kubernetes manifests (Helm chart) | `helm/dmart/` | Deploy HA en k8s | Alta |
-| 8.2 | GitOps con ArgoCD / Flux | `.argocd/`, `flux/` | Sync automático main→prod | Alta |
-| 8.3 | SurrealDB cluster (3+ nodos, replication) | `docker-compose.cluster.yml` | HA database | Alta |
-| 8.4 | Disaster Recovery: RPO < 1h, RTO < 4h | `scripts/dr_test.sh` | Test trimestral documentado | Alta |
-| 8.5 | HIPAA/NIST 800-53 / ISO 27001 evidence pack | `docs/compliance/` | Auditoría lista | Media |
-| 8.6 | Multi-tenancy (varios hospitales, aislamiento datos) | `db.rs`, `rbac.rs` | Tenant isolation | Media |
-| 8.7 | Blue/Green deploy + canary releases | `.github/workflows/deploy.yml` | Zero-downtime deploys | Media |
-| 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja |
+| 8.1 | Kubernetes manifests (Helm chart) | `helm/dmart/` | Deploy HA en k8s | Alta → **SPEC-019** |
+| 8.2 | GitOps con ArgoCD / Flux | `.argocd/`, `flux/` | Sync automático main→prod | Alta → **SPEC-020** |
+| 8.3 | SurrealDB cluster (3+ nodos, replication) | `docker-compose.cluster.yml` | HA database | Alta → **SPEC-021** |
+| 8.4 | Disaster Recovery: RPO < 1h, RTO < 4h | `scripts/dr_test.sh` | Test trimestral documentado | Alta → **SPEC-022** |
+| 8.5 | HIPAA/NIST 800-53 / ISO 27001 evidence pack | `docs/compliance/` | Auditoría lista | Media → **SPEC-023** |
+| 8.6 | Multi-tenancy (varios hospitales, aislamiento datos) | `db.rs`, `rbac.rs` | Tenant isolation | Media → **SPEC-024** |
+| 8.7 | Blue/Green deploy + canary releases | `.github/workflows/deploy.yml` | Zero-downtime deploys | Media → **SPEC-025** |
+| 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja → **SPEC-026** |
 
 ---
 
