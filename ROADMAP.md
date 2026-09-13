@@ -395,6 +395,27 @@ Producción hospitalaria real: k8s, GitOps, disaster recovery, compliance.
 > cobertura), SPEC-028 (vectores clínicos), SPEC-031 (ingest hardening)**. k8s/GitOps/
 > cluster no aportan valor a un piloto de 5 camas y sí suman riesgo operativo.
 
+> 🎯 **DEFINICIÓN DE PILOTO ROBUSTO (ACUERDO 2026-09-13):** "robusto" NO es
+> completar 31 specs; es que **el sistema sobreviva 30 días en una UCI de 5 camas
+> sin intervención directa del desarrollador**. Ese es el criterio Go/No-Go del
+> piloto. Criterios medibles:
+
+| # | Criterio (Go/No-Go) | Cómo se mide | Spec que lo cubre |
+|---|---------------------|--------------|-------------------|
+| R1 | **30 días de uptime sin intervención** | `uptime_seconds` continuo en staging; reinicio automático del contenedor (restart policy) | 006, 012 |
+| R2 | **Detecta sus propios fallos** | 6 dashboards importados y con datos en staging; 18 alertas en dry-run 48h → notificaciones activas; **0 falsas alarmas/semana** tras tuning | 005, 008 |
+| R3 | **No pierde datos clínicos** | Backup diario automático + **restauración probada** (RPO ≤24h, RTO <4h); 0 samples descartados del pipeline HL7 en condiciones normales | 009, 031 |
+| R4 | **Despliegue y rollback sin drama** | `docker compose -f docker-compose.prod.yml up` reproducible en staging; rollback a versión previa <15 min; imagen ≈50MB | 006, 012 |
+| R5 | **Escalas clínicamente correctas** | Tests contra vectores de referencia Knaus/GCS/NEWS2/SAPS; sin ello ninguna escala se declara DONE | 028 |
+| R6 | **Un monitor roto no tumba el resto** | Rate-limit + circuit breaker; gap/fault detectados y visibles en Grafana (sensores caídos ≠ UCI caída) | 031 |
+| R7 | **PHI y seguridad sin sorpresas** | 0 advisories (`cargo audit`); sin patient_id/MRN en logs, métricas ni labels; `/obs/metrics` restringido a red interna o basic auth | 005 (security), 023 cuando haya contrato |
+| R8 | **Cambios no rompen lo existente** | CI gate: `cargo test -p dmart-server --lib --test api_tests --test hl7_integration` + clippy 0 + `promtool test rules` verdes en cada PR | 007, 027 |
+
+> **Consecuencia práctica:** de los 26 specs restantes, SOLO ~8 (006, 012, 007, 008,
+> 009, 031, 028, 027) avanzan el criterio R1–R8. El orden recomendado del sprint es
+> **006 → 012 → 007 → 031 → 028 → 009 → 008 → 027**. ML (014–018) y k8s (019–026)
+> quedan en segundo plano hasta cumplir R1–R8 o firmar un contrato hospitalario.
+
 ---
 
 ## Spec-Driven Development (SDD) — Nuevo Proceso
