@@ -560,6 +560,208 @@ async fn login_token(http: &axum::Router, username: &str, password: &str) -> Str
         .to_string()
 }
 
+// ─── Observabilidad: /metrics Prometheus ──────────────────────────────────
+// El recorder es global; se instala una única vez por proceso de test.
+
+use std::sync::OnceLock;
+
+static METRICS_HANDLE: OnceLock<metrics_exporter_prometheus::PrometheusHandle> = OnceLock::new();
+
+fn metrics_handle() -> metrics_exporter_prometheus::PrometheusHandle {
+    METRICS_HANDLE
+        .get_or_init(|| {
+            dmart_server::observability::init_metrics().expect("init metrics once")
+        })
+        .clone()
+}
+
+async fn build_obs_app(db: &TestDb) -> axum::Router {
+    let auth_service = dmart_server::auth::AuthService::new(db.clone());
+    let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
+    let security_state = dmart_server::security::create_security_state();
+    let database = std::sync::Arc::new(db.clone());
+    let api = dmart_server::api::build_api_router(database.clone(), auth_config, security_state);
+    let obs = dmart_server::observability::observability_router(database, metrics_handle());
+    axum::Router::new()
+        .merge(api)
+        .nest(
+            "/obs",
+            obs,
+        )
+        .layer(axum::extract::connect_info::MockConnectInfo(
+            "127.0.0.1:0".parse::<SocketAddr>().unwrap(),
+        ))
+}
+
+async fn scrape_metrics(http: &axum::Router) -> (StatusCode, String) {
+    let app = http.clone();
+    let request = axum::http::Request::builder()
+        .method(Method::GET)
+        .uri("/obs/metrics")
+        .body(Body::from(""))
+        .expect("request");
+    let response = app.oneshot(request).await.expect("oneshot metrics");
+    let status = response.status();
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
+    (status, String::from_utf8_lossy(&bytes).to_string())
+}
+
+/// Devuelve el valor numérico de la serie Prometheus `token` (p.ej.
+/// `auth_login_total{result="success"}` o `patients_created_total`).
+fn metric_value(body: &str, token: &str) -> Option<f64> {
+    body.lines().find_map(|l| {
+        if l.starts_with('#') || !l.starts_with(token) {
+            return None;
+        }
+        let value = l[token.len()..].trim_start_matches('{');
+        value
+            .split_whitespace()
+            .next()
+            .unwrap_or("0")
+            .parse::<f64>()
+            .ok()
+    })
+}
+
+const SPEC_METRICS: &[&str] = &[
+    "http_requests_total",
+    "http_request_duration_seconds",
+    "http_requests_errors_total",
+    "auth_login_total",
+    "auth_refresh_total",
+    "auth_failures_total",
+    "rbac_denials_total",
+    "surreal_query_duration_seconds",
+    "surreal_connection_pool",
+    "patients_total",
+    "patients_created_total",
+    "patients_deleted_total",
+    "measurements_total",
+    "measurements_created_total",
+    "scales_calculated_total",
+    "ml_predictions_total",
+    "ml_model_load_duration_seconds",
+    "ml_accuracy_gauge",
+    "sse_connections_active",
+    "hl7_messages_processed_total",
+    "hl7_messages_errors_total",
+    "ingest_gap_total",
+    "ingest_invalid_total",
+    "ingest_fault_devices",
+    "ingest_throttled_total",
+    "ingest_error_avg",
+    "db_connections_active",
+    "cache_connected",
+    "uptime_seconds",
+    "process_cpu_seconds_total",
+    "process_resident_memory_bytes",
+];
+
+#[tokio::test]
+async fn test_metrics_endpoint_exposes_all_and_tracks_events() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "metrics_admin",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Métricas",
+    )
+    .await;
+    let http = build_obs_app(&db).await;
+
+    // Warm-up: la primera petición registra sus propias métricas HTTP *después*
+    // de renderizar, así que un request previo asegura que `http_requests_total`
+    // exista en el primer scrape.
+    let warmup = http.clone();
+    let req = axum::http::Request::builder()
+        .method(Method::GET)
+        .uri("/obs/health")
+        .body(Body::from(""))
+        .expect("warmup");
+    let _ = warmup.oneshot(req).await.expect("warmup oneshot");
+
+    // 1) Scrape base: todas las métricas del spec deben estar expuestas.
+    let (status, body) = scrape_metrics(&http).await;
+    assert_eq!(status, StatusCode::OK);
+    let present = |name: &str| {
+        body.lines()
+            .any(|l| !l.starts_with('#') && (l.starts_with(&format!("{name} ")) || l.starts_with(&format!("{name}{{"))))
+    };
+    for name in SPEC_METRICS {
+        assert!(present(name), "métrica ausente en /obs/metrics: {name}");
+    }
+
+    // 2) Generar eventos de negocio y verificar que incrementan contadores.
+    let before_login = metric_value(&body, "auth_login_total{result=\"success\"}").unwrap_or(0.0);
+    let before_fail = metric_value(&body, "auth_login_total{result=\"failure\"}").unwrap_or(0.0);
+    let before_patients = metric_value(&body, "patients_created_total").unwrap_or(0.0);
+    let before_gcs = metric_value(&body, "scales_calculated_total{scale=\"gcs\"}").unwrap_or(0.0);
+
+    let _token = login_token(&http, "metrics_admin", "SuperSecreto_01!").await;
+    let (s, _) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("metrics_admin", "Contraseña_incorrecta_99!")),
+    )
+    .await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+
+    let patient = dmart_shared::models::Patient::new();
+    let payload = serde_json::to_value(&patient).unwrap();
+    let (s, j) = send(&http, Method::POST, "/patients", Some(&_token), Some(payload)).await;
+    assert_eq!(s, StatusCode::CREATED);
+    let pid = j["data"]["patient_id"].as_str().expect("patient_id");
+    let (s, _) = send(
+        &http,
+        Method::POST,
+        &format!("/patients/{pid}/scales/gcs"),
+        Some(&_token),
+        Some(serde_json::json!({
+            "apertura_ocular": 4,
+            "respuesta_verbal": 5,
+            "respuesta_motora": 6,
+            "notas": "score GCS de prueba",
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
+
+    let (_, body2) = scrape_metrics(&http).await;
+    assert!(
+        metric_value(&body2, "auth_login_total{result=\"success\"}")
+            .unwrap_or(0.0)
+            > before_login,
+        "login exitoso no contabilizado"
+    );
+    assert!(
+        metric_value(&body2, "auth_login_total{result=\"failure\"}")
+            .unwrap_or(0.0)
+            > before_fail,
+        "login fallido no contabilizado"
+    );
+    assert!(
+        metric_value(&body2, "patients_created_total").unwrap_or(0.0) > before_patients,
+        "paciente creado no contabilizado"
+    );
+    assert!(
+        metric_value(&body2, "scales_calculated_total{scale=\"gcs\"}").unwrap_or(0.0)
+            > before_gcs,
+        "escala GCS no contabilizada"
+    );
+    assert!(
+        body2.contains("sse_connections_active"),
+        "gauge SSE ausente tras scrape"
+    );
+}
+
 #[tokio::test]
 async fn test_e2e_login_wrong_password_returns_401() {
     let (db, _dir) = test_db().await;

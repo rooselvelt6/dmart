@@ -1,0 +1,32 @@
+# Prometheus scrapes config — dMart UCI
+# Servidor: http://dmart-server:8080 trabajando en local, exposición en
+# docker-compose bajo el host `dmart-server` (override con --web.config opcional).
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  evaluation_interval: 1m
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files:
+  - "rules/alerts-critical.yml"
+  - "rules/alerts-auth-security.yml"
+  - "rules/alerts-clinical-ml.yml"
+  - "rules/alerts-ingest-hl7.yml"
+
+scrape_configs:
+  - job_name: dmart-server
+    metrics_path: /obs/metrics
+    scheme: http
+    static_configs:
+      - targets: ["dmart-server:8080"]
+        labels:
+          service: dmart
+          env: production
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

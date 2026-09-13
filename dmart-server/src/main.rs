@@ -7,6 +7,7 @@ mod db;
 mod hl7;
 mod mfa;
 mod middleware;
+mod metrics;
 pub mod migrations;
 mod observability;
 pub mod rbac;

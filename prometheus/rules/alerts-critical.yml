@@ -1,0 +1,68 @@
+# dMart critical alerts: disponibilidad, latencia y errores HTTP.
+groups:
+  - name: dmart-critical
+    rules:
+      - alert: DMartServerDown
+        expr: up{job="dmart-server"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: dmart
+        annotations:
+          summary: "dMart server unreachable"
+          description: "Prometheus cannot scrape {{ $labels.instance }} for more than 2 minutes."
+          runbook_url: "https://wiki.dmart.io/runbooks/server-down"
+
+      - alert: DMartHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{method=~"POST|PUT|DELETE",status=~"5.."}[5m]))
+          /
+            sum(rate(http_requests_total{method=~"POST|PUT|DELETE"}[5m]))
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          service: dmart
+        annotations:
+          summary: "High 5xx error rate (>1% writes)"
+          description: "5xx error ratio on mutations exceeded 1% over 5 minutes."
+          runbook_url: "https://wiki.dmart.io/runbooks/high-error-rate"
+
+      - alert: DMartHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 2.0
+        for: 10m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "P95 latency above 2s"
+          description: "P95 request latency exceeded 2 seconds for 10 minutes."
+          runbook_url: "https://wiki.dmart.io/runbooks/high-latency"
+
+      - alert: DMartDatabaseDisconnected
+        expr: surreal_connection_pool < 1
+        for: 2m
+        labels:
+          severity: critical
+          service: dmart
+        annotations:
+          summary: "SurrealDB unreachable"
+          description: "The app reports no active SurrealDB connections."
+          runbook_url: "https://wiki.dmart.io/runbooks/database-down"
+
+      - alert: DMartProcessMemoryHigh
+        expr: |
+          process_resident_memory_bytes > 4 * 1024 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "RSS above 4 GiB"
+          description: "Process resident memory is above 4 GiB for 10 minutes."
+          runbook_url: "https://wiki.dmart.io/runbooks/memory-high"

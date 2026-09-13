@@ -78,8 +78,10 @@ async fn handle_stream(mut stream: TcpStream, db: Database, name: &str) -> anyho
         match parse_oru_message(&raw) {
             Ok(msg) => {
                 let msg_id = msg.message_id.clone();
+                let source = msg.source.label();
                 match ingest_vitals(&db, &msg).await {
                     Ok(m) => {
+                        crate::metrics::hl7_processed(source);
                         tracing::info!(
                             "[mllp:{name}] medición {} a paciente {}",
                             m.measurement_id,
@@ -88,6 +90,7 @@ async fn handle_stream(mut stream: TcpStream, db: Database, name: &str) -> anyho
                         stream.write_all(&build_ack(&msg_id, None)).await?;
                     }
                     Err(e) => {
+                        crate::metrics::hl7_error(source);
                         tracing::warn!("[mllp:{name}] ingestión falló: {e}");
                         stream
                             .write_all(&build_ack(&msg_id, Some(&e.to_string())))
@@ -96,6 +99,7 @@ async fn handle_stream(mut stream: TcpStream, db: Database, name: &str) -> anyho
                 }
             }
             Err(e) => {
+                crate::metrics::hl7_error("unknown");
                 tracing::warn!("[mllp:{name}] parseo falló: {e}");
                 stream
                     .write_all(&build_ack("", Some(&e.to_string())))

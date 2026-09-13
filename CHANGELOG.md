@@ -7,6 +7,71 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-005: Prometheus `/metrics` + Grafana Dashboards
+
+### Agregado
+- **Extensión de métricas** (`/obs/metrics`, antes `/metrics`): todas las series
+  REQUERIDAS del spec expuestas, incluido business KPIs:
+  - HTTP/System: `http_requests_total{method,status}`, `http_request_duration_seconds`,
+    `http_requests_errors_total{route}` (route agrupado, cardinalidad acotada),
+    `uptime_seconds`, `process_cpu_seconds_total` + `process_resident_memory_bytes`
+    (leídos de /proc), `db_connections_active`, `cache_connected`,
+    `surreal_connection_pool`, `surreal_query_duration_seconds`.
+  - Auth/Security: `auth_login_total`, `auth_refresh_total` (success/failure),
+    `auth_failures_total{reason}`, `rbac_denials_total{permission}`.
+  - Business: `patients_total{status=all|active}`, `patients_created_total`,
+    `patients_deleted_total`, `measurements_total`, `measurements_created_total`,
+    `scales_calculated_total{scale}`.
+  - ML: `ml_predictions_total{model}`, `ml_accuracy_gauge{model}`,
+    `ml_model_load_duration_seconds`.
+  - Realtime/Interop: `sse_connections_active`, `hl7_messages_processed_total{source}`,
+    `hl7_messages_errors_total{source}`.
+  - Data-quality (SPEC-031, baseline a 0 hasta que se implemente):
+    `ingest_gap_total`, `ingest_invalid_total`, `ingest_fault_devices`,
+    `ingest_throttled_total`, `ingest_error_avg`.
+- **Nuevo módulo `dmart-server/src/metrics.rs`**: registro descriptivo (SinLabels/
+  LabelNames) de las ~27 métricas, helpers de instrumentación (auth, HL7, SSE,
+  escalas, ML, HTTP errors) y `survey_db()` que recalcula en cada scrape
+  `patients_total`, `measurements_total`, `surreal_connection_pool`,
+  `surreal_query_duration_seconds` y gauges de proceso.
+- **`/obs/metrics` handler** en `observability.rs`: comprueba DB viva (ping),
+  actualiza gauges en vivo y renderiza las métricas; warm-up de HTTP counters en
+  pruebas. `db_healthy()` corregido a `RETURN 1` (fix de `/health` 503).
+- **Fix bug latente de dependencias**: `metrics` subido `0.21 → 0.22` para que el
+  recorder instalado (`metrics-exporter-prometheus` 0.13.1 exige `metrics ^0.22`)
+  y los macros de la app usen el MISMO crate. Antes había dos instancias del crate
+  `metrics` y `/metrics` exponía cuerpo **vacío**.
+- **6 dashboards Grafana** en `grafana/dashboards/` (+ `datasource.yaml`):
+  `dmart-overview`, `clinical-kpis`, `ml-models`, `security`, `hl7-fhir`,
+  `monitor-data-quality` (schema 39, JSON válidos, datasource Prometheus).
+- **18 alerting rules** en `prometheus/rules/` (critical, auth-security,
+  clinical-ml, ingest-hl7): DMartServerDown, DMartHighErrorRate (ratio 5xx >1%
+  on writes), DMartHighLatencyP95 (>2s), DMartDatabaseDisconnected,
+  DMartProcessMemoryHigh (>4GiB), LoginBruteForce (>30/min), RefreshTokenFailureBurst,
+  LoginSuccessRateDrop, RBACDenialBurst (guard de 0 para accuracy sin baseline),
+  ClinicalVolumeAnomaly, MLModelDrift, MLMetricsStale, ScalesEngineErrors,
+  HL7IngestErrorRate, HL7IngestPipelineDown + 3 alertas ingest SPEC-031
+  (SensorGap/SensorFault/Throttling).
+- **`prometheus/prometheus.yml`**: scrape job `dmart-server` sobre `/obs/metrics`.
+- **Config promtool validada**: `promtool check config` ✓, `check rules` ✓ (18 reglas),
+  `promtool test rules` ✓ sobre `prometheus/rules/test.yml` (12 casos: positivos +
+  negativos incl. guard de accuracy=0 y volúmenes estables sin falsa alarma).
+
+### Corregido
+- `db_healthy()` devolvía siempre `false` (`SELECT 1 AS health` no válido sin
+  FROM) → `/health` devolvía 503 de forma persistente. Ahora usa `RETURN 1`.
+- Dos instancias del crate `metrics` (0.21 en app vs 0.22 requerido por exporter)
+  → `/metrics` vacío. Bump a `metrics = "0.22"`.
+
+### Tests
+- `api_tests` 30 (incl. nuevo `test_metrics_endpoint_exposes_all_and_tracks_events`
+  que scrapea `/obs/metrics`, comprueba las ~32 series del spec y verifica que
+  login success/failure, creación de paciente y score GCS incrementan contadores),
+  `hl7_integration` 32, lib server 39. Todos verdes.
+- Gates solo `-p dmart-server` (nunca workspace por WASM/fuzz).
+
+---
+
 ## [Unreleased] — SPEC-004: Auth/Autz Hardening (JWT Refresh + RBAC Granular)
 
 ### Agregado

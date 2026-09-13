@@ -1,0 +1,231 @@
+# Tests de reglas de alerta dMart — ejecutar con:
+# promtool test rules rules/test.yml
+rule_files:
+  - alerts-critical.yml
+  - alerts-auth-security.yml
+  - alerts-clinical-ml.yml
+  - alerts-ingest-hl7.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- Critical ---
+  - interval: 1m
+    input_series:
+      - series: 'up{job="dmart-server",instance="dmart-server:8080"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DMartServerDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: dmart
+              instance: dmart-server:8080
+              job: dmart-server
+            exp_annotations:
+              summary: "dMart server unreachable"
+              description: "Prometheus cannot scrape dmart-server:8080 for more than 2 minutes."
+              runbook_url: "https://wiki.dmart.io/runbooks/server-down"
+
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{method="POST",status="500"}'
+        values: '0+3x30'
+      - series: 'http_requests_total{method="POST",status="201"}'
+        values: '0+200x30'
+    alert_rule_test:
+      # ratio = 3/(3+200) = 1.5% > 1% -> alerta activa tras for:5m
+      - eval_time: 10m
+        alertname: DMartHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: dmart
+            exp_annotations:
+              summary: "High 5xx error rate (>1% writes)"
+              description: "5xx error ratio on mutations exceeded 1% over 5 minutes."
+              runbook_url: "https://wiki.dmart.io/runbooks/high-error-rate"
+
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{method="POST",status="200"}'
+        values: '0+100x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: DMartHighErrorRate
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'surreal_connection_pool'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DMartDatabaseDisconnected
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: dmart
+            exp_annotations:
+              summary: "SurrealDB unreachable"
+              description: "The app reports no active SurrealDB connections."
+              runbook_url: "https://wiki.dmart.io/runbooks/database-down"
+
+  # --- Auth / Security ---
+  - interval: 1m
+    input_series:
+      - series: 'auth_failures_total{reason="invalid_credentials"}'
+        values: '0+40x30'
+    alert_rule_test:
+      # 40 fallos/min > 30 fallos/min -> activa
+      - eval_time: 10m
+        alertname: LoginBruteForce
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: dmart
+            exp_annotations:
+              summary: "Possible credential brute-force"
+              description: "More than 30 failed logins/min over 5 minutes."
+              runbook_url: "https://wiki.dmart.io/runbooks/brute-force"
+
+  - interval: 1m
+    input_series:
+      - series: 'auth_refresh_total{result="failure"}'
+        values: '0+25x30'
+    alert_rule_test:
+      # 25 refusals/min > 20/min -> activa
+      - eval_time: 20m
+        alertname: RefreshTokenFailureBurst
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: dmart
+            exp_annotations:
+              summary: "Refresh-token rotation failures"
+              description: "High rate of refresh-token rejections (single-use reuse or expired)."
+              runbook_url: "https://wiki.dmart.io/runbooks/refresh-token-failures"
+
+  - interval: 1m
+    input_series:
+      - series: 'rbac_denials_total{permission="patients:delete"}'
+        values: '0+25x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RBACDenialBurst
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: dmart
+            exp_annotations:
+              summary: "RBAC denials burst"
+              description: "Unauthorized-access attempts exceeded 20/min over 5 minutes."
+              runbook_url: "https://wiki.dmart.io/runbooks/rbac-denials"
+
+  # --- Clinical / ML ---
+  - interval: 1m
+    input_series:
+      - series: 'patients_total{status="active"}'
+        values: '10+0x30'
+    alert_rule_test:
+      # Volumen estable (10 activos) -> 10 < 5 es falso -> NO alerta
+      - eval_time: 30m
+        alertname: ClinicalVolumeAnomaly
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'ml_accuracy_gauge{model="apache_mortality_v1"}'
+        values: '0.7+0x180'
+    alert_rule_test:
+      # 0.7 dentro de (0, 0.8) -> alerta tras for:1h
+      - eval_time: 2h
+        alertname: MLModelDrift
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: dmart
+              model: apache_mortality_v1
+            exp_annotations:
+              summary: "ML model accuracy dropped below 0.80"
+              description: "Reported APACHE mortality-model accuracy is below the 0.80 threshold."
+              runbook_url: "https://wiki.dmart.io/runbooks/ml-drift"
+
+  - interval: 1m
+    input_series:
+      - series: 'ml_accuracy_gauge{model="apache_mortality_v1"}'
+        values: '0+0x180'
+    alert_rule_test:
+      # accuracy 0 (sin reportar/aún sin baseline) -> guard >0 evita falsa alarma
+      - eval_time: 2h
+        alertname: MLModelDrift
+        exp_alerts: []
+
+  # --- Ingest / HL7 / Data-quality ---
+  - interval: 1m
+    input_series:
+      - series: 'hl7_messages_errors_total{source="Mindray"}'
+        values: '0+4x30'
+      - series: 'hl7_messages_processed_total{source="Mindray"}'
+        values: '0+100x30'
+    alert_rule_test:
+      # 4 err/min > 0.05/s (3/min) -> alerta
+      - eval_time: 15m
+        alertname: HL7IngestErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: dmart
+            exp_annotations:
+              summary: "HL7 ingestion error rate high"
+              description: "More than 5% of incoming HL7 messages fail over 10 minutes."
+              runbook_url: "https://wiki.dmart.io/runbooks/hl7-errors"
+
+  - interval: 1m
+    input_series:
+      - series: 'ingest_gap_total'
+        values: '0+2x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MonitorSensorGap
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: dmart
+            exp_annotations:
+              summary: "Monitor data gap detected (SPEC-031)"
+              description: "A monitor stopped sending vitals for more than the expected interval."
+              runbook_url: "https://wiki.dmart.io/runbooks/sensor-gap"
+
+  - interval: 1m
+    input_series:
+      - series: 'ingest_fault_devices'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: MonitorSensorFault
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: dmart
+            exp_annotations:
+              summary: "Monitor device marked as fault (SPEC-031)"
+              description: "At least one monitor is producing invalid/clamped values."
+              runbook_url: "https://wiki.dmart.io/runbooks/sensor-fault"
+
+  - interval: 1m
+    input_series:
+      - series: 'ingest_throttled_total'
+        values: '0+2x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MonitorIngestThrottling
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: dmart
+            exp_annotations:
+              summary: "Ingest throttling active (SPEC-031)"
+              description: "Incoming monitor data is being throttled (possible message flood)."
+              runbook_url: "https://wiki.dmart.io/runbooks/ingest-throttling"

@@ -196,6 +196,8 @@ pub async fn calc_apache(
 
     match db_ops::create_measurement(&db, m).await {
         Ok(_) => {
+            crate::metrics::scale_calculated("apache");
+            crate::metrics::ml_prediction("apache_mortality_v1");
             // Actualizar paciente
             if let Ok(Some(mut p)) = db_ops::get_patient(&db, &patient_id).await {
                 p.estado_gravedad = severity.clone();
@@ -273,6 +275,7 @@ pub async fn calc_gcs(
 
     match db_ops::create_measurement(&db, m).await {
         Ok(_) => {
+            crate::metrics::scale_calculated("gcs");
             if let Ok(Some(mut p)) = db_ops::get_patient(&db, &patient_id).await {
                 p.ultimo_gcs_score = Some(total);
                 p.updated_at = Utc::now().to_rfc3339();
@@ -346,6 +349,7 @@ pub async fn calc_news2(
 
     match db_ops::create_measurement(&db, m).await {
         Ok(_) => {
+            crate::metrics::scale_calculated("news2");
             let result = News2Result {
                 measurement_id: mid,
                 patient_id,
@@ -415,6 +419,7 @@ pub async fn calc_sofa(
 
     match db_ops::create_measurement(&db, m).await {
         Ok(_) => {
+            crate::metrics::scale_calculated("sofa");
             let result = SofaResult {
                 measurement_id: mid,
                 patient_id,
@@ -489,6 +494,8 @@ pub async fn calc_saps3(
 
     match db_ops::create_measurement(&db, m).await {
         Ok(_) => {
+            crate::metrics::scale_calculated("saps3");
+            crate::metrics::ml_prediction("saps3_mortality_v1");
             let result = Saps3Result {
                 measurement_id: mid,
                 patient_id,

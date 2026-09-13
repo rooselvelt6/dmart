@@ -65,9 +65,33 @@ impl RealtimeHub {
             }
         });
 
-        Sse::new(stream).keep_alive(
+        crate::metrics::sse_connect();
+        Sse::new(CountedStream { inner: stream }).keep_alive(
             KeepAlive::new().interval(std::time::Duration::from_secs(keepalive::INTERVAL_SECS)),
         )
+    }
+}
+
+/// Wrapper de stream que decrementa `sse_connections_active` cuando la conexión
+/// se cierra (el `Drop` se ejecuta al terminar/abandonar el stream).
+struct CountedStream<S> {
+    inner: S,
+}
+
+impl<S> Drop for CountedStream<S> {
+    fn drop(&mut self) {
+        crate::metrics::sse_disconnect();
+    }
+}
+
+impl<S: futures_util::Stream> futures_util::Stream for CountedStream<S> {
+    type Item = S::Item;
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<S::Item>> {
+        let inner = unsafe { self.as_mut().map_unchecked_mut(|s| &mut s.inner) };
+        inner.poll_next(cx)
     }
 }
 

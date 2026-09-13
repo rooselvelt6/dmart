@@ -99,6 +99,7 @@ pub async fn auth_middleware(
             if let Some(required) = crate::rbac::permission_for(&method, &path)
                 && !claims.has_permission(required)
             {
+                crate::metrics::rbac_denial(required);
                 let response = Json(ApiResponse::<String>::err(format!(
                     "Forbidden: se requiere permiso {}",
                     required

@@ -221,6 +221,7 @@ pub async fn create_patient(db: &Surreal<Db>, mut patient: Patient) -> Result<Pa
         .create(("patients", patient.patient_id.clone()))
         .content(patient)
         .await?;
+    crate::metrics::patient_created();
     created.ok_or_else(|| anyhow::anyhow!("Failed to create patient"))
 }
 
@@ -308,6 +309,7 @@ LET $created = CREATE type::thing('patients', $pid) CONTENT $patient RETURN AFTE
         return Err(anyhow::anyhow!("{}", err));
     }
 
+    crate::metrics::patient_created();
     get_patient(db, &patient_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Failed to create patient"))
@@ -400,6 +402,7 @@ pub async fn search_patients_count(db: &Surreal<Db>, query: &str) -> Result<u64>
 
 pub async fn delete_patient(db: &Surreal<Db>, id: &str) -> Result<()> {
     let _: Option<Patient> = db.delete(("patients", id)).await?;
+    crate::metrics::patient_deleted();
     Ok(())
 }
 
@@ -415,6 +418,8 @@ pub async fn create_measurement(db: &Surreal<Db>, mut m: Measurement) -> Result<
         .create(("measurements", m.measurement_id.clone()))
         .content(m)
         .await?;
+
+    crate::metrics::measurement_created();
 
     if crate::cache::cache_available() {
         crate::cache::cache_del(&format!("measurements:{}", patient_id)).await;

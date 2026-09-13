@@ -1,0 +1,63 @@
+# dMart HL7 / ingest / data-quality alerts (incluye SPEC-031 futuros eventos).
+groups:
+  - name: dmart-ingest-hl7
+    rules:
+      - alert: HL7IngestErrorRate
+        expr: sum(rate(hl7_messages_errors_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "HL7 ingestion error rate high"
+          description: "More than 5% of incoming HL7 messages fail over 10 minutes."
+          runbook_url: "https://wiki.dmart.io/runbooks/hl7-errors"
+
+      - alert: HL7IngestPipelineDown
+        expr: |
+          increase(hl7_messages_processed_total[1h]) == 0
+          and
+          increase(hl7_messages_processed_total[7d]) > 0
+        for: 30m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "HL7 ingest pipeline stopped (historically active)"
+          description: >
+            No HL7 messages received in 1 hour, but traffic existed in the past
+            7 days — likely a monitor or MLLP link issue.
+          runbook_url: "https://wiki.dmart.io/runbooks/hl7-stalled"
+
+      - alert: MonitorSensorGap
+        expr: rate(ingest_gap_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "Monitor data gap detected (SPEC-031)"
+          description: "A monitor stopped sending vitals for more than the expected interval."
+          runbook_url: "https://wiki.dmart.io/runbooks/sensor-gap"
+
+      - alert: MonitorSensorFault
+        expr: ingest_fault_devices > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: dmart
+        annotations:
+          summary: "Monitor device marked as fault (SPEC-031)"
+          description: "At least one monitor is producing invalid/clamped values."
+          runbook_url: "https://wiki.dmart.io/runbooks/sensor-fault"
+
+      - alert: MonitorIngestThrottling
+        expr: rate(ingest_throttled_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "Ingest throttling active (SPEC-031)"
+          description: "Incoming monitor data is being throttled (possible message flood)."
+          runbook_url: "https://wiki.dmart.io/runbooks/ingest-throttling"

@@ -1,0 +1,49 @@
+# dMart security alerts: autenticación y autorización.
+groups:
+  - name: dmart-auth-security
+    rules:
+      - alert: LoginBruteForce
+        expr: sum(rate(auth_failures_total[5m])) * 60 > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "Possible credential brute-force"
+          description: "More than 30 failed logins/min over 5 minutes."
+          runbook_url: "https://wiki.dmart.io/runbooks/brute-force"
+
+      - alert: RefreshTokenFailureBurst
+        expr: sum(rate(auth_refresh_total{result="failure"}[5m])) * 60 > 20
+        for: 10m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "Refresh-token rotation failures"
+          description: "High rate of refresh-token rejections (single-use reuse or expired)."
+          runbook_url: "https://wiki.dmart.io/runbooks/refresh-token-failures"
+
+      - alert: LoginSuccessRateDrop
+        expr: |
+          sum(rate(auth_login_total{result="success"}[30m]))
+          < (sum(rate(auth_login_total{result="success"}[7d])) * 0.5)
+        for: 15m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "Login volume dropped >50% vs 7-day baseline"
+          description: "Successful logins fell by more than half versus the 7-day average."
+          runbook_url: "https://wiki.dmart.io/runbooks/login-volume-anomaly"
+
+      - alert: RBACDenialBurst
+        expr: sum(rate(rbac_denials_total[5m])) * 60 > 20
+        for: 10m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "RBAC denials burst"
+          description: "Unauthorized-access attempts exceeded 20/min over 5 minutes."
+          runbook_url: "https://wiki.dmart.io/runbooks/rbac-denials"

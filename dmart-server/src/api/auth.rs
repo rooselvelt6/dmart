@@ -56,6 +56,7 @@ async fn login(
         .await
     {
         Ok(response) => {
+            crate::metrics::auth_login("success");
             if let Some(audit) = crate::audit::audit() {
                 let _ = audit
                     .log_login_success(&response.user.user_id, &response.user.username, None)
@@ -67,6 +68,8 @@ async fn login(
             resp
         }
         Err(e) => {
+            crate::metrics::auth_login("failure");
+            crate::metrics::auth_failure("login");
             if let Some(audit) = crate::audit::audit() {
                 let _ = audit.log_login_failed(&req.username, &e, None).await;
             }
@@ -163,6 +166,7 @@ async fn refresh(
         .or_else(|| body.and_then(|Json(b)| b.refresh_token));
 
     let Some(token) = token else {
+        crate::metrics::auth_refresh("failure");
         return (
             StatusCode::UNAUTHORIZED,
             Json(ApiResponse::<LoginResponse>::err(
@@ -177,16 +181,20 @@ async fn refresh(
         .await
     {
         Ok(response) => {
+            crate::metrics::auth_refresh("success");
             let mut resp =
                 (StatusCode::OK, Json(ApiResponse::ok(response.clone()))).into_response();
             apply_refresh_cookie(&mut resp, &response.refresh_token);
             resp
         }
-        Err(e) => (
-            StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::<LoginResponse>::err(e)),
-        )
-            .into_response(),
+        Err(e) => {
+            crate::metrics::auth_refresh("failure");
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ApiResponse::<LoginResponse>::err(e)),
+            )
+                .into_response()
+        }
     }
 }
 

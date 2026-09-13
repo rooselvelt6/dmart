@@ -56,6 +56,8 @@ pub async fn create_measurement(
 
     match db_ops::create_measurement(&db, measurement).await {
         Ok(m) => {
+            crate::metrics::scale_calculated("apache");
+            crate::metrics::ml_prediction("apache_mortality_v1");
             // Actualizar estado_gravedad del paciente
             if let Ok(Some(mut patient)) = db_ops::get_patient(&db, &patient_id).await {
                 patient.estado_gravedad = severity;

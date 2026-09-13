@@ -1,0 +1,56 @@
+# dMart clinical KPIs y ML alerts.
+groups:
+  - name: dmart-clinical-ml
+    rules:
+      - alert: ClinicalVolumeAnomaly
+        expr: |
+          patients_total{status="active"}
+          < (avg_over_time(patients_total{status="active"}[7d]) * 0.5)
+        for: 15m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "Patient volume dropped >50% vs 7-day average"
+          description: "Active-patient count fell to less than half of the 7-day baseline."
+          runbook_url: "https://wiki.dmart.io/runbooks/clinical-volume-anomaly"
+
+      - alert: MLModelDrift
+        expr: |
+          ml_accuracy_gauge{model="apache_mortality_v1"} > 0
+          and
+          ml_accuracy_gauge{model="apache_mortality_v1"} < 0.80
+        for: 1h
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "ML model accuracy dropped below 0.80"
+          description: "Reported APACHE mortality-model accuracy is below the 0.80 threshold."
+          runbook_url: "https://wiki.dmart.io/runbooks/ml-drift"
+
+      - alert: MLMetricsStale
+        expr: |
+          time() - timestamp(ml_predictions_total{model="apache_mortality_v1"}) > 3600
+        for: 15m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "ML metrics not updated for >1h"
+          description: "No ML prediction samples in the last hour (series stale or stopped)."
+          runbook_url: "https://wiki.dmart.io/runbooks/ml-stale"
+
+      - alert: ScalesEngineErrors
+        expr: |
+          increase(hl7_messages_errors_total[5m]) > 0
+          and
+          rate(scales_calculated_total[30m]) == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: dmart
+        annotations:
+          summary: "Scales engine stopped while HL7 errors present"
+          description: "Scale calculations stalled for 30 minutes with incoming HL7 errors."
+          runbook_url: "https://wiki.dmart.io/runbooks/scales-engine"

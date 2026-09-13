@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use metrics::{Unit, counter, describe_counter, describe_gauge, describe_histogram, histogram};
+use metrics::counter;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle as PrometheusHandle_};
 
 use std::future::Future;
@@ -23,20 +23,23 @@ use crate::db::Database;
 #[derive(Clone)]
 pub struct ObservabilityState {
     pub start_time: std::time::Instant,
+    pub prometheus: PrometheusHandle_,
     pub db: Database,
 }
 
 impl ObservabilityState {
-    pub fn new(db: Database) -> Self {
+    pub fn new(db: Database, prometheus: PrometheusHandle_) -> Self {
         Self {
             start_time: std::time::Instant::now(),
+            prometheus,
             db,
         }
     }
 
     pub async fn db_healthy(&self) -> bool {
+        // SurrealDB no admite `SELECT <valor>` sin FROM; usamos `RETURN` como ping.
         self.db
-            .query("SELECT 1 AS health")
+            .query("RETURN 1")
             .await
             .map(|_| true)
             .unwrap_or(false)
@@ -62,36 +65,7 @@ pub fn init_tracing() -> anyhow::Result<()> {
 
 /// Inicializa métricas Prometheus + OpenTelemetry (si endpoint configurado)
 pub fn init_metrics() -> anyhow::Result<PrometheusHandle_> {
-    // Métricas de proceso (CPU, memoria, etc.) - Collector API cambió en v0.3
-    // let _ = Collector::default().install(); // descomentar si se fija la API
-
-    // Métricas custom de la app
-    describe_counter!(
-        "http_requests_total",
-        Unit::Count,
-        "Total number of HTTP requests"
-    );
-    describe_histogram!(
-        "http_request_duration_seconds",
-        Unit::Seconds,
-        "HTTP request latency"
-    );
-    describe_counter!(
-        "http_requests_errors_total",
-        Unit::Count,
-        "Total number of HTTP error responses"
-    );
-    describe_gauge!(
-        "db_connections_active",
-        Unit::Count,
-        "Active database connections"
-    );
-    describe_gauge!(
-        "cache_connected",
-        Unit::Count,
-        "Cache connection status (1=connected, 0=disconnected)"
-    );
-    describe_gauge!("uptime_seconds", Unit::Seconds, "Server uptime in seconds");
+    crate::metrics::register();
 
     // Prometheus handle para exponer /metrics via axum
     let handle = PrometheusBuilder::new().install_recorder()?;
@@ -108,21 +82,29 @@ pub fn init_metrics() -> anyhow::Result<PrometheusHandle_> {
     Ok(handle)
 }
 
-/// Middleware de métricas HTTP
+/// Middleware de métricas HTTP (labels acotados para evitar cardinalidad alta).
 pub async fn metrics_middleware(
     req: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> Response {
     let start = std::time::Instant::now();
+    let method = req.method().to_string();
+    let path = req.uri().path().to_string();
 
     let response = next.run(req).await;
     let latency = start.elapsed().as_secs_f64();
+    let status = response.status().as_u16().to_string();
 
-    counter!("http_requests_total", 1);
-    histogram!("http_request_duration_seconds", latency);
+    counter!("http_requests_total", "method" => method.clone(), "status" => status.clone()).increment(1);
+    metrics::histogram!(
+        "http_request_duration_seconds",
+        "method" => method,
+        "status" => status
+    )
+    .record(latency);
 
     if response.status().is_server_error() || response.status().is_client_error() {
-        counter!("http_requests_errors_total", 1);
+        crate::metrics::http_error(path.as_str());
     }
 
     response
@@ -176,27 +158,34 @@ pub async fn ready_check(State(state): State<ObservabilityState>) -> impl IntoRe
 
 /// Router de observabilidad (/health, /live, /ready, /metrics)
 pub fn observability_router(db: Database, prometheus_handle: PrometheusHandle_) -> Router {
-    let state = ObservabilityState::new(db);
+    let state = ObservabilityState::new(db, prometheus_handle);
     Router::new()
         .route("/health", get(health_check))
         .route("/live", get(live_check))
         .route("/ready", get(ready_check))
-        .route(
-            "/metrics",
-            get(move || {
-                let handle = prometheus_handle.clone();
-                async move {
-                    let metrics = handle.render();
-                    (
-                        StatusCode::OK,
-                        [("Content-Type", "text/plain; version=0.0.4; charset=utf-8")],
-                        metrics,
-                    )
-                }
-            }),
-        )
+        .route("/metrics", get(metrics_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(metrics_middleware))
+}
+
+/// GET /metrics — Expone el scrape Prometheus. Antes de renderizar recalcula
+/// las métricas de estado (patients/measurements/process) consultando la BD.
+async fn metrics_handler(State(state): State<ObservabilityState>) -> Response {
+    state.db_healthy().await; // ping DB (también alimenta health)
+    metrics::gauge!("uptime_seconds").set(state.start_time.elapsed().as_secs_f64());
+    metrics::gauge!("db_connections_active").set(1.0);
+    metrics::gauge!("cache_connected").set(if crate::cache::cache_available() { 1.0 } else { 0.0 });
+
+    crate::metrics::touch_zero_counters();
+    crate::metrics::survey_db(&state.db).await;
+
+    let body = state.prometheus.render();
+    (
+        StatusCode::OK,
+        [("Content-Type", "text/plain; version=0.0.4; charset=utf-8")],
+        body,
+    )
+        .into_response()
 }
 
 /// Conexión a SurrealDB con reintentos exponenciales

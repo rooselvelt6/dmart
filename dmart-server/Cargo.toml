@@ -52,7 +52,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"]
 tracing-opentelemetry = "0.25"
 
 # Metrics & Observability
-metrics = "0.21"
+metrics = "0.22"
 metrics-exporter-prometheus = { version = "0.13", default-features = false, features = ["hyper", "tokio"] }
 metrics-process = "2"
 
