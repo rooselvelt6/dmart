@@ -1,0 +1,94 @@
+name: Release — Semantic Versioning + Changelog
+
+on:
+  push:
+    branches: [main]
+    # Solo trigger si hay commits convencionales (feat, fix, perf, security)
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Tipo de versión (major, minor, patch)'
+        required: true
+        default: 'patch'
+        type: choice
+        options: [major, minor, patch]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install git-cliff
+        run: |
+          curl -L https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin/
+
+      - name: Install cargo-release (opcional)
+        run: cargo install cargo-release --locked
+
+      - name: Determine version bump
+        id: version
+        run: |
+          if [ "${{ github.event.inputs.version_type }}" != "" ]; then
+            BUMP="${{ github.event.inputs.version_type }}"
+          else
+            # Auto-detect desde conventional commits
+            BUMP=$(git cliff --dry-run --config cliff.toml | grep -E "^## \[v" | head -1 | sed -E 's/.*\[(v?[0-9]+\.[0-9]+\.[0-9]+)\].*/\1/' || echo "patch")
+            if [ -z "$BUMP" ]; then BUMP="patch"; fi
+          fi
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          git cliff --config cliff.toml --unreleased --tag ${{ steps.version.outputs.bump }} > CHANGELOG.md
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          VERSION="${{ steps.version.outputs.bump }}"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.bump }}
+          name: Release v${{ steps.version.outputs.bump }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          files: |
+            target/release/dmart-server
+            dmart-app/dist/**
+
+      - name: Update CHANGELOG.md in repo
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "chore: update CHANGELOG.md for v${{ steps.version.outputs.bump }}" || echo "No changes to commit"
+          git push origin main || echo "Already up to date"
+
+      - name: Notify (placeholder for Slack/Discord/Email)
+        if: always()
+        run: |
+          echo "## Release v${{ steps.version.outputs.bump }} created" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Tag: v${{ steps.version.outputs.bump }}" >> $GITHUB_STEP_SUMMARY
+          echo "📝 Changelog: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)" >> $GITHUB_STEP_SUMMARY

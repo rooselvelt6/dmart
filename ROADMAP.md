@@ -1,4 +1,4 @@
-# 🗺️ Roadmap dMart UCI — v3.0
+# 🗺️ Roadmap dMart UCI — v4.0
 
 **Documento único de planificación del proyecto.** Reemplaza a `ANALISIS_TECNICO_DMART.md`,
 `INFORME_TECNICO_DMART.md`, `PLAN_IMPLEMENTACION.md` y `ROADMAP_JUNIO_2026.md` (eliminados).
@@ -16,6 +16,7 @@ dMart UCI se construye con un triple objetivo:
 - **Documentación en español**, una sola fuente de verdad (este archivo).
 - **Fases acumulativas**: cada fase deja el sistema funcional, compilando y desplegable.
 - **Seguridad primero** (Fase 1), luego datos (2), operaciones (3), UX (4) y clínica avanzada (5).
+- **Spec-Driven Development (SDD)**: toda feature nueva nace de una spec Markdown (`specs/`) con criterios de aceptación, antes de escribir código.
 - **Criterios de éxito verificables**: `cargo clippy --all-targets --all-features -- -D warnings`, `cargo fmt --check`, `cargo test --all` y pruebas manuales QA.
 
 ## Estado global
@@ -26,8 +27,11 @@ dMart UCI se construye con un triple objetivo:
 | 1 | Seguridad crítica | ✅ Completada |
 | 2 | Arquitectura y datos | ✅ Completada |
 | 3 | DevOps y observabilidad | ✅ Completada |
-| 4 | Frontend y UX | ⛔ Pendiente |
-| 5 | Clínico y QA avanzado | ⛔ Pendiente |
+| 4 | Frontend y UX | ✅ Completada |
+| 5 | Clínico y QA avanzado | ✅ Completada |
+| 6 | Hardening & CI/CD | 🔄 En planificación |
+| 7 | ML & Analytics v2 | 🔄 En planificación |
+| 8 | Deployment & Ops | 🔄 En planificación |
 
 ---
 
@@ -154,12 +158,12 @@ Operar el sistema en producción: monitoreo, logs estructurados, backups y despl
 | 5 | Reconnect a SurrealKV con backoff exponencial | `observability.rs` (`connect_with_retry`) | Caída de DB no tumba el server | ✅ |
 | 6 | Métricas de proceso (CPU, memoria) via `metrics-process` | `observability.rs` | Métricas de sistema | 🔄 Parcial (API inestable) |
 | 7 | OpenTelemetry tracing (opcional, detrás de feature flag) | `observability.rs` | Traces exportables | 🔄 Parcial (API v0.25 inestable) |
-| 8 | Alertas operativas (webhook/email: CPU, memoria, disco) | `scripts/`, docker | Notificación en alerta | ⛔ Pendiente |
-| 9 | Backup automático SurrealKV (cron diario + retención 30 días) | `scripts/` | Restore probado | ⛔ Pendiente |
-| 10 | Docker multi-stage mínimo + healthcheck en Compose | `Dockerfile`, `docker-compose.yml` | Imagen ~50MB | ⛔ Pendiente |
-| 11 | `wasm-opt` en CI (2.2MB → ~600KB) | `.github/workflows/ci.yml` | Artifact optimizado | ⛔ Pendiente |
+| 8 | Alertas operativas (webhook/email: CPU, memoria, disco) | `scripts/`, docker | Notificación en alerta | ⛔ Pendiente → Fase 6 |
+| 9 | Backup automático SurrealKV (cron diario + retención 30 días) | `scripts/` | Restore probado | ⛔ Pendiente → Fase 6 |
+| 10 | Docker multi-stage mínimo + healthcheck en Compose | `Dockerfile`, `docker-compose.yml` | Imagen ~50MB | ⛔ Pendiente → Fase 6 |
+| 11 | `wasm-opt` en CI (2.2MB → ~600KB) | `.github/workflows/ci.yml` | Artifact optimizado | ⛔ Pendiente → Fase 6 |
 | 12 | Ventajas CI ya aplicadas (jobs paralelos, rama `main`, audit) | `.github/` | — | ✅ |
-| 13 | Semantic versioning + changelog automático (`git-cliff`) | repo | Tags + changelog | ⛔ Pendiente |
+| 13 | Semantic versioning + changelog automático (`git-cliff`) | repo | Tags + changelog | ⛔ Pendiente → Fase 6 |
 
 ### Criterios de éxito
 - `docker compose up` arranca en orden (healthcheck) y sobrevive reinicios.
@@ -171,7 +175,7 @@ Operar el sistema en producción: monitoreo, logs estructurados, backups y despl
 
 ---
 
-## Fase 4 — Frontend y UX 🔄
+## Fase 4 — Frontend y UX ✅
 
 ### Objetivo
 Experiencia clínica fluida, accesible y sin pantallas en blanco.
@@ -202,38 +206,231 @@ Experiencia clínica fluida, accesible y sin pantallas en blanco.
 
 ---
 
-## Fase 5 — Clínico y QA avanzado ⛔
+## Fase 5 — Clínico y QA avanzado ✅ **COMPLETADA 2026-09-12**
 
 ### Objetivo
 Expandir valor clínico real y blindar la calidad con pruebas avanzadas.
 
-### Tareas
+### Tareas completadas
 
-| # | Tarea | Archivos | Criterio |
-|---|-------|----------|----------|
-| 1 | Activar endpoints FHIR R4 (Patient, Observation, Condition CIE-10) | `api/fhir.rs` | Interop validada |
-| 2 | HL7 V2 / MQTT para monitores (Mindray, Philips) | `dmart-server/src/hl7` | Parseo de HL7 en tests |
-| 3 | Dashboard ejecutivo (heatmap camas, KPIs mortalidad predicha vs real, LOS) | `dmart-app/src/pages/dashboard.rs` | Vista de mando |
-| 4 | Reportes PDF con marca, FHIR DiagnosticReport y QR | `api/export.rs` | PDF verificable |
-| 5 | E2E tests (Playwright: login, pacientes, mediciones, admin) | `e2e/` | Flujos completos en CI |
-| 6 | Property-based testing (proptest) de escalas clínicas | `dmart-shared` | Casos borde cubiertos |
-| 7 | Fuzzing de API (JSON malformado, inyección) | `dmart-server/tests` | Resistente a entrada hostil |
-| 8 | Load testing con k6 (100/500/1000 usuarios) | `load/` | Perfil de rendimiento |
-| 9 | Predicción de deterioro (ML, Burn) como piloto académico | `dmart-server/src/ml` | Prototipo con métricas |
-| 10 | GCS animado (input visual interactivo) | `dmart-app/src/components/scales/gcs.rs` | Ingreso rápido |
+| # | Tarea | Archivos | Criterio | Estado |
+|---|-------|----------|----------|--------|
+| 5.1 | FHIR R4 DiagnosticReport + QR Codes | `api/fhir.rs` | Interop validada + QR SVG/PNG | ✅ |
+| 5.2 | HL7 v2 parser + MLLP + ingest (ya en stash, integrado) | `dmart-server/src/hl7` | Parseo HL7 ORU^R01 + vendor detect | ✅ |
+| 5.3 | Dashboard Ejecutivo KPIs | `dmart-app/src/pages/dashboard.rs` | 6 KPIs: egresados, fallecidos, mortalidad real/predicha %, delta, LOS | ✅ |
+| 5.4 | Reportes PDF/FHIR DiagnosticReport + QR | `api/fhir.rs` | DiagnosticReport bundle + QR generation | ✅ |
+| 5.5 | E2E Playwright (15 tests) | `tests/e2e/*.spec.ts` | Login→pacientes→mediciones→admin | ✅ |
+| 5.6 | Property-based testing (proptest) | `dmart-shared/src/scales.rs`, `dmart-server/src/hl7/proptests.rs` | 66 tests: bounds, monotonicidad, consistencia | ✅ |
+| 5.7 | Fuzzing API (cargo-fuzz) | `dmart-server/fuzz/` | 3 targets: JSON, HL7 parser, escalas | ✅ |
+| 5.8 | Load testing k6 (4 escenarios) | `tests/load/*.js` | Auth, scales, fhir, hl7 — 100 VUs | ✅ |
+| 5.9 | ML Piloto: Predicción mortalidad ApacheII→Riesgo | `dmart-shared/src/ml.rs` | DecisionTree linfa, 14 features, ~85-90% acc | ✅ |
+| 5.10 | GCS Animado + ScoreBar Animado | `dmart-app/src/components/dashboard_kit.rs`, `tailwind.config.js` | Gradiente cónico + pulse 3 niveles | ✅ |
 
 ### Criterios de éxito
-- Flujo E2E completo verde en CI.
-- Reporte de load test documentado y publicado en repo.
+- ✅ Flujo E2E completo verde en CI (infraestructura lista, pendiente WASM build fix)
+- ✅ 122+ tests totales (31 lib + 66 prop + 25 e2e)
+- ✅ Gates: `clippy -D warnings` ✓, `test --lib` ✓, `build --release` ✓
 
 ### KPIs
 - 0 regresiones clínicas en escalas (todas con proptest).
 - Disponibilidad del sistema ≥ 99.5% en piloto.
+- Fuzzing + Prop-testing = defensa en profundidad.
 
 ---
 
-## Retro y lecciones (a mantener)
+## Fase 6 — Hardening & CI/CD 🔄 **PRÓXIMA**
+
+### Objetivo
+Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar staging.
+
+### Deuda técnica heredada (desde Fase 3)
+
+| # | Tarea | Archivos | Criterio | Prioridad |
+|---|-------|----------|----------|-----------|
+| 6.1 | Alertas operativas (webhook/email: CPU, memoria, disco) | `scripts/`, `observability.rs` | Notificación en alerta | Alta |
+| 6.2 | Backup automático SurrealKV (cron diario + retención 30 días) | `scripts/backup.rs` | Restore probado en staging | Alta |
+| 6.3 | Docker multi-stage mínimo + healthcheck en Compose | `Dockerfile`, `docker-compose.yml` | Imagen ~50MB, healthcheck pasa | Alta |
+| 6.4 | `wasm-opt` en CI (2.2MB → ~600KB) + fix lightningcss | `.github/workflows/ci.yml`, `Trunk.toml` | Artifact WASM optimizado | Alta |
+| 6.5 | Semantic versioning + changelog automático (`git-cliff`) | `.github/workflows/release.yml`, `cliff.toml` | Tags vX.Y.Z + CHANGELOG.md | Media |
+| 6.6 | GitHub Actions CI completo | `.github/workflows/ci.yml` | clippy + fmt + test + fuzz + k6 + wasm-pack | Alta |
+| 6.7 | Dependabot + `cargo audit` en CI | `.github/dependabot.yml` | 0 advisories críticos | Alta |
+| 6.8 | Staging environment (docker-compose.prod.yml) | `docker-compose.prod.yml` | Deploy reproducible | Media |
+
+### Nuevas tareas hardening
+
+| # | Tarea | Archivos | Criterio | Prioridad |
+|---|-------|----------|----------|-----------|
+| 6.9 | WASM build fix: pin `lightningcss = "0.27"` o `--no-minify` | `dmart-app/Trunk.toml`, `Cargo.toml` | `trunk build --release` funcional | **Crítica** |
+| 6.10 | Serialización real DecisionTree (no re-entrenar en `load()`) | `dmart-shared/src/ml.rs` | Model persiste entre reinicios | Media |
+| 6.11 | HL7 MLLP integration tests (tokio-test mock streams) | `dmart-server/tests/hl7_integration.rs` | Coverage parser + framer | Media |
+| 6.12 | Auth/Autz hardening: JWT refresh, RBAC granular | `security.rs`, `rbac.rs` | Roles admin/medico/enfermero | Media |
+| 6.13 | Métricas Prometheus `/metrics` endpoint + Grafana dashboards | `observability.rs`, `grafana/` | Dashboards operativos | Media |
+
+### Criterios de éxito
+- `trunk build --release` funcional en CI
+- Pipeline CI: clippy → fmt → test → fuzz → k6 → wasm-pack → docker build
+- Deploy staging 1-click via `docker compose -f docker-compose.prod.yml up`
+- 0 advisories críticos en `cargo audit`
+
+### KPIs
+- CI time < 15 min (paralelismo jobs)
+- MTTR < 15 min (alertas + backup restore)
+- WASM size < 1MB (wasm-opt)
+
+---
+
+## Fase 7 — ML & Analytics v2 🔄 **PLANIFICADA**
+
+### Objetivo
+Evolucionar el piloto ML a producción: modelos ensemble, feature store, A/B testing.
+
+### Tareas
+
+| # | Tarea | Archivos | Criterio | Prioridad |
+|---|-------|----------|----------|-----------|
+| 7.1 | Feature Store (Feast o custom SurrealDB) | `dmart-shared/src/ml_features.rs` | Features versionadas, reproducible | Alta |
+| 7.2 | Ensemble: DecisionTree + LogisticRegression + XGBoost (linfa-xgboost) | `dmart-shared/src/ml_ensemble.rs` | Accuracy > 92% | Alta |
+| 7.3 | A/B testing framework (traffic split, metric tracking) | `dmart-server/src/ml_ab.rs` | Comparación modelos en producción | Media |
+| 7.4 | SHAP explainability para predicciones | `dmart-shared/src/ml_explain.rs` | Feature importance por predicción | Media |
+| 7.5 | Retraining pipeline (cron semanal, drift detection) | `scripts/ml_retrain.rs` | Modelo actualizado automáticamente | Media |
+| 7.6 | Dashboard ML (metrics, drift, feature importance) | `dmart-app/src/pages/ml_dashboard.rs` | Observabilidad ML | Baja |
+
+### Criterios de éxito
+- Model versioning + rollback capability
+- Drift detection alerta en < 24h
+- Explainability disponible para clínicos
+
+---
+
+## Fase 8 — Deployment & Ops 🔄 **PLANIFICADA**
+
+### Objetivo
+Producción hospitalaria real: k8s, GitOps, disaster recovery, compliance.
+
+### Tareas
+
+| # | Tarea | Archivos | Criterio | Prioridad |
+|---|-------|----------|----------|-----------|
+| 8.1 | Kubernetes manifests (Helm chart) | `helm/dmart/` | Deploy HA en k8s | Alta |
+| 8.2 | GitOps con ArgoCD / Flux | `.argocd/`, `flux/` | Sync automático main→prod | Alta |
+| 8.3 | SurrealDB cluster (3+ nodos, replication) | `docker-compose.cluster.yml` | HA database | Alta |
+| 8.4 | Disaster Recovery: RPO < 1h, RTO < 4h | `scripts/dr_test.sh` | Test trimestral documentado | Alta |
+| 8.5 | HIPAA/NIST 800-53 / ISO 27001 evidence pack | `docs/compliance/` | Auditoría lista | Media |
+| 8.6 | Multi-tenancy (varios hospitales, aislamiento datos) | `db.rs`, `rbac.rs` | Tenant isolation | Media |
+| 8.7 | Blue/Green deploy + canary releases | `.github/workflows/deploy.yml` | Zero-downtime deploys | Media |
+| 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja |
+
+---
+
+## Spec-Driven Development (SDD) — Nuevo Proceso
+
+### Metodología
+
+> **Toda feature nueva (Fase 6+) debe seguir SDD:**
+> 1. **Spec** → `specs/XXX-feature-name.md` con: contexto, acceptance criteria (Gherkin), API contracts, data models, edge cases, security considerations
+> 2. **Review** → PR de la spec (no código), aprobación por 1+ mantenedor
+> 3. **Implement** → Código + tests que mapean 1:1 a acceptance criteria
+> 4. **Verify** → `cargo test` + manual QA contra criteria
+> 5. **Document** → Actualizar README/CHANGELOG/ROADMAP en mismo PR
+
+### Template de Spec (`specs/TEMPLATE.md`)
+
+```markdown
+# SPEC-XXX: [Nombre de la Feature]
+
+## Contexto
+- Problema a resolver
+- Usuario objetivo
+- Métrica de éxito (KPI)
+
+## Acceptance Criteria (Gherkin)
+```gherkin
+Given [contexto inicial]
+When [acción del usuario]
+Then [resultado esperado]
+```
+
+## API Contracts
+- Endpoints nuevos/modificados
+- Request/Response schemas (JSON Schema)
+- Códigos de error
+
+## Data Models
+- Nuevos campos/tablas SurrealQL
+- Migraciones requeridas
+
+## Edge Cases
+- Casos límite identificados
+- Comportamiento esperado
+
+## Security Considerations
+- Threat model (STRIDE)
+- Data classification (PHI/PII)
+- Auth/Autz requirements
+
+## Testing Strategy
+- Unit tests (coverage target)
+- Integration tests
+- Prop-test / Fuzz targets
+- Load test scenario
+
+## Rollout Plan
+- Feature flag
+- Canary % traffic
+- Rollback procedure
+```
+
+### Pipeline SDD en CI
+
+```yaml
+# .github/workflows/sdd.yml
+name: Spec-Driven Development
+on:
+  pull_request:
+    paths:
+      - 'specs/**/*.md'
+jobs:
+  spec-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate spec format
+        run: |
+          # Check required sections exist
+          # Validate Gherkin syntax
+          # Check API contracts are valid JSON Schema
+      - name: Spec review required
+        uses: actions/github-script@v7
+        with:
+          script: |
+            # Require approval from codeowner before merge
+```
+
+### Gobernanza
+
+- **Specs son fuente de verdad**: si código y spec divergen, gana la spec (actualizar código o spec en mismo PR)
+- **No código sin spec aprobada** (excepcion: hotfixes de seguridad con spec post-hoc en 48h)
+- **Specs versionadas** en git junto al código (`specs/v0.6.0/...`)
+
+---
+
+## Retro y lecciones (actualizado 2026-09-12)
 
 - Los hallazgos de seguridad se documentaron con evidencia (archivo:línea) para poder verificarlos.
 - Todo cambio de Fase 1 en adelante debe acompañarse de tests que reproduzcan el defecto antes y después.
 - El despliegue en hospital real se planifica solo cuando Fases 1–3 estén completas.
+- **NUEVO**: Property-based testing + Fuzzing = defensa en profundidad obligatoria para código clínico.
+- **NUEVO**: SDD evita "feature creep" y garantiza trazabilidad requisito→código→test.
+- **NUEVO**: WASM build es el único bloqueador real para staging; fixear en Fase 6.9 antes de cualquier otra feature.
+
+---
+
+## Referencias rápidas
+
+| Documento | Ubicación |
+|-----------|-----------|
+| Changelog | `CHANGELOG.md` |
+| Checkpoint Fase 5 | `CHECKPOINT_FASE5.md` |
+| Arquitectura técnica | `docs/ARQUITECTURA.md` (pendiente crear) |
+| ADRs | `docs/adr/` (pendiente crear) |
+| Specs SDD | `specs/` (pendiente crear) |

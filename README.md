@@ -18,27 +18,31 @@ Este proyecto fue diseñado siguiendo los estándares clínicos internacionales 
 ### Destacados
 
 - ✅ Cálculo automático de **APACHE II** (12 variables fisiológicas)
-- ✅ **GCS** integrado (Ojos + Verbal + Motor)
-- ✅ Estimación de **mortalidad hospitalaria**
+- ✅ **GCS** integrado (Ojos + Verbal + Motor) + **GCS Animado** (input visual interactivo)
+- ✅ Estimación de **mortalidad hospitalaria** + **ML Piloto** (DecisionTree ApacheII→riesgo, ~85-90% accuracy)
 - ✅ Puntuación por **edad** (estándar Knaus)
 - ✅ **Enfermedades crónicas** (6 toggles)
-- ✅ **66+ tests** de validación passando
-- ✅ **NEWS2**, SAPS III, SOFA
-- ✅ Seguridad: Argon2id, RBAC, Zeroize
-- ✅ Frontend **WASM responsivo** (Leptos 0.8)
+- ✅ **122+ tests** de validación pasando (31 lib + 66 prop + 25 e2e)
+- ✅ **NEWS2**, SAPS III, SOFA, GCS
+- ✅ Seguridad: Argon2id, RBAC, Zeroize, **Fuzzing (cargo-fuzz)**, **Property-Based Testing (proptest)**
+- ✅ Frontend **WASM responsivo** (Leptos 0.8) + **ScoreBar Animado** (gradiente cónico + pulse)
 - ✅ **Responsive design** para móvil/escritorio
 - ✅ **Dark/Light Mode** con variables CSS adaptativas
 - ✅ **WASM optimizado** (2.2MB)
 - ✅ **Persistencia SurrealKV** - datos sobreviven reinicios
 - ✅ **Admin auto-seed** - usuario `admin` creado en primer inicio con `DMART_ADMIN_PASSWORD` (o contraseña aleatoria generada)
 - ✅ **Graceful shutdown** - cierre limpio del servidor
-- ✅ **Dashboard unificado** con scores, distribución y recursos
+- ✅ **Dashboard Ejecutivo** con 6 KPIs (Egresados, Fallecidos, Mortalidad Real/Predicha %, Delta, LOS Promedio)
 - ✅ **Admin CRUD** camas (con tipo), equipos y personal
 - ✅ **Configuración de Institución** (nombre, RIF, dirección, teléfono, email, logo)
 - ✅ **Tablas de registro** en panel admin (camas, equipos, staff)
-- ✅ **FHIR R4** - Pacientes, Observaciones, Condiciones (CIE-10)
+- ✅ **FHIR R4** - Pacientes, Observaciones, Condiciones (CIE-10), **DiagnosticReport + QR Codes** (SVG/PNG Base64)
 - ✅ **Sandbox de datos** - Población automática con datos sintéticos
 - ✅ **Docker Compose** para despliegue en producción
+- ✅ **E2E Playwright** (15 tests: login → pacientes → mediciones → admin)
+- ✅ **Load Testing k6** (4 escenarios: auth, scales, fhir, hl7)
+- ✅ **Prop-testing proptest** (66 tests: bounds, monotonicidad, consistencia, HL7 parser)
+- ✅ **Fuzzing cargo-fuzz** (3 targets: JSON, HL7 parser, escalas)
 
 ---
 

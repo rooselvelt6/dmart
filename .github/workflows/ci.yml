@@ -1,103 +1,368 @@
-name: dMart CI/CD
+name: CI — Spec-Driven Development Pipeline
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'CHANGELOG.md'
+  workflow_dispatch:
 
 env:
+  RUST_VERSION: "1.98"
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-Dwarnings"
+  RUST_BACKTRACE: 1
 
 jobs:
-  lint:
-    name: Lint (Clippy + Format)
+  # ──────────────────────────────────────────────────────────────
+  # SPEC VALIDATION (SDD Gate)
+  # ──────────────────────────────────────────────────────────────
+  spec-lint:
+    name: Spec Lint (SDD Gate)
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: 1.98.0
-          components: clippy, rustfmt
-      - name: Format check
-        run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+          fetch-depth: 0
 
-  test:
-    name: Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: 1.98.0
-      - name: Run tests
-        run: cargo test --all
+      - name: Validate spec format
+        run: |
+          set -euo pipefail
+          for spec in specs/*.md; do
+            [ "$spec" = "specs/TEMPLATE.md" ] && continue
+            echo "Checking $spec..."
+            # Required sections
+            for section in "## Contexto" "## Acceptance Criteria" "## API Contracts" "## Data Models" "## Edge Cases" "## Security Considerations" "## Testing Strategy" "## Rollout Plan" "## Definition of Done"; do
+              grep -q "$section" "$spec" || { echo "❌ Missing section: $section in $spec"; exit 1; }
+            done
+            # Gherkin syntax basic check
+            grep -q '```gherkin' "$spec" || { echo "❌ Missing Gherkin block in $spec"; exit 1; }
+            # JSON Schema in API Contracts
+            grep -q 'json' "$spec" || echo "⚠️  No JSON schema found in $spec (optional)"
+          done
+          echo "✅ All specs valid"
 
-  build-server:
-    name: Build Server
+      - name: Require spec approval
+        if: github.event.pull_request.draft == false
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+            const approved = reviews.some(r => r.state === 'APPROVED');
+            if (!approved) {
+              core.setFailed('❌ Spec PR requires at least 1 APPROVED review before merge');
+            } else {
+              console.log('✅ Spec approved');
+            }
+
+  # ──────────────────────────────────────────────────────────────
+  # RUST WORKSPACE CHECKS
+  # ──────────────────────────────────────────────────────────────
+  rust-fmt:
+    name: Format Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.98.0
-      - name: Build server (release)
-        run: cargo build --release --package dmart-server
-      - name: Upload server artifact
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  rust-clippy:
+    name: Clippy (-D warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  rust-test-lib:
+    name: Library Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --lib --all-features
+
+  rust-test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      surreal:
+        image: surrealdb/surrealdb:latest
+        ports: [8000:8000]
+        options: --health-cmd="curl -f http://localhost:8000/health" --health-interval=10s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --test integration --all-features
+        env:
+          SURREALDB_URL: http://localhost:8000
+          DMART_MASTER_KEY: test-master-key-32-bytes-long!!
+          DMART_ADMIN_PASSWORD: testadmin123
+
+  # ──────────────────────────────────────────────────────────────
+  # PROPERTY-BASED TESTING (proptest)
+  # ──────────────────────────────────────────────────────────────
+  prop-test:
+    name: Property Tests (proptest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --lib proptest -- --nocapture
+
+  # ──────────────────────────────────────────────────────────────
+  # FUZZING (cargo-fuzz)
+  # ──────────────────────────────────────────────────────────────
+  fuzz-test:
+    name: Fuzzing (cargo-fuzz)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: |
+          cd dmart-server/fuzz
+          cargo build --release
+      - name: Run fuzz targets (short)
+        run: |
+          cd dmart-server/fuzz
+          for target in fuzz_api_json fuzz_hl7_parser fuzz_scales; do
+            echo "Running $target for 30s..."
+            timeout 30s cargo run --release --bin $target -- -max_total_time=30 || true
+          done
+
+  # ──────────────────────────────────────────────────────────────
+  # LOAD TESTING (k6)
+  # ──────────────────────────────────────────────────────────────
+  load-test:
+    name: Load Test (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' || github.event.pull_request.labels.*.name contains 'load-test'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install k6
+        run: |
+          wget -q https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz -O /tmp/k6.tar.gz
+          tar -xzf /tmp/k6.tar.gz -C /tmp
+          sudo mv /tmp/k6-v0.54.0-linux-amd64/k6 /usr/local/bin/
+      - name: Start backend server
+        run: |
+          cargo run --release --bin dmart-server &
+          sleep 10
+          curl -f http://127.0.0.1:3000/api/health
+        env:
+          DMART_MASTER_KEY: test-master-key-32-bytes-long!!
+          DMART_ADMIN_PASSWORD: testadmin123
+      - name: Run k6 auth test
+        run: k6 run tests/load/auth.js --out json=results/auth.json
+      - name: Run k6 scales test
+        run: k6 run tests/load/scales.js --out json=results/scales.json
+      - name: Upload k6 results
         uses: actions/upload-artifact@v4
         with:
-          name: dmart-server
-          path: target/release/dmart-server
+          name: k6-results
+          path: results/
 
-  build-wasm:
-    name: Build WASM Frontend
+  # ──────────────────────────────────────────────────────────────
+  # WASM BUILD (Frontend)
+  # ──────────────────────────────────────────────────────────────
+  wasm-build:
+    name: WASM Build (trunk)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.98.0
-          target: wasm32-unknown-unknown
-      - name: Install Trunk
-        run: cargo install trunk
-      - name: Build WASM
-        run: cd dmart-app && trunk build --release
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+      - name: Install trunk (binary)
+        run: |
+          curl -L https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin/
+      - name: Cache trunk
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/trunk
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: trunk-${{ runner.os }}-${{ hashFiles('dmart-app/Cargo.lock', 'dmart-app/Trunk.toml') }}
+      - name: Build WASM release
+        run: |
+          cd dmart-app
+          trunk build --release
+      - name: Verify WASM size
+        run: |
+          WASM_SIZE=$(stat -c%s dmart-app/dist/*.wasm 2>/dev/null | head -1 || stat -c%s dmart-app/dist/dmart_app_bg.wasm)
+          echo "WASM size: $WASM_SIZE bytes"
+          if [ $WASM_SIZE -gt 1048576 ]; then
+            echo "❌ WASM too large (>1MB): $WASM_SIZE"
+            exit 1
+          fi
+          echo "✅ WASM size OK: $WASM_SIZE bytes"
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dmart-frontend
+          name: dmart-frontend-wasm
           path: dmart-app/dist/
+          retention-days: 7
 
+  # ──────────────────────────────────────────────────────────────
+  # E2E TESTS (Playwright)
+  # ──────────────────────────────────────────────────────────────
+  e2e-test:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [wasm-build, rust-test-integration]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - name: Install Playwright
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Download WASM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dmart-frontend-wasm
+          path: dmart-app/dist
+      - name: Start backend
+        run: |
+          cargo run --release --bin dmart-server &
+          sleep 10
+          curl -f http://127.0.0.1:3000/api/health
+        env:
+          DMART_MASTER_KEY: test-master-key-32-bytes-long!!
+          DMART_ADMIN_PASSWORD: testadmin123
+      - name: Start frontend server
+        run: |
+          cd dmart-app/dist
+          python3 -m http.server 8080 &
+          sleep 3
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=html
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:8080/dist
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────
+  # SECURITY AUDIT
+  # ──────────────────────────────────────────────────────────────
   security-audit:
-    name: Security Audit
+    name: Security Audit (cargo audit + dependabot)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.98.0
+          toolchain: ${{ env.RUST_VERSION }}
       - name: Install cargo-audit
-        run: cargo install cargo-audit
-      - name: Audit dependencies
-        run: cargo audit
+        run: cargo install cargo-audit --locked
+      - name: Run cargo audit
+        run: cargo audit --workspace --deny warnings
+      - name: Check for TODO/FIXME in security code
+        run: |
+          grep -r "TODO\|FIXME" --include="*.rs" dmart-server/src/security.rs dmart-server/src/auth.rs dmart-server/src/crypto.rs dmart-server/src/rbac.rs || true
 
-  docker:
-    name: Docker Build
+  # ──────────────────────────────────────────────────────────────
+  # RELEASE BUILD
+  # ──────────────────────────────────────────────────────────────
+  release-build:
+    name: Release Build (all targets)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    needs: [lint, test, build-server, build-wasm]
+    needs: [rust-clippy, rust-test-lib, rust-test-integration, prop-test, wasm-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          context: .
-          push: false
-          tags: dmart-server:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build all release
+        run: cargo build --release --workspace
+      - name: Verify binaries
+        run: |
+          for bin in dmart-server; do
+            ./target/release/$bin --version || ./target/release/$bin --help 2>&1 | head -1
+          done
+      - name: Upload release binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmart-release-binaries
+          path: |
+            target/release/dmart-server
+          retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────
+  # NOTIFY
+  # ──────────────────────────────────────────────────────────────
+  notify:
+    name: Notify Result
+    runs-on: ubuntu-latest
+    needs: [rust-fmt, rust-clippy, rust-test-lib, rust-test-integration, prop-test, fuzz-test, wasm-build, e2e-test, security-audit, release-build]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          jobs=("rust-fmt" "rust-clippy" "rust-test-lib" "rust-test-integration" "prop-test" "fuzz-test" "wasm-build" "e2e-test" "security-audit" "release-build")
+          for job in "${jobs[@]}"; do
+            result="${{ needs.$job.result }}"
+            if [ "$result" = "success" ]; then
+              echo "✅ $job" >> $GITHUB_STEP_SUMMARY
+            elif [ "$result" = "failure" ]; then
+              echo "❌ $job" >> $GITHUB_STEP_SUMMARY
+            elif [ "$result" = "skipped" ]; then
+              echo "⏭️ $job (skipped)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❓ $job ($result)" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

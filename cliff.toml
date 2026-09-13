@@ -1,0 +1,82 @@
+# cliff.toml — Configuración para git-cliff (changelog automático)
+# https://github.com/orhun/git-cliff
+
+[changelog]
+# Header del changelog
+header = """
+# Changelog
+
+Todos los cambios notables de este proyecto se documentan en este archivo.
+
+El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
+y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+"""
+
+# Template para cada versión
+body = """
+{% if version %}\n## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}{% else %}\n## [Unreleased]{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7) }}){% if commit.scope %} [{{ commit.scope }}]{% endif %}
+{% endfor %}
+{% endfor %}
+"""
+
+# Footer
+footer = """
+---
+*Generado automáticamente con [git-cliff](https://github.com/orhun/git-cliff)*
+"""
+
+[git]
+# Convencional commits
+conventional_commits = true
+# Filtrar commits de merge
+filter_commits = true
+# Ignorar commits que solo tocan docs
+ignore_commits = { message = "^docs?:" }
+
+[git.cliff]
+# Include commit body
+include_body = true
+
+[changelog.group]
+# Orden de grupos
+order = ["feat", "fix", "perf", "security", "refactor", "test", "docs", "chore", "ci", "build", "style"]
+
+# Mapeo de tipos de commit a títulos de sección
+title_mappings = { feat = "Agregado", fix = "Corregido", perf = "Rendimiento", security = "Seguridad", refactor = "Refactor", test = "Tests", docs = "Documentación", chore = "Mantenimiento", ci = "CI/CD", build = "Build", style = "Estilo" }
+
+# Commit groups por scope
+commit_groups = [
+  { scope = "ml", title = "Machine Learning" },
+  { scope = "fhir", title = "FHIR R4" },
+  { scope = "hl7", title = "HL7 v2" },
+  { scope = "fuzz", title = "Fuzzing" },
+  { scope = "prop", title = "Property Testing" },
+  { scope = "k6", title = "Load Testing" },
+  { scope = "e2e", title = "E2E Tests" },
+  { scope = "wasm", title = "WASM Frontend" },
+  { scope = "scorebar", title = "ScoreBar Animado" },
+  { scope = "dashboard", title = "Dashboard Ejecutivo" },
+  { scope = "qr", title = "QR Codes" },
+  { scope = "auth", title = "Autenticación" },
+  { scope = "rbac", title = "RBAC" },
+  { scope = "crypto", title = "Criptografía" },
+  { scope = "db", title = "Base de Datos" },
+  { scope = "api", title = "API" },
+  { scope = "ui", title = "UI/UX" },
+]
+
+[changelog.version]
+# Usar git tags para versiones
+use_latest_tag = true
+# Fallback si no hay tags
+fallback = "0.0.0"
+
+[changelog.template]
+# Custom template para commits
+commit = """
+- {{ message }}{% if scope %} [{{ scope }}]{% endif %} ({{ id | truncate(length=7) }})
+"""
