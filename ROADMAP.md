@@ -29,7 +29,7 @@ dMart UCI se construye con un triple objetivo:
 | 3 | DevOps y observabilidad | ✅ Completada |
 | 4 | Frontend y UX | ✅ Completada |
 | 5 | Clínico y QA avanzado | ✅ Completada |
-| 6 | Hardening & CI/CD | 🔄 En planificación |
+| 6 | Hardening & CI/CD | 🔄 En ejecución (SPEC-001/002/003 done) |
 | 7 | ML & Analytics v2 | 🔄 En planificación |
 | 8 | Deployment & Ops | 🔄 En planificación |
 
@@ -228,8 +228,8 @@ Expandir valor clínico real y blindar la calidad con pruebas avanzadas.
 
 ### Criterios de éxito
 - ✅ Flujo E2E completo verde en CI (infraestructura lista, pendiente WASM build fix)
-- ✅ 122+ tests totales (31 lib + 66 prop + 25 e2e)
-- ✅ Gates: `clippy -D warnings` ✓, `test --lib` ✓, `build --release` ✓
+- ✅ 136+ tests totales (121 Rust + 15 Playwright E2E)
+- ✅ Gates: `clippy -D warnings` ✓, `fmt --check` ✓, `test --lib` ✓, `build --release` ✓
 
 ### KPIs
 - 0 regresiones clínicas en escalas (todas con proptest).
@@ -262,7 +262,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 |---|-------|----------|----------|-----------|--------|
 | 6.9 | WASM build fix: cargo + wasm-bindgen direct (bypass trunk) | `dmart-app/Trunk.toml`, CI workflow | `cargo build --target wasm32-unknown-unknown --release` + wasm-bindgen funcional | **Crítica** | ✅ **DONE** (SPEC-001) |
 | 6.10 | Serialización real DecisionTree (no re-entrenar en `load()`) | `dmart-shared/src/ml.rs` | Model persiste entre reinicios | Media | ✅ **DONE** (SPEC-002) |
-| 6.11 | HL7 MLLP integration tests (tokio-test mock streams) | `dmart-server/tests/hl7_integration.rs` | Coverage parser + framer | Media | Pendiente |
+| 6.11 | HL7 MLLP integration tests (tokio-test mock streams) | `dmart-server/tests/hl7_integration.rs` | Coverage parser + framer > 90% | Media | ✅ **DONE** (SPEC-003, 2026-09-13) |
 | 6.12 | Auth/Autz hardening: JWT refresh, RBAC granular | `security.rs`, `rbac.rs` | Roles admin/medico/enfermero | Media | Pendiente |
 | 6.13 | Métricas Prometheus `/metrics` endpoint + Grafana dashboards | `observability.rs`, `grafana/` | Dashboards operativos | Media | Pendiente |
 
@@ -288,7 +288,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 |------|--------|------|-----------|--------------|----------|--------|
 | **SPEC-001** | WASM Build Fix (cargo + wasm-bindgen) | 6 | 🔴 Crítica | — | 1 día | ✅ DONE |
 | **SPEC-002** | ML Model Persistence (bincode) | 6 | 🟠 Alta | SPEC-001 | 1 día | ✅ DONE |
-| **SPEC-003** | HL7 MLLP Integration Tests | 6 | 🟠 Alta | — | 2 días | 📋 READY |
+| **SPEC-003** | HL7 MLLP Integration Tests | 6 | 🟠 Alta | — | 2 días | ✅ DONE |
 | **SPEC-004** | Auth/Autz Hardening (JWT refresh, RBAC granular) | 6 | 🟠 Alta | — | 3 días | 📋 READY |
 | **SPEC-005** | Prometheus `/metrics` + Grafana Dashboards | 6 | 🟠 Alta | SPEC-004 | 2 días | 📋 READY |
 | **SPEC-006** | Docker Multi-stage + Healthcheck + Staging Compose | 6 | 🔴 Crítica | SPEC-001 | 2 días | 📋 READY |
@@ -312,14 +312,15 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | **SPEC-024** | Multi-tenancy (aislamiento datos) | 8 | 🟡 Media | SPEC-004 | 3 días | ⏳ PENDING |
 | **SPEC-025** | Blue/Green + Canary Deploy | 8 | 🟡 Media | SPEC-020 | 2 días | ⏳ PENDING |
 | **SPEC-026** | Cost Optimization (right-sizing) | 8 | 🟢 Baja | SPEC-019 | 1 día | ⏳ PENDING |
+| **SPEC-027** | Coverage gate en CI (`cargo llvm-cov`) para HL7 y clínica | 6 | 🟠 Alta | SPEC-003, SPEC-007 | 0.5 día | ⏳ PENDING |
 
 ### Próximos 3 Specs a ejecutar (Sprint actual)
 
 | Orden | Spec | Responsable | Deadline | Criterio Go/No-Go |
 |-------|------|-------------|----------|-------------------|
-| 1 | **SPEC-003** HL7 MLLP Integration Tests | Backend | +2 días | Parser + framer coverage > 90% |
-| 2 | **SPEC-004** Auth/Autz Hardening | Backend/Security | +3 días | JWT refresh + RBAC granular verde |
-| 3 | **SPEC-005** Prometheus + Grafana | DevOps | +2 días | `/metrics` + dashboards operativos |
+| 1 | **SPEC-004** Auth/Autz Hardening | Backend/Security | +3 días | JWT refresh + RBAC granular verde |
+| 2 | **SPEC-005** Prometheus + Grafana | DevOps | +2 días | `/metrics` + dashboards operativos |
+| 3 | **SPEC-006** Docker multi-stage + Staging | Backend/DevOps | +2 días | Imagen ~50MB + `docker compose -f docker-compose.prod.yml up` en staging |
 
 ---
 
@@ -327,11 +328,12 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 
 | Métrica | Target | Actual |
 |---------|--------|--------|
-| Specs completadas | 22/26 | 2 (7.7%) |
-| Specs en progreso | 0 | 0 |
+| Specs completadas | 23/27 (85%) | 3 (11.5%) |
+| Specs en progreso | 0 | 0 (sprint: SPEC-004/005/006) |
 | Specs bloqueadas | 0 | 0 |
-| Cobertura tests críticos | >90% | ~75% (falta HL7 integration, auth hardening) |
-| Deuda técnica Fase 3 | 0 | 8 items pendientes |
+| Cobertura HL7 (parser + MLLP + ingest) | >90% | ✅ 96.5% / 93.8% / 91.8% |
+| Cobertura tests críticos | >90% | ~85% (falta auth hardening) |
+| Deuda técnica Fase 3 | 0 | 8 items pendientes (6.1–6.8) |
 
 ---
 
@@ -478,6 +480,9 @@ jobs:
 - **NUEVO**: Property-based testing + Fuzzing = defensa en profundidad obligatoria para código clínico.
 - **NUEVO**: SDD evita "feature creep" y garantiza trazabilidad requisito→código→test.
 - **NUEVO**: WASM build es el único bloqueador real para staging; fixear en Fase 6.9 antes de cualquier otra feature.
+- **NUEVO**: `cargo llvm-cov` validado localmente → cobertura HL7 >90%. Recomendado: gate de cobertura en CI (**SPEC-027**).
+- **NUEVO**: los commits de Fase 5.6 entraron con drift de clippy/fmt (rotos los gates). Lección: **todo commit debe repasar los 4 gates** (`fmt --check`, `clippy -D warnings`, `test`, `build --release`) antes de pushear; el SDD ya no lo permite.
+- **NUEVO**: los tests de integración HL7 usan TCP real (`serve()` + TcpStream) en vez de únicamente mocks — cubren paths de error (parseo, UTF-8, ingestión, >1 MiB, EOF graceful) que los unit tests no alcanzaban.
 
 ---
 
@@ -486,7 +491,7 @@ jobs:
 | Documento | Ubicación |
 |-----------|-----------|
 | Changelog | `CHANGELOG.md` |
-| Checkpoint Fase 5 | `CHECKPOINT_FASE5.md` |
-| Arquitectura técnica | `docs/ARQUITECTURA.md` (pendiente crear) |
-| ADRs | `docs/adr/` (pendiente crear) |
-| Specs SDD | `specs/` (pendiente crear) |
+| Arquitectura técnica | `docs/ARQUITECTURA.md` ✅ (ADR modelo SurrealDB) |
+| API REST | `docs/API.md` ✅ |
+| Referencias clínicas | `docs/APACHE_II.md`, `docs/GCS.md` |
+| Specs SDD | `specs/` ✅ (001–006 + TEMPLATE) |
