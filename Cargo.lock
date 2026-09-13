@@ -1638,6 +1638,7 @@ dependencies = [
 name = "dmart-shared"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "chrono",
  "criterion",
  "linfa",
@@ -3420,6 +3421,7 @@ dependencies = [
  "linfa",
  "ndarray 0.15.6",
  "ndarray-rand 0.14.0",
+ "serde",
 ]
 
 [[package]]

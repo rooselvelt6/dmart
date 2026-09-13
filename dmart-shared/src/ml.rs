@@ -8,6 +8,7 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use bincode;
 
 use crate::models::ApacheIIData;
 use crate::scales::{calculate_apache_ii_score, mortality_risk};
@@ -71,8 +72,8 @@ impl MortalityFeatures {
     }
 }
 
-/// Modelo de predicción de mortalidad
-#[derive(Debug, Clone)]
+/// Modelo de predicción de mortalidad (serializable con bincode)
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MortalityModel {
     model: DecisionTree<f32, usize>,
     feature_names: Vec<String>,
@@ -192,20 +193,17 @@ impl MortalityModel {
         self.predict(features)
     }
 
-    /// Guarda el modelo a disco
+    /// Guarda el modelo a disco (serialización binaria con bincode)
     pub fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Serializar parámetros del árbol
-        let model_data = serde_json::to_string(&self.feature_names)?;
-        fs::write(path, model_data)?;
+        let encoded = bincode::serialize(self)?;
+        fs::write(path, encoded)?;
         Ok(())
     }
 
-    /// Carga el modelo desde disco
+    /// Carga el modelo desde disco (deserialización binaria con bincode)
     pub fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let _feature_names: Vec<String> = serde_json::from_str(&fs::read_to_string(path)?)?;
-        // Nota: En producción se serializaría el árbol completo
-        // Por simplicidad, re-entrenamos con la misma semilla
-        let model = Self::train()?;
+        let data = fs::read(path)?;
+        let model: Self = bincode::deserialize(&data)?;
         Ok(model)
     }
 
@@ -298,5 +296,44 @@ mod tests {
     fn test_train_and_evaluate() {
         let model = train_and_evaluate().unwrap();
         assert!(!model.feature_names.is_empty());
+    }
+
+    #[test]
+    fn test_model_save_load_roundtrip() {
+        let model = MortalityModel::train().unwrap();
+        let temp_path = "/tmp/test_mortality_model.bin";
+        
+        // Save
+        model.save(temp_path).unwrap();
+        
+        // Load
+        let loaded_model = MortalityModel::load(temp_path).unwrap();
+        
+        // Test predictions match
+        let features = MortalityFeatures {
+            apache_score: 30.0,
+            gcs_total: 10.0,
+            edad: 65.0,
+            temperatura: 38.5,
+            presion_arterial_media: 70.0,
+            frecuencia_cardiaca: 110.0,
+            frecuencia_respiratoria: 25.0,
+            fio2: 0.6,
+            spo2: 92.0,
+            ph_arterial: 7.30,
+            sodio_serico: 138.0,
+            creatinina: 1.5,
+            leucocitos: 14.0,
+            potasio_serico: 4.2,
+        };
+        
+        let pred1 = model.predict(&features);
+        let pred2 = loaded_model.predict(&features);
+        
+        // Predictions should be identical (bit-for-bit same model)
+        assert_eq!(pred1, pred2, "Loaded model predictions differ from original");
+        
+        // Cleanup
+        std::fs::remove_file(temp_path).ok();
     }
 }

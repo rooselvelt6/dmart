@@ -261,7 +261,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | # | Tarea | Archivos | Criterio | Prioridad | Estado |
 |---|-------|----------|----------|-----------|--------|
 | 6.9 | WASM build fix: cargo + wasm-bindgen direct (bypass trunk) | `dmart-app/Trunk.toml`, CI workflow | `cargo build --target wasm32-unknown-unknown --release` + wasm-bindgen funcional | **Crítica** | ✅ **DONE** (SPEC-001) |
-| 6.10 | Serialización real DecisionTree (no re-entrenar en `load()`) | `dmart-shared/src/ml.rs` | Model persiste entre reinicios | Media | 🔄 SPEC-002 |
+| 6.10 | Serialización real DecisionTree (no re-entrenar en `load()`) | `dmart-shared/src/ml.rs` | Model persiste entre reinicios | Media | ✅ **DONE** (SPEC-002) |
 | 6.11 | HL7 MLLP integration tests (tokio-test mock streams) | `dmart-server/tests/hl7_integration.rs` | Coverage parser + framer | Media | Pendiente |
 | 6.12 | Auth/Autz hardening: JWT refresh, RBAC granular | `security.rs`, `rbac.rs` | Roles admin/medico/enfermero | Media | Pendiente |
 | 6.13 | Métricas Prometheus `/metrics` endpoint + Grafana dashboards | `observability.rs`, `grafana/` | Dashboards operativos | Media | Pendiente |
