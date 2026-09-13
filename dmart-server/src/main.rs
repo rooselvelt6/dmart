@@ -70,9 +70,6 @@ async fn main() -> anyhow::Result<()> {
     init_tracing()?;
     tracing::info!("🏥 UCI-DMART Server initializing...");
 
-    // ── Observability: Metrics (Prometheus + optional OpenTelemetry) ────
-    init_metrics()?;
-
     // Use absolute path for data persistence
     let db_path = std::env::var("DMART_DB_PATH").unwrap_or_else(|_| {
         let base = std::env::current_dir().unwrap_or_default();
@@ -261,18 +258,19 @@ async fn main() -> anyhow::Result<()> {
     let server = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
-    );
-
-    graceful_shutdown(shutdown_timeout, || {
-        Box::pin(async {
-            // Here you could add cleanup logic:
-            // - Flush metrics
-            // - Close DB connections
-            // - Shutdown cache
-            tracing::info!("🧹 Cleanup completed");
+    )
+    .with_graceful_shutdown(async move {
+        graceful_shutdown(shutdown_timeout, || {
+            Box::pin(async {
+                // Here you could add cleanup logic:
+                // - Flush metrics
+                // - Close DB connections
+                // - Shutdown cache
+                tracing::info!("🧹 Cleanup completed");
+            })
         })
-    })
-    .await;
+        .await;
+    });
 
     server.await?;
 

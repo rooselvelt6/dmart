@@ -1,4 +1,5 @@
 target/
+dmart-server/fuzz/target/
 .git/
 .gitignore
 *.md

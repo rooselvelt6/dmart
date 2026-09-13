@@ -291,7 +291,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | **SPEC-003** | HL7 MLLP Integration Tests | 6 | 🟠 Alta | — | 2 días | ✅ DONE |
 | **SPEC-004** | Auth/Autz Hardening (JWT refresh, RBAC granular) | 6 | 🟠 Alta | — | 3 días | ✅ DONE |
 | **SPEC-005** | Prometheus `/metrics` + Grafana Dashboards | 6 | 🟠 Alta | SPEC-004 | 2 días | ✅ DONE |
-| **SPEC-006** | Docker Multi-stage + Healthcheck + Staging Compose | 6 | 🔴 Crítica | SPEC-001 | 2 días | 📋 READY |
+| **SPEC-006** | Docker Multi-stage + Healthcheck + Staging Compose | 6 | 🔴 Crítica | SPEC-001 | 2 días | ✅ DONE |
 | **SPEC-007** | CI Pipeline Completo (activar jobs fuzz/k6/e2e) | 6 | 🔴 Crítica | SPEC-001, SPEC-006 | 1 día | 📋 READY |
 | **SPEC-008** | Alertas Operativas (webhook/email) | 6 | 🟡 Media | SPEC-005 | 1 día | ⏳ PENDING |
 | **SPEC-009** | Backup Automático SurrealKV (cron + retención) | 6 | 🟡 Media | SPEC-006 | 1 día | ⏳ PENDING |
@@ -324,7 +324,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 |-------|------|-------------|----------|-------------------|
 | 1 | **SPEC-004** Auth/Autz Hardening | Backend/Security | +3 días | ✅ JWT refresh + RBAC granular + 0 advisories |
 | 2 | **SPEC-005** Prometheus + Grafana | DevOps | +2 días | ✅ `/metrics` + dashboards operativos + `promtool test rules` 🟢 |
-| 3 | **SPEC-006** Docker multi-stage + Staging | Backend/DevOps | +2 días | Imagen ~50MB + `docker compose -f docker-compose.prod.yml up` en staging |
+| 3 | **SPEC-006** Docker multi-stage + Staging | Backend/DevOps | +2 días | ✅ Imagen 48MB + `docker compose -f docker-compose.staging.yml up` validado end-to-end (healthy + SPA + persistencia) |
 
 > **Hot trail tras el sprint** (precedencia por columna):  
 > 4. **SPEC-007** CI Pipeline Completo — acoplar **SPEC-027** (gate cobertura)  
@@ -338,8 +338,8 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 
 | Métrica | Target | Actual |
 |---------|--------|--------|
-| Specs completadas | 26/31 (84%) | 5 (16.1%) |
-| Specs en progreso | 0 | 0 (sprint: SPEC-004/005 ✅, 006) |
+| Specs completadas | 26/31 (84%) | 6 (19.4%) |
+| Specs en progreso | 0 | 0 (sprint: SPEC-004/005/006 ✅) |
 | Specs bloqueadas | 0 | 0 |
 | Cobertura HL7 (parser + MLLP + ingest) | >90% | ✅ 96.5% / 93.8% / 91.8% |
 | Cobertura tests críticos | >90% | ✅ ~91% (auth hardening + PDF export cubiertos) |

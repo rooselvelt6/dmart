@@ -50,8 +50,8 @@ animation: {
           '100%': { opacity: '1' },
         },
         scorePulse: {
-          '0%, 100%': { opacity: '1', box-shadow: '0 0 10px rgba(0,0,0,0.1)' },
-          '50%': { opacity: '0.8', box-shadow: '0 0 25px rgba(239,68,68,0.4)' },
+          '0%, 100%': { opacity: '1', 'box-shadow': '0 0 10px rgba(0,0,0,0.1)' },
+          '50%': { opacity: '0.8', 'box-shadow': '0 0 25px rgba(239,68,68,0.4)' },
         },
       }
     }

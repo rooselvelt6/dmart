@@ -7,6 +7,49 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-006: Docker Multi-stage + Staging Compose
+
+### Corregido
+- **Healthcheck del Dockerfile roto**: apuntaba a `/api/health` (endpoint
+  inexistente); ahora valida `/obs/health` (health_check en observability.rs).
+  Sin esto, un container "healthy" que no lo estaba, y el staging no podía
+  validarse.
+- **Contexto de build del workspace**: `cargo` exige el manifest de TODOS los
+  miembros; faltaba `dmart-app/` en `builder-server` y `dmart-server/` en
+  `builder-wasm` → `failed to load manifest for workspace member`. Copiados ambos
+  + `dmart-server/fuzz/target` (3.5GB) excluido vía `.dockerignore`.
+- **Server "sordo" en producción (bug crítico)**: en `main.rs` se hacía
+  `graceful_shutdown(...).await` ANTES de `server.await`; al esperar SIGTERM/SIGINT
+  antes de arrancar, axum nunca empezaba a servir (el socket escuchaba a nivel
+  kernel, TCP conectaba, pero toda request colgaba). Ahora el shutdown graceful va
+  dentro de `with_graceful_shutdown`.
+- **Doble inicialización de métricas**: `init_metrics()` se llamaba dos veces en
+  `main.rs` (línea ~75 y ~136). El registrar devolvía el error "failed to install
+  exporter as global recorder: metrics already initialized" y el proceso moría al
+  arrancar. Eliminada la llamada huérfana.
+- **`tailwind.config.js` con SyntaxError**: las keys `box-shadow` sin comillas en
+  `keyframes.scorePulse` rompían el pipeline CSS de trunk. Ahora van entre comillas.
+- **wasm-opt rompía el build con rustc 1.98**: el módulo usa `memory.copy` sin
+  declarar `bulk-memory` y binaryen rechaza el módulo. En trunk 0.21 la opción
+  `wasm_opt` ya NO existe en `Trunk.toml`; se desactiva con el atributo per-link
+  `data-wasm-opt="0"` en `index.html`. Se descarta el intento del `RUSTFLAGS`
+  `-target-feature=-bulk-memory` (contraproducente).
+- **Valkey no arrancaba con `cap_drop: ALL`**: `setpriv` del entrypoint necesita
+  `SETUID`/`SETGID` (+ `CHOWN`/`FOWNER`/`DAC_OVERRIDE` para el volumen `/data`).
+  Re-añadidos como `cap_add` en el servicio valkey del compose.
+
+### Agregado
+- `docker-compose.staging.yml`: server (build local, `read_only`, `cap_drop: ALL`,
+  `no-new-privileges`, `tmpfs /tmp`, volumen `dmart-data`) + Valkey 8 (LRU 256MB),
+  healthchecks, `restart: unless-stopped`, puerto configurable (`STAGING_PORT`) y
+  fail-fast de `DMART_MASTER_KEY`. Sin container SurrealDB (DB embebida en archivo).
+- `.env.staging.example` con `DMART_MASTER_KEY`/`DMART_ADMIN_PASSWORD`/Argon2id;
+  `.env.staging` añadido a `.gitignore`.
+- Spec-006 refrescada a la arquitectura real (DB embebida, `/obs/health`, frontend
+  vía `ServeDir` sin nginx, env `DMART_*`); criterio R1/R4 del ROADMAP.
+
+---
+
 ## [Unreleased] — SPEC-005: Prometheus `/metrics` + Grafana Dashboards
 
 ### Agregado

@@ -1,7 +1,6 @@
 [build]
 target = "index.html"
 dist = "../dist"
-wasm_opt = false
 minify = "never"
 
 [[proxy]]

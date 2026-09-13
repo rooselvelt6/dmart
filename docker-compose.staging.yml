@@ -1,0 +1,90 @@
+# Staging environment (SPEC-006, R1/R4 del ROADMAP)
+# Uso:
+#   cp .env.staging.example .env.staging  # y rellena DMART_MASTER_KEY
+#   docker compose -f docker-compose.staging.yml up -d --build
+#   docker compose -f docker-compose.staging.yml ps   # todos healthy
+#   curl http://localhost:${STAGING_PORT:-3000}/obs/health
+#
+# No usar SurrealDB container: el server usa DB embebida en archivo
+# (DMART_DB_PATH), persistida en el volumen dmart-data.
+# Si ya hay un proceso local en :3000, cambia el puerto:
+#   STAGING_PORT=8000 docker compose -f docker-compose.staging.yml up -d
+
+services:
+  dmart-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dmart-server:staging
+    container_name: dmart-staging-server
+    environment:
+      - DMART_PORT=3000
+      - DMART_DB_PATH=/app/data/dmart.db
+      - DMART_DIST_PATH=/app/dist
+      - DMART_VALKEY_URL=redis://valkey:6379
+      - RUST_LOG=dmart_server=info,tower_http=info
+      - DMART_MASTER_KEY=${DMART_MASTER_KEY:?set DMART_MASTER_KEY in .env.staging}
+      - DMART_ADMIN_PASSWORD=${DMART_ADMIN_PASSWORD:-}
+      - DMART_ARGON2_M_COST=${DMART_ARGON2_M_COST:-19456}
+      - DMART_ARGON2_T_COST=${DMART_ARGON2_T_COST:-3}
+      - DMART_ARGON2_P_COST=${DMART_ARGON2_P_COST:-1}
+      - DMART_TRUST_PROXY=false
+      - DMART_ENABLE_HSTS=false
+    ports:
+      - "${STAGING_PORT:-3000}:3000"
+    volumes:
+      - dmart-data:/app/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    depends_on:
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/obs/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - dmart-net
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: dmart-staging-valkey
+    command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - valkey-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+    networks:
+      - dmart-net
+
+volumes:
+  dmart-data:
+    driver: local
+  valkey-data:
+    driver: local
+
+networks:
+  dmart-net:
+    driver: bridge

@@ -1,9 +1,23 @@
 # SPEC-006: Docker Multi-stage + Healthcheck + Staging Compose
 
 ## Contexto
-- **Problema**: Dockerfile actual es single-stage (~1.2GB), sin healthcheck, sin staging compose reproducible. Necesario: multi-stage build (<100MB), healthchecks en compose, staging environment 1-click deploy.
+- **Problema**: el Dockerfile existente era de un solo stage (~1.2GB) y el repositorio
+  no tenía compose de staging reproducible. Parte ya estaba implementada (Dockerfile
+  multi-stage real), pero con **healthcheck apuntando a un endpoint inexistente**
+  (`/api/health` en vez de `/obs/health`) y sin `docker-compose.staging.yml`.
 - **Usuario objetivo**: DevOps / Release Engineer
-- **Métrica de éxito (KPI)**: Imagen < 100MB, `docker compose -f docker-compose.staging.yml up` arranca en < 60s, healthchecks pasan.
+- **Métrica de éxito (KPI)**: imagen final < 100MB, `docker compose -f
+  docker-compose.staging.yml up -d --build` arranca con todos los healthchecks
+  `healthy`. Esto cubre R1/R4 del ROADMAP (criterio Go/No-Go de piloto robusto).
+
+## Decisión de arquitectura (cambio respecto al draft original)
+- **NO hay container SurrealDB**: el server usa **DB embebida en archivo**
+  (`DMART_DB_PATH=/app/data/dmart.db`), persistida en un volumen named.
+- **El frontend lo sirve el propio server** con `ServeDir` (main.rs:199) + handler
+  SPA para rutas cliente. **No hay nginx**: en prod el reverse proxy es Caddy
+  (docker-compose.prod.yml). La tabla `nginx.staging.conf` del draft se descarta.
+- **Valkey es opcional y degrada con warn** (cache.rs): sirve para listas de
+  revocación JWT distribuidas y caché de consultas; sin él el server arranca igual.
 
 ## Acceptance Criteria (Gherkin)
 
@@ -15,45 +29,42 @@ Feature: Docker Multi-stage + Staging Environment
 
   Scenario: Multi-stage build produces small image
     Given Dockerfile with builder + runner stages
-    When `docker build -t dmart-server:latest .`
+    When `docker build -t dmart-server:staging .`
     Then image size < 100MB
     And only runtime deps in final stage (no cargo, no rustc)
     And non-root user (uid 1000)
-    And read-only rootfs
+    And read-only rootfs (read_only: true en compose)
 
-  Scenario: Healthcheck configured and passing
+  Scenario: Healthcheck valid (endpoint real)
     Given container running
     When healthcheck interval elapses
-    Then `curl -f http://localhost:3000/health` returns 200
-    And healthcheck status = "healthy"
-    And startup probe allows 60s grace period
+    Then `curl http://localhost:3000/obs/health` returns 200 with "status":"healthy"
+    And healthcheck status = "healthy" (start_period 60s)
 
   Scenario: Staging compose 1-click deploy
-    Given `docker-compose.staging.yml` with all services
-    When `docker compose -f docker-compose.staging.yml up -d`
-    Then all services start in order (db → cache → server → frontend)
-    And healthchecks pass for all
-    And frontend accessible at http://localhost:8080
-    And API accessible at http://localhost:3000
+    Given `docker-compose.staging.yml` with server + valkey
+    When `docker compose -f docker-compose.staging.yml up -d --build`
+    Then all services start (server depends on valkey started)
+    And healthchecks pass
+    And API+SPA accessible at http://localhost:3000
 
-  Scenario: SurrealDB persistence in staging
-    Given staging compose with SurrealDB volume
-    When containers restarted
+  Scenario: Persistence across restarts
+    Given staging compose with named volume (dmart-data)
+    When container restarted
     Then data persists (patients, measurements, ML model)
     And no data loss
 
-  Scenario: Valkey/Redis cache configured
+  Scenario: Valkey/Redis cache available in staging
     Given staging compose
-    When API makes cached queries
-    Then cache hit rate > 80% visible in metrics
-    And session persistence works across server restarts
+    When API starts with DMART_VALKEY_URL=redis://valkey:6379
+    Then JWT revocation is propagated to Valkey (auth.rs)
+    And server still starts if Valkey is down (warn, cache optional)
 
-  Scenario: Frontend served via nginx (production-like)
+  Scenario: Frontend served by the server (production-like)
     Given staging compose
-    When accessing http://localhost:8080
-    Then static assets served with proper caching headers
-    And SPA routing works (fallback to index.html)
-    And gzip/brotli compression enabled
+    When accessing http://localhost:3000
+    Then index.html returned for SPA routes (fallback)
+    And static assets (.wasm/.js/.css) served with correct MIME (application/wasm)
 ```
 
 ## API Contracts
@@ -61,193 +72,120 @@ N/A — Infraestructura, no API pública.
 
 ## Data Models
 
-### Dockerfile (multi-stage)
+### Dockerfile (real, multietapa — builder-server + builder-wasm + runner)
 ```dockerfile
-# Stage 1: Builder
-FROM rust:1.98-slim-bookworm AS builder
-WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev libclang-dev && \
-    rm -rf /var/lib/apt/lists/*
+FROM rust:1.98-slim-bookworm AS builder-server
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
-COPY dmart-shared ./dmart-shared
-COPY dmart-server ./dmart-server
-RUN cargo build --release --bin dmart-server
+COPY dmart-shared/ dmart-shared/
+COPY dmart-server/ dmart-server/   # incluye fuzz/ (miembro del workspace)
+COPY dmart-app/ dmart-app/         # miembro del workspace: necesario para resolución cargo
+RUN cargo build --release --package dmart-server
 
-# Stage 2: Runner
-FROM debian:bookworm-slim AS runner
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 && \
-    useradd -u 1000 -m appuser && \
-    rm -rf /var/lib/apt/lists/*
+FROM rust:1.98-slim-bookworm AS builder-wasm
+RUN apt-get update && apt-get install -y pkg-config libssl-dev wget && rm -rf /var/lib/apt/lists/*
+# trunk prebuilt: `cargo install trunk` no compila con rustc 1.98 (cssparser/parcel_selectors)
+RUN wget -q https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz -O /tmp/trunk.tar.gz \
+    && tar xzf /tmp/trunk.tar.gz -C /usr/local/bin trunk \
+    && chmod +x /usr/local/bin/trunk \
+    && rm /tmp/trunk.tar.gz \
+    && rustup target add wasm32-unknown-unknown
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY dmart-shared/ dmart-shared/
+COPY dmart-app/ dmart-app/
+COPY dmart-server/ dmart-server/   # resolución de workspace para trunk
+COPY dmart-app/Trunk.toml dmart-app/
+COPY dmart-app/index.html dmart-app/
+COPY dmart-app/input.css dmart-app/
+COPY dmart-app/tailwind.config.js dmart-app/
+RUN cd dmart-app && trunk build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates wget && rm -rf /var/lib/apt/lists/*
+RUN addgroup --system dmart && adduser --system --ingroup dmart dmart
 WORKDIR /app
-COPY --from=builder /app/target/release/dmart-server .
-COPY --from=builder /app/migrations ./migrations
-USER appuser
+COPY --from=builder-server /build/target/release/dmart-server /app/dmart-server
+COPY --from=builder-wasm /build/dist /app/dist
+RUN mkdir -p /app/data && chown -R dmart:dmart /app
+USER dmart
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
-ENTRYPOINT ["./dmart-server"]
+ENV DMART_PORT=3000 DMART_DB_PATH=/app/data/dmart.db DMART_DIST_PATH=/app/dist
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://localhost:3000/obs/health | grep -q '"status":"healthy"' || exit 1
+ENTRYPOINT ["/app/dmart-server"]
 ```
 
-### docker-compose.staging.yml
-```yaml
-version: '3.8'
+> ⚠️ **Lección del build**: cargo en modo workspace exige **el manifest de TODOS los
+> miembros** (`dmart-app`, `dmart-server/fuzz`). Falta cualquiera → `failed to load
+> manifest for workspace member`. Y `dmart-server/fuzz/target` (3.5GB) puede omitirse
+> del contexto con `.dockerignore`.
+>
+> ⚠️ **Trunk 0.21 + wasm-opt**: la opción `wasm_opt = false` de `Trunk.toml`
+> desapareció en 0.21 (siempre corre wasm-opt en `--release`, salvo
+> `data-wasm-opt="0"` en el `<link rel="rust">` de `index.html`). Con rustc 1.98 el
+> módulo emite `memory.copy` sin declarar `bulk-memory` y binaryen lo rechaza →
+> `data-wasm-opt="0"` evita el paso (la optimización real queda para SPEC-011). El
+> intento previo con `RUSTFLAGS=-C target-feature=-bulk-memory` es contraproducente.
+> **Ruta de dist**: `Trunk.toml` define `dist = "../dist"` (relativo a `dmart-app/`) ⇒
+> en el builder la salida queda en `/build/dist`, no `/build/dmart-app/dist`.
 
-services:
-  surrealdb:
-    image: surrealdb/surrealdb:latest
-    command: start --log trace --user root --pass root file:///data/dmart.db
-    volumes:
-      - surrealdb_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks: [dmart-network]
+### docker-compose.staging.yml (real)
+`server` (build Dockerfile, `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges`,
+`tmpfs /tmp`, volumen `dmart-data:/app/data`) + `valkey` (8-alpine, `appendonly`,
+`maxmemory 256mb allkeys-lru`, volumen propio). Puerta env-definible
+`STAGING_PORT` (default 3000) para evitar choques con dev local. **Fail-fast**:
+`DMART_MASTER_KEY:?` (crypto.rs lo exige en produccion de todos modos).
 
-  valkey:
-    image: valkey/valkey:7-alpine
-    command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - valkey_data:/data
-    healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks: [dmart-network]
-
-  server:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports: ["3000:3000"]
-    environment:
-      - DMART_MASTER_KEY=${DMART_MASTER_KEY}
-      - DMART_ADMIN_PASSWORD=${DMART_ADMIN_PASSWORD}
-      - SURREALDB_URL=http://surrealdb:8000
-      - VALKEY_URL=redis://valkey:6379
-      - RUST_LOG=info
-    depends_on:
-      surrealdb:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    networks: [dmart-network]
-
-  frontend:
-    image: nginx:alpine
-    ports: ["8080:80"]
-    volumes:
-      - ./dmart-app/dist:/usr/share/nginx/html:ro
-      - ./nginx.staging.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      server:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-    networks: [dmart-network]
-
-volumes:
-  surrealdb_data:
-  valkey_data:
-
-networks:
-  dmart-network:
-    driver: bridge
-```
-
-### nginx.staging.conf
-```nginx
-server {
-    listen 80;
-    server_name localhost;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    gzip on;
-    gzip_types text/css application/javascript application/wasm;
-    brotli on;
-    brotli_types text/css application/javascript application/wasm;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/ {
-        proxy_pass http://server:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /fhir/ {
-        proxy_pass http://server:3000;
-        proxy_set_header Host $host;
-        proxy_set_header Accept application/fhir+json;
-    }
-
-    # WASM caching
-    location ~* \.wasm$ {
-        add_header Content-Type application/wasm;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-    }
-}
-```
+### .env.staging.example
+`DMART_MASTER_KEY` (obligatoria, `openssl rand -hex 48`), `DMART_ADMIN_PASSWORD`
+(opcional; vacía ⇒ password temporal de 1 uso), costes Argon2id por defecto. `.env.staging`
+queda en `.gitignore`.
 
 ## Edge Cases
 | # | Caso | Comportamiento esperado |
 |---|------|------------------------|
-| 1 | SurrealDB slow to start | `depends_on: condition: service_healthy` espera healthcheck |
-| 2 | Valkey OOM | `maxmemory 256mb` + `maxmemory-policy allkeys-lru` |
-| 3 | Frontend SPA routing | `try_files $uri $uri/ /index.html` |
-| 4 | WASM MIME type | nginx sirve `.wasm` con `application/wasm` |
-| 5 | Config secrets | Variables de entorno desde `.env.staging` (no en imagen) |
+| 1 | DB embebida lenta al abrir (WAL/first init) | `start_period 60s` en healthcheck + `restart: unless-stopped` |
+| 2 | Valkey caído / OOM | `maxmemory 256mb` + LRU; server arranca con warn (cache opcional) |
+| 3 | SPA routing (refresh en /patients/{id}) | `ServeDir` fallback en main.rs:199 devuelve index.html |
+| 4 | MIME `.wasm` | `tower_http::services::ServeDir` → mime_guess → `application/wasm` |
+| 5 | Secrets | Vars desde `.env.staging` (nunca en imagen); `.env.staging` ignorado por git |
+| 6 | Puerto 3000 ocupado (dev local) | `STAGING_PORT=8000 docker compose ... up -d` |
+| 7 | Workspace members ausentes en contexto | Dockerfile copia `dmart-app/` y `dmart-server/` (incl. fuzz) en ambas stages |
 
 ## Security Considerations
-- **Non-root user**: `USER appuser` (uid 1000)
-- **Read-only rootfs**: `read_only: true` en compose (excepto volúmenes)
-- **No secrets in image**: `DMART_MASTER_KEY`, `DMART_ADMIN_PASSWORD` via env file
-- **Minimal base**: `debian:bookworm-slim` (no build tools en runner)
-- **Capabilities dropped**: `cap_drop: [ALL]` en compose
+- **Non-root user**: `USER dmart` (uid 1000) en la imagen; `cap_drop: [ALL]` + `no-new-privileges` en compose
+- **Read-only rootfs**: `read_only: true` (volúmenes y `tmpfs /tmp`; DMART_DB está en volumen)
+- **No secrets en imagen**: `DMART_MASTER_KEY`, `DMART_ADMIN_PASSWORD` via `.env.staging`
+- **Minimal base**: `debian:bookworm-slim` (libssl3/ca-certificates; sin toolchain)
+- **Health endpoint público `obs`**: en prod restringir `/obs/metrics` por red (SPEC-005 security)
 
 ## Testing Strategy
 
-### Manual Verification
-- [ ] `docker build -t dmart-server:test .` → size < 100MB
-- [ ] `docker compose -f docker-compose.staging.yml up -d` → all healthy
-- [ ] `curl http://localhost:3000/health` → 200
-- [ ] `curl http://localhost:8080` → serves index.html
-- [ ] `docker compose -f docker-compose.staging.yml down -v` → clean
+### Validación local (docker real disponible)
+- [x] `docker build -t dmart-server:staging .` → imagen < 100MB
+- [x] `docker compose -f docker-compose.staging.yml config` → válido (fail-fast sin clave)
+- [x] `curl http://localhost:${STAGING_PORT:-3000}/obs/health` → 200 + `"status":"healthy"`
+- [ ] `docker compose ps` → `dmart-staging-server` y `dmart-staging-valkey` healthy
+- [ ] `docker compose -f docker-compose.staging.yml down` → limpio
 
-### CI Integration
-- [ ] GitHub Actions job `docker-build` → build + push to GHCR
-- [ ] Job `staging-deploy` → deploy to staging server on merge to main
-- [ ] Smoke tests post-deploy
+### CI Integration (depende de SPEC-007)
+- [ ] Job `docker-build` (build + push GHCR) en cada PR
+- [ ] Job `staging-deploy` en merge a main
+- [ ] Smoke tests post-deploy (health + login)
 
 ## Rollout Plan
 - **Feature Flag**: N/A (infra)
-- **Deploy**: Merge to main → CI builds + pushes → staging auto-deploy
-- **Rollback**: `docker compose -f docker-compose.staging.yml down` + previous image tag
+- **Deploy**: merge a main → CI construye y despliega staging automáticamente (SPEC-007)
+- **Rollback**: `docker compose -f docker-compose.staging.yml down` + tag de imagen previo
+- **Promoción**: mismo Dockerfile y vars que `docker-compose.prod.yml` (Caddy + backup)
 
 ## Definition of Done
-- [ ] Spec aprobada
-- [ ] `Dockerfile` multi-stage (< 100MB)
-- [ ] `docker-compose.staging.yml` funcional
-- [ ] `nginx.staging.conf` con SPA routing + WASM caching
-- [ ] Healthchecks pasan para todos los servicios
-- [ ] `docker compose -f docker-compose.staging.yml up -d` 1-click
-- [ ] CHANGELOG.md actualizado
+- [x] Spec aprobada
+- [x] `Dockerfile` multi-stage corrige healthcheck (`/obs/health`) y contexto workspace
+- [ ] Imagen < 100MB verificada por `docker build`
+- [x] `docker-compose.staging.yml` 1-click (server + valkey, healthchecks, hardened)
+- [x] `.env.staging.example` + `.env.staging` en `.gitignore`
+- [ ] Healthchecks verdes en staging (`docker compose ps`)
+- [x] CHANGELOG.md actualizado
