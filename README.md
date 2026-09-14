@@ -136,8 +136,12 @@ flowchart TB
 ### Opción A — Docker (recomendado)
 
 ```bash
-docker compose up --build -d          # dev (server + valkey)
-docker compose -f docker-compose.prod.yml up -d   # prod (Caddy + backup)
+docker compose up --build -d                    # dev (server + valkey)
+cp .env.staging.example .env.staging            # rellena DMART_MASTER_KEY
+docker compose -f docker-compose.staging.yml up -d   # staging validado (R1/R4)
+
+cp .env.prod.example .env.prod                  # rellena DMART_MASTER_KEY
+docker compose -f docker-compose.prod.yml up -d     # prod (Caddy, HTTPS opcional vía SITE_ADDRESS)
 ```
 
 ### Opción B — Manual

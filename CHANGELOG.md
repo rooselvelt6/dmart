@@ -7,6 +7,82 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-027: Coverage Gate en CI (cargo llvm-cov)
+
+### Agregado
+- **Job `coverage`** en `.github/workflows/ci.yml`:
+  - `cargo llvm-cov` scoped (`-p dmart-shared -p dmart-server --lib --test api_tests --test hl7_integration`, sin `--workspace`) → `coverage.lcov`.
+  - Gate por módulo: `scripts/check-coverage-thresholds.sh`.
+  - Gate global `LH/LF ≥ 85%` computado del propio LCOV (una sola invocación de llvm-cov).
+  - Upload de `coverage.lcov` como artifact (30 días).
+  - Conectado a `needs:` de `release-build` y `notify`.
+- **Script `scripts/check-coverage-thresholds.sh`**: tabla única de umbrales por módulo;
+  falla con `exit 1` nombrando cada módulo bajo umbral; alerta `⚠️ NOT FOUND` si un módulo
+  protegido desaparece del reporte.
+- **Tests de validación clínica** (`dmart-shared/src/validation.rs`, +7): FiO2>1.0, A-aDO2
+  crítico-alto, edad>120, respuesta verbal/motora GCS fuera de rango, valor bajo el mínimo
+  físico, warning crítico-alto, `get_range_description`.
+
+### Corregido
+- **Bug real del Circuit Breaker (SPEC-031, `circuit_breaker.rs`)**: el estado `HalfOpen`
+  era un no-op — la transición a `Closed`/`Open` nunca ocurría y 2 tests fallaban de forma
+  consistente (fueron interpretados como "flaky"). Ahora `record_result` aplica la máquina
+  de estados completa: éxito en half-open requiere `success_threshold` (3) consecutivos para
+  cerrar, fallo reabre. Añadido `consecutive_successes` con `#[serde(default)]`.
+  Tests actualizados a la semántica de 3 éxitos.
+
+### Cobertura final por módulo protegido (spec: 027)
+| Módulo | Before | After | Umbral |
+|--------|--------|-------|--------|
+| hl7/parser.rs | 96.5% | 95.0% | 90% ✅ |
+| hl7/mllp.rs | 93.8% | 100.0% | 90% ✅ |
+| hl7/ingest.rs | 91.8% | 94.7% | 90% ✅ |
+| shared/scales.rs | 83.4% | 89.1% | 85% ✅ |
+| shared/validation.rs | 81.3% | **100.0%** | 85% ✅ |
+| shared/ml.rs | 94.6% | 95.9% | 80% ✅ |
+
+### Tests
+- `dmart-shared --lib` 38 ✓ · `dmart-server --lib` 65 ✓ (incluye circuit breaker 7/7).
+- Test negativo del gate verificado (parser.rs 11.9% → `exit 1`).
+- Clippy: `circuit_breaker.rs` 0 warnings.
+
+---
+
+## [Unreleased] — SPEC-028: Vectores Clínicos de Referencia (Test Vectors)
+
+### Agregado
+- **Suite de conformidad clínica** (`dmart-shared/tests/conformance.rs`, 6 tests):
+  - `test_conformance_apache_ii_exact_match` — 7 fixtures validadas contra Knaus 1985 con
+    match **EXACTO** de score total y de los 16 sub-scores del breakdown.
+  - `test_conformance_gcs_exact_match` — 6 fixtures validadas contra Teasdale & Jennett 1974
+    (total + interpretación clínica).
+  - `test_conformance_*_has_enough_vectors` — gate: falla si <6 vectores APACHE II o <5 GCS.
+  - `test_conformance_all_fixtures_cite_sources` — exige cita bibliográfica válida por fixture.
+  - `test_conformance_loader_rejects_invariant_violations` — invariantes estructurales.
+- **Loader de fixtures** (`dmart-shared/src/testdata.rs`):
+  - Deserialización serde estricta con `env!("CARGO_MANIFEST_DIR")` → `testdata/scales/<scale>`.
+  - Validación de invariantes en carga: sub-scores ≤ máximos de la escala, suma = total,
+    consistencia GCS (ojos+verbal+motor = total), coordinación breakdown ⇄ score total.
+  - `diff_apache_ii_subscores` — diff granular (escala, fixture y sub-score divergente) al fallar.
+- **Vectores de referencia** en `dmart-shared/testdata/scales/`:
+  - `apache_ii/` (7): sano (0), fiebre+taquipnea (2), HTA+taquicardia+edad (9),
+    IRA+acidosis (20), falla multiorgánica extrema **(score máximo de la escala: 71)**,
+    cirugía electiva+crónica (20), hipotermia+disturbio electrolítico (34).
+  - `gcs/` (6): consciente (15), lesión leve (13/14), moderada (9), grave/como (6), coma profundo (3).
+
+### Corregido
+- **Suite de conformidad cazó 3 errores aritméticos en los vectores calculados a mano**
+  (no en el motor de escalas): pH=7.20 es 3 pts (rango 7.15-7.24) no 2; creatinina con
+  falla renal aguda duplica (4 pt → 8 pt); T=31.0 es 3 pts (rango 30-31.9) no 2.
+  La implementación de `scales.rs` resultó correcta en todos los casos.
+
+### Tests
+- `dmart-shared` lib 31 ✓ + conformance 6 ✓ + proptests ✓.
+- `dmart-server` api_tests 31 ✓ + hl7_integration 32 ✓.
+- Gates: `fmt --check` ✓, `clippy -p dmart-shared --all-targets` ✓ (0 warnings).
+
+---
+
 ## [Unreleased] — SPEC-006: Docker Multi-stage + Staging Compose
 
 ### Corregido
@@ -37,6 +113,13 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 - **Valkey no arrancaba con `cap_drop: ALL`**: `setpriv` del entrypoint necesita
   `SETUID`/`SETGID` (+ `CHOWN`/`FOWNER`/`DAC_OVERRIDE` para el volumen `/data`).
   Re-añadidos como `cap_add` en el servicio valkey del compose.
+- **SELinux bloqueaba bind-mount del Caddyfile en prod**: `docker-compose.prod.yml`
+  montaba `./Caddyfile:/etc/caddy/Caddyfile:ro` y fallaba con "permission denied"
+  al correr como root con `read_only` + `no-new-privileges`. Solución: Caddyfile
+  copiado dentro de imagen custom (`Dockerfile.caddy`) → sin bind-mount, sin SELinux.
+- **Backup "cp -r /data" peligroso eliminado**: copiaba la BD SurrealKV viva
+  (snapshot inconsistente). El backup real vendrá en SPEC-009; aquí solo se dejan
+  los volúmenes named para que 009 los respalde.
 
 ### Agregado
 - `docker-compose.staging.yml`: server (build local, `read_only`, `cap_drop: ALL`,

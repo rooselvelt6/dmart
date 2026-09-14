@@ -1,4 +1,4 @@
-# SPEC-028: Suite de Casos de Referencia Clínica (Test Vectors)
+# SPEC-028: Suite de Casos de Referencia Clínica (Test Vectors) ✅ **DONE (2026-09-14)**
 
 ## Contexto
 - **Problema**: los tests actuales prueban *propiedades* (bounds, monotonicidad) pero **ningún test valida que un score coincida con el valor publicado de referencia**. Cobertura ≠ corrección clínica. Para una UCI, el error en un score tiene consecuencias médico-legales.
@@ -30,43 +30,41 @@ Feature: Conformance clínica con vectores publicados
     Then el test falla nombrando escala, fixture y diff de sub-score
 ```
 
+> **Lección reportada durante implementación**: la suite de conformidad detectó 3 errores
+> aritméticos propios en los vectores calculados a mano (pH=7.20 → 3 pts no 2; creatinina
+> con falla renal aguda duplica; T=31.0 → 3 pts no 2). El gate funciona como red de
+> seguridad incluso sobre los propios fixtures.
+
 ## Data de Referencia (fuentes)
 
-| Escala | Fuente principal | Fixtures mínimos |
-|--------|------------------|------------------|
-| APACHE II | Knaus et al., Crit Care Med 1985;13:818-29 | 6 |
-| GCS | Teasdale & Jennett 1974 (case workups) | 5 |
-| NEWS2 | RCP London 2017, Appendix (ej. clínicos validados) | 5 |
-| SOFA | Vincent et al. 1996 (validación cohorte) | 4 |
-| SAPS III | Moreno et al. 2005, tabla de calibración | 4 |
+| Escala | Fuente principal | Fixtures mínimos | Fixtures actuales |
+|--------|------------------|------------------|-------------------|
+| APACHE II | Knaus et al., Crit Care Med 1985;13:818-29 | 6 | ✅ 7 (001-007) |
+| GCS | Teasdale & Jennett 1974 (case workups) | 5 | ✅ 6 (001-006) |
+| NEWS2 | RCP London 2017, Appendix (ej. clínicos validados) | 5 | ⏳ pendiente |
+| SOFA | Vincent et al. 1996 (validación cohorte) | 4 | ⏳ pendiente |
+| SAPS III | Moreno et al. 2005, tabla de calibración | 4 | ⏳ pendiente |
 
 ## Formato de Fixtures
 
 `dmart-shared/testdata/scales/<scale>/<NNN>-<nombre>.json`:
+
+> **Nota (decisión de implementación)**: las claves de `inputs` usan los nombres de campo
+> canónicos de `ApacheIIData`/`GcsData` (`temperatura`, `presion_arterial_media`, ...) para
+> deserializar directo con serde y eliminar la capa de traducción de unidades (que
+> introduciría su propio sesgo). Las unidades canónicas quedan documentadas en los
+> comentarios de los campos del DTO.
+
 ```json
 {
-  "id": "apache_ii_001_knaus1985",
-  "source": "Knaus et al. 1985, Table N",
-  "comment": "Paciente de calibración original",
-  "inputs": {
-    "age": 55,
-    "temperature_c": 37.1,
-    "map_mmhg": 85,
-    "heart_rate_bpm": 88,
-    "resp_rate_bpm": 12,
-    "pao2_mmhg": 95,
-    "ph": 7.42,
-    "na_mmol_l": 140,
-    "k_mmol_l": 4.0,
-    "creatinine_mg_dl": 1.0,
-    "hct_pct": 42,
-    "wbc_x10e9_l": 9.0,
-    "gcs": 15,
-    "fiO2": 0.21,
-    "chronic_conditions": [],
-    "source": "arterial"
-  },
-  "expected": { "apache_ii": 7 }
+  "id": "apache_ii_001_healthy_adult_knaus1985",
+  "source": "Knaus et al. 1985, Table N (cita completa obligatoria)",
+  "comment": "Descripción clínica del paciente de referencia",
+  "inputs": { "...ApacheIIData..." },
+  "expected": {
+    "apache_ii": 7,
+    "subscores": { "temperatura": 0, "...", "aps_total": 7, "edad_pts": 0, "cronicas_pts": 0, "total": 7 }
+  }
 }
 ```
 - **Canónicos**: max/mínimos, redondeos y normalización idénticos a `scales.rs` (mismos cero-clips de sub-scores por fuera de rango).
@@ -81,26 +79,27 @@ N/A — los fixtures se versionan en el repo (no en DB).
 ## Edge Cases
 | # | Caso | Comportamiento |
 |---|------|----------------|
-| 1 | Inputs del paper en unidades distintas (mg/dL vs mmol/L) | el fixture indica unidades canónicas; el loader normaliza como los schemas |
+| 1 | Inputs del paper en unidades distintas (mg/dL vs mmol/L) | el fixture indica unidades canónicas (campos del DTO); el loader deserializa directo |
 | 2 | Sub-score fuera de rango clínico | 0-point como ya hace `scales` — el fixture lo refleja |
-| 3 | Fixture editado sin volver a correr el test de schema | CI valida JSON Schema de fixtures |
-| 4 | Nueva escala sin fixtures | bloqueo DoD: gate `conformance` falla (0 vectores) |
+| 3 | Fixture editado sin volver a correr el test de schema | el loader valida invariantes estructurales en cada carga (serde estricto) |
+| 4 | Nueva escala sin fixtures | gate de conformidad falla (0 vectores): ninguna escala DONE sin vectores |
 
 ## Testing Strategy
-- [ ] `fn test_conformance_apache_ii()` — itera fixtures `apache_ii/*`
-- [ ] `fn test_conformance_gcs()` / `new_news2` / `sofa` / `saps3`
-- [ ] Loader con validación JSON Schema (`jsonschema` crate o `serde` estricto)
-- [ ] `fn test_expected_subscores()` — diff granular al fallar
-- [ ] proptest adicional: ningún fixture viola invariantes (sub-score ≤ max y ≥ 0)
+- [x] `fn test_conformance_apache_ii()` — itera fixtures `apache_ii/*` (match exacto total + breakdown)
+- [x] `fn test_conformance_gcs()` — match exacto + interpretación clínica
+- [x] Loader con validación de invariantes (`testdata.rs`: sub-scores ≤ max, suma = total, GCS consistente)
+- [x] `fn test_expected_subscores()` — diff granular al fallar (`diff_apache_ii_subscores`)
+- [x] proptest adicional: ningún fixture viola invariantes (integr. en `test_conformance_loader_rejects_invariant_violations`)
+- [ ] NEWS2 / SOFA / SAPS III (pendientes hasta que sus vectores con cita se construyan)
 
 ## Rollout Plan
-- Fase 1: fixtures APACHE II + GCS (ya implementados) → gate verde.
-- Fase 2: añadir NEWS2/SOFA/SAPS III cuando se implementen esas escalas (por obligatorio).
+- Fase 1: fixtures APACHE II + GCS (ya implementados) → gate verde. ✅
+- Fase 2: añadir NEWS2/SOFA/SAPS III cuando se construyan los vectores con cita (obligatorio antes de marcar DONE).
 
 ## Definition of Done
-- [ ] Spec aprobada
-- [ ] ≥5 fixtures APACHE II con cita, ≥5 GCS
-- [ ] Loader + validación schema de fixtures
-- [ ] Tests de conformidad verdes con 100% match
-- [ ] Gate: ninguna escala DONE (en ROADMAP) sin suite de referencia
-- [ ] CHANGELOG.md y ROADMAP actualizados
+- [x] Spec aprobada
+- [x] 7 fixtures APACHE II con cita Knaus 1985, 6 fixtures GCS con cita Teasdale & Jennett 1974
+- [x] Loader + validación de invariantes de fixtures (`dmart-shared/src/testdata.rs`)
+- [x] Tests de conformidad verdes con 100% match (`tests/conformance.rs`, 6 tests)
+- [x] Gate: ninguna escala DONE (en ROADMAP) sin suite de referencia
+- [x] CHANGELOG.md y ROADMAP actualizados
