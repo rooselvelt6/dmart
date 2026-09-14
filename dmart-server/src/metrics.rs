@@ -6,65 +6,163 @@
 //! se recalculan en el scrape (`survey_db`) para no desincronizarse con la BD.
 
 use crate::db::Database;
-use metrics::{Unit, counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram};
+use metrics::{
+    Unit, counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram,
+};
 
 /// Descripción global de todas las métricas. Se llama una vez en `init_metrics`.
 pub fn register() {
     // HTTP
-    describe_counter!("http_requests_total", Unit::Count, "HTTP requests by method/status");
+    describe_counter!(
+        "http_requests_total",
+        Unit::Count,
+        "HTTP requests by method/status"
+    );
     describe_histogram!(
         "http_request_duration_seconds",
         Unit::Seconds,
         "HTTP request latency (p50/p95/p99 via histogram)"
     );
-    describe_counter!("http_requests_errors_total", Unit::Count, "HTTP error responses (4xx/5xx)");
+    describe_counter!(
+        "http_requests_errors_total",
+        Unit::Count,
+        "HTTP error responses (4xx/5xx)"
+    );
 
     // Auth
     describe_counter!("auth_login_total", Unit::Count, "Login attempts by result");
-    describe_counter!("auth_refresh_total", Unit::Count, "Refresh-token rotations by result");
-    describe_counter!("auth_failures_total", Unit::Count, "Failed authentication attempts by reason");
-    describe_counter!("rbac_denials_total", Unit::Count, "Authorization denials (403) by permission");
+    describe_counter!(
+        "auth_refresh_total",
+        Unit::Count,
+        "Refresh-token rotations by result"
+    );
+    describe_counter!(
+        "auth_failures_total",
+        Unit::Count,
+        "Failed authentication attempts by reason"
+    );
+    describe_counter!(
+        "rbac_denials_total",
+        Unit::Count,
+        "Authorization denials (403) by permission"
+    );
 
     // Base de datos
-    describe_histogram!("surreal_query_duration_seconds", Unit::Seconds, "SurrealDB query latency (survey)");
-    describe_gauge!("surreal_connection_pool", Unit::Count, "Active SurrealDB connections");
+    describe_histogram!(
+        "surreal_query_duration_seconds",
+        Unit::Seconds,
+        "SurrealDB query latency (survey)"
+    );
+    describe_gauge!(
+        "surreal_connection_pool",
+        Unit::Count,
+        "Active SurrealDB connections"
+    );
 
     // Negocio
     describe_gauge!("patients_total", Unit::Count, "Patients by status");
     describe_counter!("patients_created_total", Unit::Count, "Patients created");
-    describe_counter!("patients_deleted_total", Unit::Count, "Patients deleted/egreso");
+    describe_counter!(
+        "patients_deleted_total",
+        Unit::Count,
+        "Patients deleted/egreso"
+    );
     describe_gauge!("measurements_total", Unit::Count, "Measurements persisted");
-    describe_counter!("measurements_created_total", Unit::Count, "Measurements created");
-    describe_counter!("scales_calculated_total", Unit::Count, "Clinical scale scores by scale");
+    describe_counter!(
+        "measurements_created_total",
+        Unit::Count,
+        "Measurements created"
+    );
+    describe_counter!(
+        "scales_calculated_total",
+        Unit::Count,
+        "Clinical scale scores by scale"
+    );
 
     // ML
-    describe_counter!("ml_predictions_total", Unit::Count, "ML mortality-risk predictions by model");
-    describe_histogram!("ml_model_load_duration_seconds", Unit::Seconds, "ML model load latency");
-    describe_gauge!("ml_accuracy_gauge", Unit::Count, "Reported model accuracy per model/phase");
+    describe_counter!(
+        "ml_predictions_total",
+        Unit::Count,
+        "ML mortality-risk predictions by model"
+    );
+    describe_histogram!(
+        "ml_model_load_duration_seconds",
+        Unit::Seconds,
+        "ML model load latency"
+    );
+    describe_gauge!(
+        "ml_accuracy_gauge",
+        Unit::Count,
+        "Reported model accuracy per model/phase"
+    );
 
     // Realtime / señales
-    describe_gauge!("sse_connections_active", Unit::Count, "Active SSE connections");
-    describe_counter!("hl7_messages_processed_total", Unit::Count, "HL7 messages ingested by source");
-    describe_counter!("hl7_messages_errors_total", Unit::Count, "HL7 messages failed by source");
+    describe_gauge!(
+        "sse_connections_active",
+        Unit::Count,
+        "Active SSE connections"
+    );
+    describe_counter!(
+        "hl7_messages_processed_total",
+        Unit::Count,
+        "HL7 messages ingested by source"
+    );
+    describe_counter!(
+        "hl7_messages_errors_total",
+        Unit::Count,
+        "HL7 messages failed by source"
+    );
 
     // Ingest data-quality (SPEC-031). Expuesta y a 0 hasta que SPEC-031 pueble
     // los eventos de gap/fault/throttling.
-    describe_counter!("ingest_gap_total", Unit::Count, "Monitor data gaps (SPEC-031)");
-    describe_counter!("ingest_invalid_total", Unit::Count, "Invalid monitor samples (SPEC-031)");
-    describe_gauge!("ingest_fault_devices", Unit::Count, "Devices in fault state (SPEC-031)");
-    describe_counter!("ingest_throttled_total", Unit::Count, "Throttled ingest events (SPEC-031)");
-    describe_gauge!("ingest_error_avg", Unit::Count, "Average ingest error rate (SPEC-031)");
+    describe_counter!(
+        "ingest_gap_total",
+        Unit::Count,
+        "Monitor data gaps (SPEC-031)"
+    );
+    describe_counter!(
+        "ingest_invalid_total",
+        Unit::Count,
+        "Invalid monitor samples (SPEC-031)"
+    );
+    describe_gauge!(
+        "ingest_fault_devices",
+        Unit::Count,
+        "Devices in fault state (SPEC-031)"
+    );
+    describe_counter!(
+        "ingest_throttled_total",
+        Unit::Count,
+        "Throttled ingest events (SPEC-031)"
+    );
+    describe_gauge!(
+        "ingest_error_avg",
+        Unit::Count,
+        "Average ingest error rate (SPEC-031)"
+    );
 
     // Infra
-    describe_gauge!("db_connections_active", Unit::Count, "Active database connections");
-    describe_gauge!("cache_connected", Unit::Count, "Cache connection status (1=connected, 0=disconnected)");
+    describe_gauge!(
+        "db_connections_active",
+        Unit::Count,
+        "Active database connections"
+    );
+    describe_gauge!(
+        "cache_connected",
+        Unit::Count,
+        "Cache connection status (1=connected, 0=disconnected)"
+    );
     describe_gauge!("uptime_seconds", Unit::Seconds, "Server uptime in seconds");
     describe_gauge!(
         "process_cpu_seconds_total",
         Unit::Seconds,
         "Total user+system CPU time used by this process"
     );
-    describe_gauge!("process_resident_memory_bytes", Unit::Bytes, "Resident memory (RSS) of this process");
+    describe_gauge!(
+        "process_resident_memory_bytes",
+        Unit::Bytes,
+        "Resident memory (RSS) of this process"
+    );
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────
@@ -147,6 +245,44 @@ pub fn hl7_error(source: &str) {
     counter!("hl7_messages_errors_total", "source" => source.to_string()).increment(1);
 }
 
+// ─── Ingest Hardening (SPEC-031) ──────────────────────────────────────────
+
+pub fn ingest_throttled(device: &str) {
+    counter!("ingest_throttled_total", "device" => device.to_string()).increment(1);
+}
+
+pub fn ingest_gap(device: &str, count: u64) {
+    counter!("ingest_gap_total", "device" => device.to_string()).increment(count);
+}
+
+pub fn ingest_invalid(device: &str, vital: &str, reason: &str) {
+    counter!("ingest_invalid_total", "device" => device.to_string(), "vital" => vital.to_string(), "reason" => reason.to_string()).increment(1);
+}
+
+pub fn ingest_message(device: &str, result: &str) {
+    counter!("ingest_messages_total", "device" => device.to_string(), "result" => result.to_string()).increment(1);
+}
+
+pub fn ingest_message_size(device: &str, size: usize) {
+    histogram!("ingest_message_size_bytes", "device" => device.to_string()).record(size as f64);
+}
+
+pub fn ingest_fault_devices_set(count: u64) {
+    gauge!("ingest_fault_devices").set(count as f64);
+}
+
+pub fn ingest_circuit_state(device: &str, state: u8) {
+    gauge!("ingest_circuit_state", "device" => device.to_string()).set(state as f64);
+}
+
+pub fn ingest_error_avg_set(rate: f64) {
+    gauge!("ingest_error_avg").set(rate);
+}
+
+pub fn ingest_rate_limit_current(device: &str, tokens: f64) {
+    gauge!("ingest_rate_limit_current", "device" => device.to_string()).set(tokens);
+}
+
 // ─── Sistema (Linux) ─────────────────────────────────────────────────────
 
 /// Devuelve (cpu_user+sys en segundos, rss en bytes) leyendo /proc/self.
@@ -177,7 +313,12 @@ fn proc_self() -> (f64, i64) {
         .and_then(|status| {
             status.lines().find_map(|l| {
                 l.strip_prefix("VmRSS:").map(|v| {
-                    v.trim().trim_end_matches(" kB").trim().parse::<i64>().unwrap_or(0) * 1024
+                    v.trim()
+                        .trim_end_matches(" kB")
+                        .trim()
+                        .parse::<i64>()
+                        .unwrap_or(0)
+                        * 1024
                 })
             })
         })
@@ -192,11 +333,7 @@ fn proc_self() -> (f64, i64) {
 /// Cuando es `false` el endpoint solo expone métricas de sistema/HTTP y se
 /// ocultan los KPIs de negocio, ML, interop HL7 e ingest.
 pub fn extended_enabled() -> bool {
-    extended_flag(
-        std::env::var("METRICS_EXTENDED")
-            .ok()
-            .as_deref(),
-    )
+    extended_flag(std::env::var("METRICS_EXTENDED").ok().as_deref())
 }
 
 /// Lógica pura del flag, testeable sin tocar el entorno.
@@ -216,13 +353,15 @@ async fn survey_count(db: &Database, table: &str, where_clause: &str) -> Option<
     let query = if where_clause.is_empty() {
         format!("SELECT count() AS count FROM {table} GROUP BY count")
     } else {
-        format!(
-            "SELECT count() AS count FROM {table} WHERE {where_clause} GROUP BY count"
-        )
+        format!("SELECT count() AS count FROM {table} WHERE {where_clause} GROUP BY count")
     };
     let rows: Vec<serde_json::Value> = db.query(query).await.ok()?.take(0).ok()?;
     // Tabla vacía o sin coincidencias devuelve [] → el total real es 0.
-    Some(rows.first().and_then(|v| v["count"].as_f64()).unwrap_or(0.0))
+    Some(
+        rows.first()
+            .and_then(|v| v["count"].as_f64())
+            .unwrap_or(0.0),
+    )
 }
 
 /// Recalcula métricas de estado consultando la BD y leyendo /proc. Lo ejecuta

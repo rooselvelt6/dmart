@@ -411,7 +411,9 @@ mod hl7_mllp_integration {
 
 mod hl7_mllp_stream {
     use super::*;
-    use dmart_server::hl7::mllp::{MAX_MESSAGE, serve};
+    use dmart_server::ingest::{IngestConfig, IngestState};
+    use dmart_server::server_ingest::{MAX_MESSAGE, serve};
+    use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
 
@@ -419,8 +421,10 @@ mod hl7_mllp_stream {
         let probe = TcpListener::bind("127.0.0.1:0").await.expect("probe bind");
         let addr = probe.local_addr().expect("probe addr");
         drop(probe);
+        let ingest_config = IngestConfig::default();
+        let ingest_state = Arc::new(IngestState::new(ingest_config));
         tokio::spawn(async move {
-            let _ = serve(addr, db).await;
+            let _ = serve(addr, db, ingest_state).await;
         });
         tokio::time::timeout(std::time::Duration::from_secs(2), async {
             loop {
@@ -545,7 +549,7 @@ mod hl7_mllp_stream {
             .expect("db connect");
         let addr = spawn_server(db).await;
 
-        // Frame > 1 MiB → el server descarta y cierra la conexión sin ACK
+        // Frame > 1 MiB → el server responde AR con error "frame_too_large" y cierra
         let mut payload = Vec::with_capacity(MAX_MESSAGE + 64);
         payload.push(START_BLOCK);
         payload.resize(payload.len() + MAX_MESSAGE + 32, b'X');
@@ -553,10 +557,17 @@ mod hl7_mllp_stream {
         payload.push(CARRIAGE_RETURN);
 
         let ack = send_frame(addr, &payload).await;
+        // Debe responder AR (error) no cerrar sin ACK
+        assert!(!ack.is_empty(), "server debe responder AR con error");
+        let ack_str = String::from_utf8_lossy(&ack);
         assert!(
-            ack.is_empty(),
-            "server debe cerrar sin ACK; recibió {} bytes",
-            ack.len()
+            ack_str.contains("AR"),
+            "debe ser ACK negativo (AR), got: {}",
+            ack_str
+        );
+        assert!(
+            ack_str.contains("frame_too_large"),
+            "debe indicar frame_too_large"
         );
 
         let _ = std::fs::remove_dir_all(&dir);

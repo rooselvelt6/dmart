@@ -5,9 +5,9 @@ mod cache;
 mod crypto;
 mod db;
 mod hl7;
+mod metrics;
 mod mfa;
 mod middleware;
-mod metrics;
 pub mod migrations;
 mod observability;
 pub mod rbac;
@@ -37,6 +37,8 @@ use crate::observability::{
     connect_with_retry, graceful_shutdown, init_metrics, init_tracing, observability_router,
 };
 use crate::security::create_security_state;
+use dmart_server::ingest::{IngestConfig, IngestState};
+use dmart_server::server_ingest;
 
 async fn spa_handler() -> impl IntoResponse {
     let dist_path = std::env::var("DMART_DIST_PATH").unwrap_or_else(|_| "./dist".to_string());
@@ -128,6 +130,16 @@ async fn main() -> anyhow::Result<()> {
     if cache_ok {
         tracing::info!("✅ Valkey cache connected");
     }
+
+    // ── Ingest Hardening (SPEC-031) ───────────────────────────────────
+    let ingest_config = IngestConfig::default();
+    let ingest_state = Arc::new(IngestState::new(ingest_config.clone()));
+    tracing::info!(
+        "🛡️ Ingest hardening enabled: rate_limit={} rps, burst={}, CB threshold={}%",
+        ingest_config.rate_limit_rps,
+        ingest_config.rate_limit_burst,
+        (ingest_config.cb_error_threshold * 100.0) as u32
+    );
 
     // ── Observability: Metrics ──────────────────────────────────────
     let prometheus_handle = init_metrics()?;
@@ -238,9 +250,10 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|p| p.parse::<u16>().ok())
     {
         let hl7_db = database.clone();
+        let hl7_ingest = ingest_state.clone();
         let hl7_addr = SocketAddr::from(([0, 0, 0, 0], hl7_port));
         tokio::spawn(async move {
-            if let Err(e) = hl7::mllp::serve(hl7_addr, hl7_db).await {
+            if let Err(e) = server_ingest::serve(hl7_addr, hl7_db, hl7_ingest).await {
                 tracing::error!("[mllp] listener cerrado: {e}");
             }
         });

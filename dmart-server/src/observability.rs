@@ -72,8 +72,8 @@ pub fn init_metrics() -> anyhow::Result<PrometheusHandle_> {
     // p50/p95/p99 de UCI sean fiables en el rango clínico (telemetría cada ~1s).
     let handle = PrometheusBuilder::new()
         .set_buckets(&[
-            0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            1.0, 2.5, 5.0, 10.0,
+            0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+            10.0,
         ])?
         .install_recorder()?;
 
@@ -87,7 +87,11 @@ pub fn init_metrics() -> anyhow::Result<PrometheusHandle_> {
 
     info!(
         "📊 Prometheus metrics available at /metrics (METRICS_EXTENDED={})",
-        if crate::metrics::extended_enabled() { "true" } else { "false" }
+        if crate::metrics::extended_enabled() {
+            "true"
+        } else {
+            "false"
+        }
     );
     Ok(handle)
 }
@@ -105,7 +109,8 @@ pub async fn metrics_middleware(
     let latency = start.elapsed().as_secs_f64();
     let status = response.status().as_u16().to_string();
 
-    counter!("http_requests_total", "method" => method.clone(), "status" => status.clone()).increment(1);
+    counter!("http_requests_total", "method" => method.clone(), "status" => status.clone())
+        .increment(1);
     metrics::histogram!(
         "http_request_duration_seconds",
         "method" => method,
@@ -189,7 +194,11 @@ async fn metrics_handler(State(state): State<ObservabilityState>) -> Response {
     state.db_healthy().await; // ping DB (también alimenta health)
     metrics::gauge!("uptime_seconds").set(state.start_time.elapsed().as_secs_f64());
     metrics::gauge!("db_connections_active").set(1.0);
-    metrics::gauge!("cache_connected").set(if crate::cache::cache_available() { 1.0 } else { 0.0 });
+    metrics::gauge!("cache_connected").set(if crate::cache::cache_available() {
+        1.0
+    } else {
+        0.0
+    });
 
     crate::metrics::touch_zero_counters(extended);
     crate::metrics::survey_db(&state.db, extended).await;

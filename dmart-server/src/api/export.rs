@@ -174,7 +174,15 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     let mut y = 270.0_f32;
 
     // Header
-    push_text(&mut ops, left, page_h, y, "SISTEMA UCI — REGISTRO DE PACIENTE", true, 14.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        "SISTEMA UCI — REGISTRO DE PACIENTE",
+        true,
+        14.0,
+    );
     y -= 8.0;
     push_text(
         &mut ops,
@@ -252,7 +260,15 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     );
 
     y -= 8.0;
-    push_text(&mut ops, left, page_h, y, "─── EVOLUCIÓN APACHE II ───", true, 11.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        "─── EVOLUCIÓN APACHE II ───",
+        true,
+        11.0,
+    );
     y -= 6.0;
     push_text(
         &mut ops,

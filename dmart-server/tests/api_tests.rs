@@ -569,9 +569,7 @@ static METRICS_HANDLE: OnceLock<metrics_exporter_prometheus::PrometheusHandle> =
 
 fn metrics_handle() -> metrics_exporter_prometheus::PrometheusHandle {
     METRICS_HANDLE
-        .get_or_init(|| {
-            dmart_server::observability::init_metrics().expect("init metrics once")
-        })
+        .get_or_init(|| dmart_server::observability::init_metrics().expect("init metrics once"))
         .clone()
 }
 
@@ -582,15 +580,9 @@ async fn build_obs_app(db: &TestDb) -> axum::Router {
     let database = std::sync::Arc::new(db.clone());
     let api = dmart_server::api::build_api_router(database.clone(), auth_config, security_state);
     let obs = dmart_server::observability::observability_router(database, metrics_handle());
-    axum::Router::new()
-        .merge(api)
-        .nest(
-            "/obs",
-            obs,
-        )
-        .layer(axum::extract::connect_info::MockConnectInfo(
-            "127.0.0.1:0".parse::<SocketAddr>().unwrap(),
-        ))
+    axum::Router::new().merge(api).nest("/obs", obs).layer(
+        axum::extract::connect_info::MockConnectInfo("127.0.0.1:0".parse::<SocketAddr>().unwrap()),
+    )
 }
 
 async fn scrape_metrics(http: &axum::Router) -> (StatusCode, String) {
@@ -728,7 +720,14 @@ async fn test_metrics_endpoint_exposes_all_and_tracks_events() {
 
     let patient = dmart_shared::models::Patient::new();
     let payload = serde_json::to_value(&patient).unwrap();
-    let (s, j) = send(&http, Method::POST, "/patients", Some(&_token), Some(payload)).await;
+    let (s, j) = send(
+        &http,
+        Method::POST,
+        "/patients",
+        Some(&_token),
+        Some(payload),
+    )
+    .await;
     assert_eq!(s, StatusCode::CREATED);
     let pid = j["data"]["patient_id"].as_str().expect("patient_id");
     let (s, _) = send(
@@ -748,15 +747,11 @@ async fn test_metrics_endpoint_exposes_all_and_tracks_events() {
 
     let (_, body2) = scrape_metrics(&http).await;
     assert!(
-        metric_value(&body2, "auth_login_total{result=\"success\"}")
-            .unwrap_or(0.0)
-            > before_login,
+        metric_value(&body2, "auth_login_total{result=\"success\"}").unwrap_or(0.0) > before_login,
         "login exitoso no contabilizado"
     );
     assert!(
-        metric_value(&body2, "auth_login_total{result=\"failure\"}")
-            .unwrap_or(0.0)
-            > before_fail,
+        metric_value(&body2, "auth_login_total{result=\"failure\"}").unwrap_or(0.0) > before_fail,
         "login fallido no contabilizado"
     );
     assert!(
@@ -764,8 +759,7 @@ async fn test_metrics_endpoint_exposes_all_and_tracks_events() {
         "paciente creado no contabilizado"
     );
     assert!(
-        metric_value(&body2, "scales_calculated_total{scale=\"gcs\"}").unwrap_or(0.0)
-            > before_gcs,
+        metric_value(&body2, "scales_calculated_total{scale=\"gcs\"}").unwrap_or(0.0) > before_gcs,
         "escala GCS no contabilizada"
     );
     assert!(
@@ -795,8 +789,8 @@ async fn test_metrics_histogram_buckets_fine_covered() {
     // SPEC-005 edge case #3: buckets finos para latencias <10ms deben existir
     // (0.1ms, 0.5ms, 1ms, 2.5ms, 5ms) además del bucket +Inf de cierre.
     for le in [
-        "0.0001", "0.0005", "0.001", "0.0025", "0.005", "0.01", "0.025", "0.05",
-        "0.1", "0.25", "0.5", "1", "2.5", "5", "10", "+Inf",
+        "0.0001", "0.0005", "0.001", "0.0025", "0.005", "0.01", "0.025", "0.05", "0.1", "0.25",
+        "0.5", "1", "2.5", "5", "10", "+Inf",
     ] {
         let has_histogram = body
             .lines()
@@ -1732,7 +1726,9 @@ async fn test_e2e_logout_revokes_refresh_token() {
         .method(Method::POST)
         .uri("/auth/login")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(login_body("logout_e2e", "SuperSecreto_01!").to_string()))
+        .body(Body::from(
+            login_body("logout_e2e", "SuperSecreto_01!").to_string(),
+        ))
         .expect("build login");
     let response = app.oneshot(request).await.expect("oneshot login");
     assert_eq!(response.status(), StatusCode::OK);

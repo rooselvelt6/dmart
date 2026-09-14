@@ -117,9 +117,9 @@ pub async fn persist_revoked_jti(jti: &str, exp: i64) {
 pub async fn is_jti_revoked_in_cache(jti: &str) -> bool {
     !jti.is_empty()
         && crate::cache::cache_available()
-            && crate::cache::cache_get(&format!("blacklist:access:{}", jti))
-                .await
-                .is_some()
+        && crate::cache::cache_get(&format!("blacklist:access:{}", jti))
+            .await
+            .is_some()
 }
 
 /// Revocación por usuario con epoch: todos los access tokens emitidos con
@@ -131,16 +131,24 @@ static REVOKED_USER_BEFORE: OnceLock<std::sync::Mutex<HashMap<String, i64>>> = O
 /// Registra el corte de revocación en memoria. Afecta a tokens con `iat` menor
 /// al valor ya registrado (se toma el máximo).
 pub fn revoke_user_access_before(user_id: &str, cutoff: i64) {
-    let mut map = REVOKED_USER_BEFORE.get_or_init(Default::default).lock().unwrap();
+    let mut map = REVOKED_USER_BEFORE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap();
     let entry = map.entry(user_id.to_string()).or_insert(cutoff);
     *entry = (*entry).max(cutoff);
 }
 
 fn is_user_access_revoked(user_id: &str, iat: i64) -> bool {
-    let map = REVOKED_USER_BEFORE.get_or_init(Default::default).lock().unwrap();
+    let map = REVOKED_USER_BEFORE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap();
     // `<=` porque iat y el corte tienen resolución de 1 s: un token emitido
     // en el mismo segundo que la detección de robo también debe caer.
-    map.get(user_id).map(|cutoff| iat <= *cutoff).unwrap_or(false)
+    map.get(user_id)
+        .map(|cutoff| iat <= *cutoff)
+        .unwrap_or(false)
 }
 
 /// Propaga la revocación por usuario a Valkey (TTL cubre la vida máxima de un

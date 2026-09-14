@@ -84,6 +84,8 @@ pub struct VitalsMessage {
     pub timestamp: String,
     pub vitals: Vec<Vital>,
     pub source: MonitorSource,
+    /// MSH.13 — sequence number (opcional, para gap detection)
+    pub sequence_number: Option<u32>,
 }
 
 /// Segmentos de un mensaje: cada campo es un vector de componentes.
@@ -245,6 +247,12 @@ pub fn parse_oru_message(raw: &str) -> Result<VitalsMessage, Hl7Error> {
         .get(8)
         .and_then(|f| f.first().cloned())
         .unwrap_or_default();
+    // MSH.13 — sequence number (opcional, para gap detection SPEC-031)
+    let sequence_number = msh
+        .1
+        .get(12)
+        .and_then(|f| f.first().cloned())
+        .and_then(|s| s.parse::<u32>().ok());
     let msh_time = msh
         .1
         .get(5)
@@ -391,6 +399,7 @@ pub fn parse_oru_message(raw: &str) -> Result<VitalsMessage, Hl7Error> {
         timestamp,
         vitals,
         source,
+        sequence_number,
     })
 }
 
