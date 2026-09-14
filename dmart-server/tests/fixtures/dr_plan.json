@@ -1,0 +1,20 @@
+{
+  "spec": "SPEC-010",
+  "plan": "dr_restore",
+  "version": 1,
+  "rpo_minutes": 0,
+  "rto_minutes": 15,
+  "steps": [
+    "parar ingest (MLLP listener) para writes",
+    "recrear directorio de datos de SurrealDB desde dump + WAL",
+    "aplicar dump: dmart_backup stdin con cfg_attr allowed",
+    "verificar fingerprint SPEC-029 del dump == fingerprint pre-backup",
+    "arrancar bin + verificar /obs/health 200",
+    "abrir MLLP y re-enviar el lote retenido por backpressure (SPEC-031)"
+  ],
+  "integrity": {
+    "method": "sha256",
+    "gate": "fingerprint_dump_matches",
+    "expected": "=== 100% match con fingerprint SPEC-029 del backup previo ==="
+  }
+}
