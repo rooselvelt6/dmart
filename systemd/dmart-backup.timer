@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily dMart Backup at 02:00 UTC
+Documentation=https://github.com/dmart/specs/009-backup-automatico.md
+Requires=dmart-backup.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=15m
+AccuracySec=1m
+Timezone=UTC
+
+[Install]
+WantedBy=timers.target

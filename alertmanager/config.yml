@@ -1,0 +1,104 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '{{ env "ALERT_EMAIL_SMTP_HOST" "localhost:25" }}'
+  smtp_from: '{{ env "ALERT_EMAIL_FROM" "alerts@dmart.local" }}'
+  smtp_auth_username: '{{ env "ALERT_EMAIL_SMTP_USER" "" }}'
+  smtp_auth_password: '{{ env "ALERT_EMAIL_SMTP_PASS" "" }}'
+  smtp_require_tls: true
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  group_by: ['alertname', 'instance', 'component']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+  routes:
+  # Críticas van a receptor crítico + default (continue: true)
+  - match:
+      severity: critical
+    receiver: 'critical'
+    continue: true
+  # HL7 alertas a receptor específico (on-call clínico)
+  - match:
+      component: hl7
+    receiver: 'hl7-oncall'
+    continue: true
+  # Backup alertas a receptor de operaciones
+  - match:
+      component: backup
+    receiver: 'ops-backup'
+    continue: true
+
+receivers:
+- name: 'default'
+  webhook_configs:
+  - url: '{{ env "ALERT_WEBHOOK_URL" "" }}'
+    send_resolved: true
+    http_config:
+      timeout: 10s
+  email_configs:
+  - to: '{{ env "ALERT_EMAIL_TO" "ops@dmart.local" }}'
+    send_resolved: true
+    headers:
+      subject: "[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}"
+
+- name: 'critical'
+  webhook_configs:
+  - url: '{{ env "ALERT_WEBHOOK_CRITICAL_URL" "" }}'
+    send_resolved: true
+    http_config:
+      timeout: 10s
+  email_configs:
+  - to: '{{ env "ALERT_EMAIL_CRITICAL_TO" "oncall@dmart.local" }}'
+    send_resolved: true
+    headers:
+      subject: "[CRITICAL] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}"
+
+- name: 'hl7-oncall'
+  webhook_configs:
+  - url: '{{ env "ALERT_WEBHOOK_HL7_URL" "" }}'
+    send_resolved: true
+  email_configs:
+  - to: '{{ env "ALERT_EMAIL_HL7_TO" "clinical-oncall@dmart.local" }}'
+    send_resolved: true
+
+- name: 'ops-backup'
+  webhook_configs:
+  - url: '{{ env "ALERT_WEBHOOK_OPS_URL" "" }}'
+    send_resolved: true
+  email_configs:
+  - to: '{{ env "ALERT_EMAIL_OPS_TO" "ops@dmart.local" }}'
+    send_resolved: true
+
+inhibit_rules:
+# Silenciar warnings si hay critical en mismo componente/instancia
+- source_match:
+    severity: 'critical'
+  target_match:
+    severity: 'warning'
+  equal: ['instance', 'component']
+
+# Silenciar HL7 warnings si HL7 critical activo
+- source_match:
+    alertname: 'HL7IngestDegraded'
+    severity: 'critical'
+  target_match:
+    alertname: 'HL7IngestGap'
+  equal: ['instance']
+
+# Silenciar cache warnings si database down
+- source_match:
+    alertname: 'DatabaseDown'
+  target_match:
+    alertname: 'CacheDisconnected'
+  equal: ['instance']
+
+# Silenciar todo si instance down (up == 0)
+- source_match:
+    alertname: 'DatabaseDown'
+  target_match_re:
+    alertname: '.*'
+  equal: ['instance']

@@ -1,82 +1,179 @@
-version: "3.9"
+# Producción/Staging deploy (SPEC-012, R3/R4 del ROADMAP)
+# Uso:
+#   cp .env.prod.example .env.prod  # y rellena DMART_MASTER_KEY
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml ps   # 3 services healthy
+#   curl http://localhost/obs/health                # vía Caddy (puerto 80)
+#
+# Sin nginx: el server sirve la SPA (ServeDir) y Caddy es solo reverse proxy.
+# HTTPS opcional (auto-LE de Caddy):
+#   SITE_ADDRESS=https://dmart.hospital.example docker compose -f docker-compose.prod.yml up -d
+# Por defecto corre HTTP en :80 (LAN del piloto, sin dominio público).
+# El backup real es SPEC-009; aquí solo existen los volúmenes named que 009 respalda.
 
 services:
+  # ─── Observabilidad ─────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    container_name: dmart-node-exporter
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    mem_limit: 128m
+    cpus: 0.25
+    networks:
+      - dmart-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: dmart-alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    volumes:
+      - ./alertmanager/config.yml:/etc/alertmanager/config.yml:ro
+      - alertmanager-data:/alertmanager
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 128m
+    cpus: 0.25
+    networks:
+      - dmart-net
+    profiles:
+      - monitoring
+
   reverse-proxy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: dmart-caddy:prod
     container_name: dmart-proxy
+    environment:
+      SITE_ADDRESS: "${SITE_ADDRESS:-:80}"
+      TZ: "${TZ:-UTC}"
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
-    networks:
-      - dmart-net
+      - caddy-config:/config
+      - caddy-data:/data
+      - caddy-config:/config
     depends_on:
       - dmart-server
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: 128m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - dmart-net
 
   dmart-server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dmart-server
+    image: dmart-server:prod
+    container_name: dmart-prod-server
     environment:
       - DMART_PORT=3000
       - DMART_DB_PATH=/app/data/dmart.db
       - DMART_DIST_PATH=/app/dist
       - DMART_VALKEY_URL=redis://valkey:6379
-      - RUST_LOG=dmart_server=info,tower_http=info
-      - DMART_MASTER_KEY=${DMART_MASTER_KEY:?set DMART_MASTER_KEY in .env}
+      - RUST_LOG=${RUST_LOG:-dmart_server=info,tower_http=info}
+      - DMART_MASTER_KEY=${DMART_MASTER_KEY:?set DMART_MASTER_KEY in .env.prod}
       - DMART_ADMIN_PASSWORD=${DMART_ADMIN_PASSWORD:-}
       - DMART_ARGON2_M_COST=${DMART_ARGON2_M_COST:-19456}
       - DMART_ARGON2_T_COST=${DMART_ARGON2_T_COST:-3}
       - DMART_ARGON2_P_COST=${DMART_ARGON2_P_COST:-1}
       - DMART_TRUST_PROXY=true
-      - DMART_ENABLE_HSTS=true
+      - DMART_ENABLE_HSTS=${DMART_ENABLE_HSTS:-false}
     volumes:
       - dmart-data:/app/data
+      - dmart-backups:/backups
+      - dmart-metrics:/var/lib/node_exporter
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     depends_on:
       valkey:
         condition: service_started
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    mem_limit: 1024m
+    cpus: 2
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/obs/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 60s
     networks:
       - dmart-net
 
   valkey:
     image: valkey/valkey:8-alpine
-    container_name: dmart-valkey
+    container_name: dmart-prod-valkey
+    command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - valkey-data:/data
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+    mem_limit: 512m
+    cpus: 1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
-    networks:
-      - dmart-net
-
-  backup:
-    image: alpine:latest
-    container_name: dmart-backup
-    volumes:
-      - dmart-data:/data:ro
-      - ./backups:/backups
-    entrypoint: |
-      sh -c "
-        echo '0 3 * * * cp -r /data /backups/dmart-\$(date +%Y%m%d-%H%M%S)' > /etc/crontabs/root;
-        crond -f -l 2
-      "
-    depends_on:
-      - dmart-server
-    restart: unless-stopped
     networks:
       - dmart-net
 
@@ -86,6 +183,14 @@ volumes:
   valkey-data:
     driver: local
   caddy-data:
+    driver: local
+  caddy-config:
+    driver: local
+  dmart-backups:
+    driver: local
+  dmart-metrics:
+    driver: local
+  alertmanager-data:
     driver: local
 
 networks:

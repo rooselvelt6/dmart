@@ -1,22 +1,29 @@
-# dMart UCI - Caddy reverse proxy configuration
-# Replace with your actual domain in production
+# dMart UCI - Caddy reverse proxy (SPEC-012)
+# SITE_ADDRESS se inyecta desde docker-compose.prod.yml.
+#   - Por defecto ":80"  → HTTP puro en LAN (piloto sin dominio público)
+#   - Con un dominio   → Caddy auto-aprovisiona TLS Let's Encrypt
+#     (SITE_ADDRESS=https://dmart.hospital.example)
 
-dmart.localhost {
+{
+    admin off
+    auto_https disable_redirects
+}
+
+{$SITE_ADDRESS} {
     reverse_proxy dmart-server:3000
+
+    encode gzip
 
     header {
         X-Content-Type-Options nosniff
         X-Frame-Options DENY
-        X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "geolocation=(), microphone=(), camera=()"
     }
 
     log {
-        output file /data/access.log
+        output file /data/caddy.access.log
+        format json
+        level INFO
     }
-}
-
-:80 {
-    redir https://{host}{uri} permanent
 }

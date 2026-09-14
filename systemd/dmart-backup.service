@@ -1,0 +1,22 @@
+[Unit]
+Description=dMart Backup — SurrealKV + Valkey
+Documentation=https://github.com/dmart/specs/009-backup-automatico.md
+After=docker.service
+Requires=docker.service
+ConditionPathExists=/app/scripts/backup.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec dmart-prod-server /app/scripts/backup.sh
+EnvironmentFile=-/opt/dmart/.env.prod
+WorkingDirectory=/app
+User=root
+Group=root
+# Logs a systemd journal
+StandardOutput=journal
+StandardError=journal
+# Timeout generoso para backups grandes
+TimeoutSec=1800
+
+[Install]
+WantedBy=multi-user.target

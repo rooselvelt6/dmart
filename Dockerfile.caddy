@@ -1,0 +1,10 @@
+# dMart UCI - Caddy reverse proxy (SPEC-012)
+# Caddy resuelve {$SITE_ADDRESS} desde variables de entorno en runtime.
+# Copia el Caddyfile en la imagen para evitar bind-mounts y problemas SELinux.
+
+FROM caddy:2-alpine
+
+COPY Caddyfile /etc/caddy/Caddyfile
+
+# Caddy ya corre como non-root (uid 1000) y usa setcap para puertos <1024.
+# No necesitamos cambios adicionales.

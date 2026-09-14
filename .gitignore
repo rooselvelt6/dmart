@@ -12,6 +12,7 @@ dmart-server/data
 # Environment files
 .env
 .env.staging
+.env.prod
 
 # OS files
 .DS_Store

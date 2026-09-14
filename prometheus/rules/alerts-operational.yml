@@ -1,0 +1,162 @@
+groups:
+- name: operational
+  interval: 30s
+  rules:
+  # ─── Sistema ──────────────────────────────────────────────
+  - alert: HighCPU
+    expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+      component: system
+    annotations:
+      summary: "High CPU usage on {{ $labels.instance }}"
+      description: "Process CPU > 80% for 5m (instance: {{ $labels.instance }})"
+      runbook_url: "https://github.com/dmart/runbooks#high-cpu"
+
+  - alert: HighMemory
+    expr: (process_resident_memory_bytes / 1073741824) > 0.9
+    for: 5m
+    labels:
+      severity: warning
+      component: system
+    annotations:
+      summary: "High memory usage on {{ $labels.instance }}"
+      description: "RSS > 90% of 1GB limit ({{ $value | humanize }}GB)"
+      runbook_url: "https://github.com/dmart/runbooks#high-memory"
+
+  - alert: DiskSpaceLow
+    expr: (node_filesystem_avail_bytes{mountpoint="/app/data"} / node_filesystem_size_bytes{mountpoint="/app/data"}) < 0.1
+    for: 2m
+    labels:
+      severity: critical
+      component: storage
+    annotations:
+      summary: "Low disk space on {{ $labels.instance }}"
+      description: "Free space < 10% on /app/data ({{ $value | humanizePercentage }} free)"
+      runbook_url: "https://github.com/dmart/runbooks#disk-space"
+
+  # ─── Aplicación ──────────────────────────────────────────
+  - alert: DatabaseDown
+    expr: up{job="dmart-server"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: database
+    annotations:
+      summary: "dmart-server down on {{ $labels.instance }}"
+      description: "Healthcheck /obs/health failing for 1m"
+      runbook_url: "https://github.com/dmart/runbooks#database-down"
+
+  - alert: CacheDisconnected
+    expr: cache_connected == 0
+    for: 2m
+    labels:
+      severity: warning
+      component: cache
+    annotations:
+      summary: "Valkey cache disconnected on {{ $labels.instance }}"
+      description: "Cache connection lost for 2m"
+      runbook_url: "https://github.com/dmart/runbooks#cache-disconnected"
+
+  - alert: HighRequestLatency
+    expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1
+    for: 5m
+    labels:
+      severity: warning
+      component: api
+    annotations:
+      summary: "High API latency (p99) on {{ $labels.instance }}"
+      description: "p99 latency > 1s for 5m"
+      runbook_url: "https://github.com/dmart/runbooks#high-latency"
+
+  - alert: HighErrorRate
+    expr: rate(http_requests_errors_total[5m]) / rate(http_requests_total[5m]) > 0.05
+    for: 3m
+    labels:
+      severity: warning
+      component: api
+    annotations:
+      summary: "High HTTP error rate on {{ $labels.instance }}"
+      description: "Error rate > 5% for 3m"
+      runbook_url: "https://github.com/dmart/runbooks#high-error-rate"
+
+  # ─── Autenticación / Seguridad ──────────────────────────
+  - alert: AuthFailureSpike
+    expr: rate(auth_failures_total[5m]) > 10
+    for: 2m
+    labels:
+      severity: warning
+      component: auth
+    annotations:
+      summary: "Authentication failure spike on {{ $labels.instance }}"
+      description: "> 10 auth failures/sec for 2m (possible brute force)"
+      runbook_url: "https://github.com/dmart/runbooks#auth-failures"
+
+  - alert: RBACDenialSpike
+    expr: rate(rbac_denials_total[5m]) > 5
+    for: 3m
+    labels:
+      severity: warning
+      component: auth
+    annotations:
+      summary: "RBAC denial spike on {{ $labels.instance }}"
+      description: "> 5 authorization denials/sec for 3m"
+      runbook_url: "https://github.com/dmart/runbooks#rbac-denials"
+
+  # ─── HL7 Ingest (SPEC-031) ──────────────────────────────
+  - alert: HL7IngestDegraded
+    expr: ingest_error_avg > 0.1
+    for: 5m
+    labels:
+      severity: warning
+      component: hl7
+    annotations:
+      summary: "HL7 ingest error rate > 10% on {{ $labels.instance }}"
+      description: "Ingest error average {{ $value | humanizePercentage }} for 5m"
+      runbook_url: "https://github.com/dmart/runbooks#hl7-ingest"
+
+  - alert: HL7IngestGap
+    expr: rate(ingest_gap_total[5m]) > 0
+    for: 2m
+    labels:
+      severity: warning
+      component: hl7
+    annotations:
+      summary: "HL7 data gaps detected on {{ $labels.instance }}"
+      description: "Monitor data gaps occurring"
+      runbook_url: "https://github.com/dmart/runbooks#hl7-gaps"
+
+  - alert: HL7DeviceFault
+    expr: ingest_fault_devices > 0
+    for: 1m
+    labels:
+      severity: warning
+      component: hl7
+    annotations:
+      summary: "HL7 devices in fault state on {{ $labels.instance }}"
+      description: "{{ $value }} device(s) reporting fault"
+      runbook_url: "https://github.com/dmart/runbooks#hl7-device-fault"
+
+  # ─── Backup (SPEC-009) ──────────────────────────────────
+  - alert: BackupFailed
+    expr: backup_success == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: backup
+    annotations:
+      summary: "Backup failed on {{ $labels.instance }}"
+      description: "Backup target {{ $labels.target }} reported failure"
+      runbook_url: "https://github.com/dmart/runbooks#backup-failed"
+
+  - alert: BackupStale
+    expr: backup_age_hours > 26
+    for: 1m
+    labels:
+      severity: warning
+      component: backup
+    annotations:
+      summary: "Backup stale on {{ $labels.instance }}"
+      description: "Last successful backup > 26h ago for target {{ $labels.target }}"
+      runbook_url: "https://github.com/dmart/runbooks#backup-stale"

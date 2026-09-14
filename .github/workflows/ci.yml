@@ -295,6 +295,45 @@ jobs:
           retention-days: 7
 
   # ──────────────────────────────────────────────────────────────
+  # COVERAGE GATE — SPEC-027
+  # ──────────────────────────────────────────────────────────────
+  coverage:
+    name: Coverage Gate (llvm-cov)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: llvm-tools-preview
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Run llvm-cov (single invocation)
+        run: |
+          cargo llvm-cov \
+            -p dmart-shared -p dmart-server \
+            --lib --test api_tests --test hl7_integration \
+            --lcov --output-path coverage.lcov
+      - name: Check per-module thresholds
+        run: bash scripts/check-coverage-thresholds.sh coverage.lcov
+      - name: Fail if global line coverage < 60%
+        run: |
+          global_lf=$(awk -F: '/^LF:/{s+=$2}END{print s}' coverage.lcov)
+          global_lh=$(awk -F: '/^LH:/{s+=$2}END{print s}' coverage.lcov)
+          pct=$(awk "BEGIN{printf \"%.1f\",100*$global_lh/$global_lf}")
+          echo "Global coverage: ${pct}% (LH=$global_lh LF=$global_lf)"
+          awk "BEGIN{if (100*$global_lh/$global_lf < 60){print \"FAIL: global coverage ${pct}% < 60%\"; exit 1}}"
+          echo "✅ Global coverage OK"
+      - name: Upload LCOV artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage.lcov
+          retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────
   # SECURITY AUDIT
   # ──────────────────────────────────────────────────────────────
   security-audit:
@@ -314,12 +353,68 @@ jobs:
           grep -r "TODO\|FIXME" --include="*.rs" dmart-server/src/security.rs dmart-server/src/auth.rs dmart-server/src/crypto.rs dmart-server/src/rbac.rs || true
 
   # ──────────────────────────────────────────────────────────────
+  # DOCKER BUILD (multi-stage, verifies image size + healthcheck)
+  # ──────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, wasm-build]
+    if: github.event_name == 'push' || github.event.pull_request.labels.*.name contains 'docker-build'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image (multi-stage)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: dmart-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Verify image size
+        run: |
+          SIZE=$(docker images dmart-server:ci --format "{{.Size}}")
+          echo "Image size: $SIZE"
+          # Parse size (e.g., "52.3MB" -> 52.3)
+          SIZE_MB=$(echo "$SIZE" | sed 's/[^0-9.]//g')
+          if (( $(echo "$SIZE_MB > 60" | bc -l) )); then
+            echo "❌ Image too large (>60MB): $SIZE"
+            exit 1
+          fi
+          echo "✅ Image size OK: $SIZE"
+      - name: Test healthcheck in container
+        run: |
+          CID=$(docker run -d -p 3000:3000 \
+            -e DMART_MASTER_KEY=test-master-key-32-bytes-long!! \
+            -e DMART_ADMIN_PASSWORD=testadmin123 \
+            -e DMART_DB_PATH=/app/data/dmart.db \
+            -e DMART_DIST_PATH=/app/dist \
+            -e DMART_VALKEY_URL=redis://127.0.0.1:6379 \
+            dmart-server:ci)
+          sleep 15
+          for i in {1..10}; do
+            if curl -sf http://localhost:3000/obs/health | grep -q '"status":"healthy"'; then
+              echo "✅ Healthcheck passed"
+              docker stop $CID
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "❌ Healthcheck failed after 30s"
+          docker logs $CID
+          docker stop $CID
+          exit 1
+
+  # ──────────────────────────────────────────────────────────────
   # RELEASE BUILD
   # ──────────────────────────────────────────────────────────────
   release-build:
     name: Release Build (all targets)
     runs-on: ubuntu-latest
-    needs: [rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, wasm-build]
+    needs: [rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, coverage, wasm-build, docker-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
@@ -350,14 +445,14 @@ jobs:
   notify:
     name: Notify Result
     runs-on: ubuntu-latest
-    needs: [rust-fmt, rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, fuzz-test, wasm-build, e2e-test, security-audit, release-build]
+    needs: [rust-fmt, rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, fuzz-test, coverage, wasm-build, e2e-test, security-audit, release-build]
     if: always()
     steps:
       - name: Summary
         run: |
           echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          jobs=("rust-fmt" "rust-clippy" "rust-test-lib" "rust-test-integration" "hl7-integration-test" "prop-test" "fuzz-test" "wasm-build" "e2e-test" "security-audit" "release-build")
+          jobs=("rust-fmt" "rust-clippy" "rust-test-lib" "rust-test-integration" "hl7-integration-test" "prop-test" "fuzz-test" "coverage" "wasm-build" "docker-build" "e2e-test" "security-audit" "release-build")
           for job in "${jobs[@]}"; do
             result="${{ needs.$job.result }}"
             if [ "$result" = "success" ]; then
