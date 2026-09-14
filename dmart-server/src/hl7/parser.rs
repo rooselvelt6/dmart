@@ -1,3 +1,4 @@
+// SPEC-031: superficie HL7/MLLP legacy ejercitada por los 38 tests de conformance/integración (SPEC-028); el pipeline ACTIVO es server_ingest + ingest/ (SPEC-031).
 //! Parser HL7 v2 para mensajes `ORU^R01` de monitores de cama (Mindray, Philips).
 //!
 //! Soporta terminadores `\r` y `\n`, encabezados de observación con códigos

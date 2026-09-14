@@ -4,12 +4,11 @@
 use crate::db::Database;
 use crate::hl7::ingest::ingest_vitals;
 use crate::hl7::parser::parse_oru_message;
-use crate::ingest::quality::{QualityValidator, ValidationReason, ValidationResult};
 use crate::ingest::IngestState;
+use crate::ingest::quality::{QualityValidator, ValidationReason, ValidationResult};
 use crate::metrics::{
     hl7_error, hl7_processed, ingest_circuit_state, ingest_error_avg_set, ingest_fault_devices_set,
-    ingest_gap, ingest_invalid, ingest_rate_limit_current,
-    ingest_throttled,
+    ingest_gap, ingest_invalid, ingest_rate_limit_current, ingest_throttled,
 };
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

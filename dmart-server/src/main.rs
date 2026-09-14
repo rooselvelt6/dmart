@@ -1,19 +1,3 @@
-pub mod api;
-mod audit;
-pub mod auth;
-mod cache;
-mod crypto;
-mod db;
-mod hl7;
-mod metrics;
-mod mfa;
-mod middleware;
-pub mod migrations;
-mod observability;
-pub mod rbac;
-mod realtime;
-mod security;
-
 use axum::{
     Router,
     extract::DefaultBodyLimit,
@@ -31,13 +15,20 @@ use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
 
-use crate::auth::AuthService;
-use crate::middleware::auth_mod::AuthMiddlewareConfig;
-use crate::observability::{
+use dmart_server::api;
+use dmart_server::audit;
+use dmart_server::auth;
+use dmart_server::auth::AuthService;
+use dmart_server::cache;
+use dmart_server::crypto;
+use dmart_server::db;
+use dmart_server::ingest::{IngestConfig, IngestState};
+use dmart_server::middleware::auth_mod::AuthMiddlewareConfig;
+use dmart_server::observability::{
     connect_with_retry, graceful_shutdown, init_metrics, init_tracing, observability_router,
 };
-use crate::security::create_security_state;
-use dmart_server::ingest::{IngestConfig, IngestState};
+use dmart_server::security;
+use dmart_server::security::create_security_state;
 use dmart_server::server_ingest;
 
 async fn spa_handler() -> impl IntoResponse {

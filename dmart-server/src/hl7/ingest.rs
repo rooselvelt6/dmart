@@ -1,3 +1,4 @@
+// SPEC-031: superficie HL7/MLLP legacy ejercitada por los 38 tests de conformance/integración (SPEC-028); el pipeline ACTIVO es server_ingest + ingest/ (SPEC-031).
 //! Ingestión de signos vitales desde monitores (HL7) hacia el registro clínico.
 //!
 //! Convierte un `VitalsMessage` parseado en una `Measurement` completa

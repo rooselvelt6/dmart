@@ -1,3 +1,4 @@
+// SPEC-031: superficie HL7/MLLP legacy ejercitada por los 38 tests de conformance/integración (SPEC-028); el pipeline ACTIVO es server_ingest + ingest/ (SPEC-031).
 //! Listener MLLP (Minimal Lower Layer Protocol) para recibir mensajes HL7
 //! desde monitores de cama en la LAN.
 //!
