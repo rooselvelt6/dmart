@@ -1,0 +1,14 @@
+{
+  "id": "gcs_004_severe_injury_teasdale1974",
+  "source": "Teasdale G, Jennett B. Lancet 1974;2(7872):81-84. Escala GCS: ojos 1 ninguna, verbal 2 sonidos, motor 3 flexión anormal. Estado comatoso.",
+  "comment": "Paciente en coma: sin apertura ocular, solo sonidos incomprensibles y flexión anormal al dolor. GCS = 6. Interpretación: Lesión grave/Coma (3-8).",
+  "inputs": {
+    "apertura_ocular": 1,
+    "respuesta_verbal": 2,
+    "respuesta_motora": 3
+  },
+  "expected": {
+    "gcs_total": 6,
+    "interpretation": "Lesión grave / Coma"
+  }
+}

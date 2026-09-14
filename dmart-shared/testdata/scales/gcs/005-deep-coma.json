@@ -1,0 +1,14 @@
+{
+  "id": "gcs_005_deep_coma_teasdale1974",
+  "source": "Teasdale G, Jennett B. Lancet 1974;2(7872):81-84. Escala GCS: mínimo en los tres componentes (1/1/1). Estado de coma profundo.",
+  "comment": "Paciente en coma profundo: ninguna respuesta en ninguno de los tres componentes. GCS mínimo = 3. Interpretación: Lesión grave/Coma.",
+  "inputs": {
+    "apertura_ocular": 1,
+    "respuesta_verbal": 1,
+    "respuesta_motora": 1
+  },
+  "expected": {
+    "gcs_total": 3,
+    "interpretation": "Lesión grave / Coma"
+  }
+}

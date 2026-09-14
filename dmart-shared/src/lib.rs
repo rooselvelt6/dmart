@@ -1,6 +1,7 @@
 pub mod ml;
 pub mod models;
 pub mod scales;
+pub mod testdata;
 pub mod validation;
 
 pub use ml::*;

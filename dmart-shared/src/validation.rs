@@ -533,5 +533,104 @@ mod tests {
         };
         let result = validate_apache_measurement(&data);
         assert!(!result.errors.is_empty());
+
+        // FiO2 inválido (mayor que 1.0 = 100%)
+        let data = ApacheIIData {
+            fio2: 1.5,
+            ..Default::default()
+        };
+        let result = validate_apache_measurement(&data);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.field == "fio2"));
+    }
+
+    #[test]
+    fn test_a_ado2_validation() {
+        // A-aDO2 dentro de rango
+        let data = ApacheIIData {
+            a_ado2: Some(150.0),
+            ..Default::default()
+        };
+        let result = validate_apache_measurement(&data);
+        assert!(result.errors.is_empty());
+
+        // A-aDO2 dentro del rango físico pero crítico alto (>600)
+        let data = ApacheIIData {
+            a_ado2: Some(650.0),
+            ..Default::default()
+        };
+        let result = validate_apache_measurement(&data);
+        assert!(result.valid, "A-aDO2=650 es físicamente posible");
+        assert!(result.warnings.iter().any(|w| w.field == "a_ado2"));
+    }
+
+    #[test]
+    fn test_edad_exceeds_max() {
+        let data = ApacheIIData {
+            edad: 121,
+            ..Default::default()
+        };
+        let result = validate_apache_measurement(&data);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.field == "edad"));
+    }
+
+    #[test]
+    fn test_gcs_verbal_out_of_range() {
+        let gcs = GcsData {
+            apertura_ocular: 4,
+            respuesta_verbal: 6, // Inválido (máximo es 5)
+            respuesta_motora: 6,
+        };
+        let result = validate_gcs_measurement(&gcs);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.field == "respuesta_verbal"));
+    }
+
+    #[test]
+    fn test_gcs_motor_out_of_range() {
+        let gcs = GcsData {
+            apertura_ocular: 4,
+            respuesta_verbal: 5,
+            respuesta_motora: 0, // Inválido (mínimo es 1)
+        };
+        let result = validate_gcs_measurement(&gcs);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.field == "respuesta_motora"));
+    }
+
+    #[test]
+    fn test_clinical_value_below_physical_min() {
+        // pH por debajo del mínimo físico posible (6.8)
+        let data = ApacheIIData {
+            ph_arterial: 6.0,
+            ..Default::default()
+        };
+        let result = validate_apache_measurement(&data);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.field == "ph_arterial"));
+    }
+
+    #[test]
+    fn test_critical_high_warning() {
+        // Sodio elevado (>170): físicamente posible, pero crítico alto
+        let data = ApacheIIData {
+            sodio_serico: 175.0,
+            ..Default::default()
+        };
+        let result = validate_apache_measurement(&data);
+        assert!(result.valid);
+        assert!(result.warnings.iter().any(|w| w.field == "sodio_serico"));
+    }
+
+    #[test]
+    fn test_get_range_description() {
+        let desc = get_range_description("temperatura").expect("temperatura debe existir");
+        assert!(desc.contains("temperatura"));
+        assert!(desc.contains("°C"));
+        assert!(
+            get_range_description("variable_inexistente").is_none(),
+            "rango inexistente debe devolver None"
+        );
     }
 }

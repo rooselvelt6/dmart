@@ -1,0 +1,14 @@
+{
+  "id": "gcs_002_mild_injury_teasdale1974",
+  "source": "Teasdale G, Jennett B. Lancet 1974;2(7872):81-84. Escala GCS: ojos 3 a la voz, verbal 4 confuso, motor 6 obedece. Clasificación clínica de severidad del trauma craneal.",
+  "comment": "Paciente con lesión leve: abre ojos a la voz, confuso pero obedece órdenes. GCS = 13. Interpretación: Lesión leve (13-14).",
+  "inputs": {
+    "apertura_ocular": 3,
+    "respuesta_verbal": 4,
+    "respuesta_motora": 6
+  },
+  "expected": {
+    "gcs_total": 13,
+    "interpretation": "Lesión leve"
+  }
+}

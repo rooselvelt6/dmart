@@ -1,0 +1,14 @@
+{
+  "id": "gcs_001_fully_conscious_teasdale1974",
+  "source": "Teasdale G, Jennett B. Assessment of coma and impaired consciousness: a practical scale. Lancet 1974;2(7872):81-84. Escala GCS (p.82): ojos 4 espontánea, verbal 5 orientado, motor 6 obedece.",
+  "comment": "Paciente consciente, orientado y que obedece órdenes. GCS máximo = 15. Interpretación: Consciente/Normal.",
+  "inputs": {
+    "apertura_ocular": 4,
+    "respuesta_verbal": 5,
+    "respuesta_motora": 6
+  },
+  "expected": {
+    "gcs_total": 15,
+    "interpretation": "Consciente / Normal"
+  }
+}

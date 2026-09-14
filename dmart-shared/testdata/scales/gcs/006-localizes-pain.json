@@ -1,0 +1,14 @@
+{
+  "id": "gcs_006_localizes_pain_teasdale1974",
+  "source": "Teasdale G, Jennett B. Lancet 1974;2(7872):81-84. Escala GCS: ojos 4 espontánea, verbal 5 orientado, motor 5 localiza el dolor.",
+  "comment": "Paciente consciente y orientado que localiza el dolor (respuesta motora subóptima). GCS = 14. Interpretación: Lesión leve (13-14).",
+  "inputs": {
+    "apertura_ocular": 4,
+    "respuesta_verbal": 5,
+    "respuesta_motora": 5
+  },
+  "expected": {
+    "gcs_total": 14,
+    "interpretation": "Lesión leve"
+  }
+}

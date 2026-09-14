@@ -1,0 +1,14 @@
+{
+  "id": "gcs_003_moderate_injury_teasdale1974",
+  "source": "Teasdale G, Jennett B. Lancet 1974;2(7872):81-84. Escala GCS: ojos 2 al dolor, verbal 3 palabras inapropiadas, motor 4 retirada al dolor.",
+  "comment": "Paciente con lesión moderada: abre ojos solo al dolor, emite palabras inapropiadas y retira al dolor. GCS = 9. Interpretación: Lesión moderada (9-12).",
+  "inputs": {
+    "apertura_ocular": 2,
+    "respuesta_verbal": 3,
+    "respuesta_motora": 4
+  },
+  "expected": {
+    "gcs_total": 9,
+    "interpretation": "Lesión moderada"
+  }
+}
