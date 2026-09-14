@@ -232,6 +232,46 @@ dmart/
 
 ---
 
+## ✅ SPECs COMPLETADAS (cerradas con gate `clippy -D 0/0` + tests verdes)
+
+| SPEC | Tema | Commit | Gate | Tests |
+|------|------|--------|------|-------|
+| 001 | Fix WASM build | — | ✅ | — |
+| 002 | ML model persistence | — | ✅ | — |
+| 003 | HL7 MLLP integration tests | — | ✅ | 32 |
+| 004 | Auth/AuthZ hardening (JWT, MFA, RBAC) | — | ✅ | 31 |
+| 005 | Prometheus/Grafana | — | ✅ | — |
+| 006 | Docker multistage staging | — | ✅ | — |
+| 007 | CI pipeline completo | — | ✅ | — |
+| 008 | Alertas operativas | — | ✅ | — |
+| 009 | Backup automático | — | ✅ | — |
+| 010 | **Restore / DR** | `c662e1e` | 0/0 | 3 |
+| 011 | **Runbook / On-call** | `c662e1e` | 0/0 | 2 |
+| 012 | Production staging compose | — | ✅ | — |
+| 013 | **FHIR R4 Bundle ingestion** | `5143791` | 0/0 | 4 |
+| 014 | **Early-Warning Streaming (EWS)** | `5143791` | 0/0 | 4 |
+| 027 | Coverage gate CI (llvm-cov ≥ 60 % global) | — | ✅ | — |
+| 028 | Clinical reference vectors (conformance) | — | ✅ | 32+6 |
+| 029 | Score fingerprint auditability | — | ✅ | — |
+| 030 | Retention / downsampling | — | ✅ | — |
+| 031 | **Bin/lib HL7 dedupe + 0 dead-code** | `bfecaf0` | 0/0 | 63 |
+
+**Totales:** 146 tests verdes · clippy `-D warnings` = **0/0** en lib y bin · coverage global 65 % (SPEC-027)
+
+---
+
+## ⏳ SPECs PENDIENTES (14 — backlog numerado)
+
+| Gap | Rango | Cuenta | Propuesta de arranque |
+|-----|-------|--------|----------------------|
+| 1 | **SPEC-015 — 016** | 2 | **015: Patient Timeline API** (historial longitudinal + eventsourcing) + **016: Clinical Decision Support rules** (motor reglas + FHIR PlanDefinition) |
+| 2 | **SPEC-017 — 026** | 10 | Backlog "core platform": 017 Observability distribuida · 018 Multi-tenancy · 019 Export HL7/FHIR batch · 020 Tele-ICU streaming · 021 Capacity planning · 022 Device registry · 023 Alert escalation · 024 Data quality scoring · 025 Research cohort extraction · 026 Disaster recovery drill |
+| 3 | **SPEC-032 — 033** | 2 | Proyección post-031: 032 ML model serving (ONNX + WASM) · 033 Patient similarity engine (embeddings) |
+
+**Próximo paso natural (mañana):** abrir **SPEC-015 + 016 en paralelo** — ambas extienden `api/patients` + `scales`/`ml` existentes, alto valor clínico, sin romper gates.
+
+---
+
 ## 🤝 Contribución
 
 ¿Bug, idea o mejora clínica? ¡Bienvenida! Revisa [ROADMAP.md](./ROADMAP.md), abre un *issue*
