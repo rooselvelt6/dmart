@@ -12,6 +12,10 @@ pub mod auth;
 pub mod cache;
 pub mod crypto;
 pub mod db;
+#[allow(dead_code)] // SPEC-014: Early-Warning Streaming EWS (ejercitado por test ews_streaming)
+pub mod ews_stream;
+#[allow(dead_code)] // SPEC-013: FHIR R4 Bundle ingestion (ejercitado por test fhir_conformance)
+pub mod fhir_bundle;
 #[allow(dead_code)] // SPEC-031/028: superficie HL7 legacy ejercitada por los 38 tests de
 // integración/conformance (SPEC-028, 32+6) y por la API externa del wire-format MLLP/ORU.
 // NO es código muerto: es la superficie de referencia de conformance HL7 (SPEC-028).

@@ -440,6 +440,34 @@ pub fn touch_zero_counters(extended: bool) {
     }
 }
 
+// ─── EWS Streaming (SPEC-014) ──────────────────────────────────────────────
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EwsAlgo {
+    NEWS2,
+    ApacheII,
+    SOFA,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EwsSeverity {
+    Normal,
+    High,
+}
+
+pub fn ews_score_published(algo: EwsAlgo, severity: EwsSeverity) {
+    let algo_str = match algo {
+        EwsAlgo::NEWS2 => "news2",
+        EwsAlgo::ApacheII => "apache2",
+        EwsAlgo::SOFA => "sofa",
+    };
+    let sev_str = match severity {
+        EwsSeverity::Normal => "normal",
+        EwsSeverity::High => "high",
+    };
+    counter!("ews_score_published_total", "algo" => algo_str, "severity" => sev_str).increment(1);
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────
 
 #[cfg(test)]

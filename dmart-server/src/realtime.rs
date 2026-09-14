@@ -101,6 +101,27 @@ impl Default for RealtimeHub {
     }
 }
 
+use crate::metrics::EwsSeverity;
+
+/// Evento de score EWS para streaming en tiempo real (SPEC-014).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ScoreEvent {
+    pub patient_id: String,
+    pub apache_score: f64,
+    pub news2_score: f64,
+    pub sofa_score: f64,
+    pub timestamp: String,
+    pub severity: EwsSeverity,
+}
+
+/// Publica un ScoreEvent en el hub global (SPEC-014).
+pub fn publish_event(event: ScoreEvent) {
+    global_hub().publish(
+        "score",
+        serde_json::to_value(event).expect("ScoreEvent serialize"),
+    );
+}
+
 static REALTIME_TX: OnceLock<RealtimeHub> = OnceLock::new();
 
 fn global_hub() -> &'static RealtimeHub {
