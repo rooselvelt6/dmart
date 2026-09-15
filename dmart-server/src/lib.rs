@@ -13,7 +13,13 @@ pub mod cache;
 #[allow(dead_code)] // SPEC-016: Clinical Decision Support rules (ejercitado por test cds_rules)
 pub mod cds_rules;
 pub mod crypto;
+#[allow(dead_code)] // SPEC-018: Data Quality (ejercitado por test data_quality)
+pub mod data_quality;
 pub mod db;
+#[allow(dead_code)] // SPEC-017: Device Registry (ejercitado por test device_registry)
+pub mod device_registry;
+#[allow(dead_code)] // SPEC-019: Alert Escalation (ejercitado por test escalation)
+pub mod escalation;
 #[allow(dead_code)] // SPEC-014: Early-Warning Streaming EWS (ejercitado por test ews_streaming)
 pub mod ews_stream;
 #[allow(dead_code)] // SPEC-013: FHIR R4 Bundle ingestion (ejercitado por test fhir_conformance)
@@ -34,3 +40,5 @@ pub mod rbac;
 pub mod realtime;
 pub mod security;
 pub mod server_ingest;
+#[allow(dead_code)] // SPEC-020: Tele-ICU (ejercitado por test teleicu)
+pub mod teleicu;

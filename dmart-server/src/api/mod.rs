@@ -2,15 +2,19 @@ pub mod admin;
 pub mod auth;
 pub mod cds;
 pub mod diagnosticos;
+pub mod escalation;
 pub mod export;
 pub mod fhir;
 pub mod institucion;
 pub mod measurements;
 pub mod monitores;
 pub mod patients;
+pub mod quality;
+pub mod registry;
 pub mod sandbox;
 pub mod scales;
 pub mod stats;
+pub mod teleicu;
 
 use axum::{
     Router,
@@ -208,6 +212,36 @@ pub fn build_api_router(
         // Sandbox
         .route("/sandbox/generate", post(sandbox::generate_patients))
         .route("/sandbox/clear", post(sandbox::clear_sandbox))
+        // Device Registry (SPEC-017)
+        .route("/devices/status", get(registry::device_status_summary))
+        .route(
+            "/devices",
+            get(registry::list_devices).post(registry::register_device),
+        )
+        .route("/devices/{id}", get(registry::get_device))
+        .route("/devices/{id}/heartbeat", post(registry::heartbeat_device))
+        // Data Quality (SPEC-018)
+        .route("/data-quality/validate", post(quality::validate_message))
+        .route("/data-quality/report", get(quality::quality_report))
+        .route("/data-quality/summary", get(quality::quality_summary))
+        // Alert Escalation (SPEC-019)
+        .route(
+            "/escalation/policies",
+            get(escalation::list_policies).post(escalation::set_policy),
+        )
+        .route("/escalation/active", get(escalation::active_escalations))
+        .route("/escalation/{id}/ack", post(escalation::acknowledge_alert))
+        .route(
+            "/escalation/{id}/escalate",
+            post(escalation::escalate_alert),
+        )
+        // Tele-ICU (SPEC-020)
+        .route(
+            "/teleicu/sessions",
+            get(teleicu::list_sessions).post(teleicu::start_session),
+        )
+        .route("/teleicu/sessions/{id}/end", post(teleicu::end_session))
+        .route("/teleicu/live/{id}", get(teleicu::live_view))
         // FHIR R4
         .route("/fhir/Patient", get(fhir::fhir_patient_search))
         .route("/fhir/Patient/{id}", get(fhir::fhir_patient_get))

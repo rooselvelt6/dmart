@@ -140,22 +140,26 @@ curl -f http://localhost:3030/obs/health
 | **014** | **Early-Warning Streaming (EWS)** | `5143791` | 4 | 0/0 |
 | **015** | **Patient Timeline API (event sourcing)** | `—` | 5 | 0/0 |
 | **016** | **Clinical Decision Support (FHIR PlanDefinition)** | `—` | 4 | 0/0 |
+| **017** | **Device Registry** | `—` | 15 | 0/0 |
+| **018** | **Data Quality (vital validation)** | `—` | 13 | 0/0 |
+| **019** | **Alert Escalation** | `—` | 7 | 0/0 |
+| **020** | **Tele-ICU** | `—` | 8 | 0/0 |
 | 027 | Coverage gate CI (llvm-cov ≥ 60 %) | — | — | ✅ |
 | 028 | Clinical reference vectors (conformance) | — | 38 | ✅ |
 | 029 | Score fingerprint auditability | — | — | ✅ |
 | 030 | Retention / downsampling | — | — | ✅ |
 | **031** | **Bin/lib HL7 dedupe → 0 dead-code** | `bfecaf0` | 63 | 0/0 |
 
-**Métricas globales:** **150 tests** pasando (65 lib + 85 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
+**Métricas globales:** **193 tests** pasando (65 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
 
-### Backlog pendiente (12 SPECs numeradas)
+### Backlog pendiente (8 SPECs numeradas)
 
 | Rango | Cuenta | Próxima acción |
 |-------|--------|----------------|
-| 017–026 | 10 | Core platform: multi-tenancy, tele-ICU, device registry, alert escalation, data quality, cohort extraction, DR drill |
+| 021–026 | 6 | Core platform: cohort extraction, DR drill, plus remaining platform modules |
 | 032–033 | 2 | ML serving ONNX/WASM + Patient similarity engine (embeddings) |
 
-**Próximo paso natural:** abrir **SPEC-017–026** en paralelo — build platform core sobre el motor CDS (SPEC-016) ya operativo.
+**Próximo paso natural:** abrir **SPEC-021–026** en paralelo — cohort extraction, DR drill, y módulos restantes de plataforma core sobre SPECs 015–020 ya operativas.
 
 ---
 
