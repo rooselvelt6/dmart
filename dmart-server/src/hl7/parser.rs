@@ -35,7 +35,7 @@ impl std::fmt::Display for Hl7Error {
 }
 
 /// Fabricante del monitor, detectado por el emisor en MSH-3/MSH-4.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum MonitorSource {
     Mindray,
     Philips,
@@ -53,7 +53,7 @@ impl MonitorSource {
 }
 
 /// Un signo vital con su código LOINC (cuando es mapeable).
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Vital {
     pub loinc: Option<String>,
     pub name: String,
@@ -74,7 +74,7 @@ pub enum VitalKind {
 }
 
 /// Mensaje ORU^R01 parseado.
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct VitalsMessage {
     pub message_id: String,
     pub sender: String,

@@ -17,6 +17,7 @@ dmart-shared = { path = "../dmart-shared" }
 # Web framework
 axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["full"] }
+cel = "0.12"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace", "set-header"] }
 futures-util = "0.3"

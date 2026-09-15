@@ -138,23 +138,24 @@ curl -f http://localhost:3030/obs/health
 | 012 | Production staging compose | — | — | ✅ |
 | **013** | **FHIR R4 Bundle ingestion** | `5143791` | 4 | 0/0 |
 | **014** | **Early-Warning Streaming (EWS)** | `5143791` | 4 | 0/0 |
+| **015** | **Patient Timeline API (event sourcing)** | `—` | 5 | 0/0 |
+| **016** | **Clinical Decision Support (FHIR PlanDefinition)** | `—` | 4 | 0/0 |
 | 027 | Coverage gate CI (llvm-cov ≥ 60 %) | — | — | ✅ |
 | 028 | Clinical reference vectors (conformance) | — | 38 | ✅ |
 | 029 | Score fingerprint auditability | — | — | ✅ |
 | 030 | Retention / downsampling | — | — | ✅ |
 | **031** | **Bin/lib HL7 dedupe → 0 dead-code** | `bfecaf0` | 63 | 0/0 |
 
-**Métricas globales:** **146 tests** pasando · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
+**Métricas globales:** **150 tests** pasando (65 lib + 85 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
 
-### Backlog pendiente (14 SPECs numeradas)
+### Backlog pendiente (12 SPECs numeradas)
 
 | Rango | Cuenta | Próxima acción |
 |-------|--------|----------------|
-| **015–016** | 2 | **Patient Timeline API** (event sourcing) + **Clinical Decision Support** (FHIR PlanDefinition + reglas) |
 | 017–026 | 10 | Core platform: multi-tenancy, tele-ICU, device registry, alert escalation, data quality, cohort extraction, DR drill |
 | 032–033 | 2 | ML serving ONNX/WASM + Patient similarity engine (embeddings) |
 
-**Próximo paso natural:** abrir **SPEC-015 + 016 en paralelo** — extienden `api/patients` + `scales`/`ml` ya existentes, alto valor clínico, sin romper gates actuales.
+**Próximo paso natural:** abrir **SPEC-017–026** en paralelo — build platform core sobre el motor CDS (SPEC-016) ya operativo.
 
 ---
 

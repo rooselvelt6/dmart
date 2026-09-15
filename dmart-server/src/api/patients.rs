@@ -1,10 +1,13 @@
 use crate::auth::Claims;
 use crate::db as db_ops;
 use crate::db::Database;
+use crate::patient_timeline::{
+    TimelineQuery, TimelineResponse, query_timeline, to_fhir_history_bundle,
+};
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode, header},
     response::IntoResponse,
 };
 use dmart_shared::models::*;
@@ -313,5 +316,57 @@ pub fn calculate_age(fecha_nacimiento: &str) -> u8 {
         years.min(150) as u8
     } else {
         0
+    }
+}
+
+// GET /api/patients/:id/timeline
+pub async fn patient_timeline(
+    State(db): State<Database>,
+    Path(id): Path<String>,
+    Query(query): Query<TimelineQuery>,
+    headers: HeaderMap,
+    claims: Claims,
+) -> impl IntoResponse {
+    if let Some(audit) = crate::audit::audit() {
+        let _ = audit
+            .log_patient_access(
+                &claims.sub,
+                &claims.username,
+                &id,
+                crate::audit::AuditAction::Read,
+                true,
+            )
+            .await;
+    }
+
+    let wants_fhir = headers
+        .get(header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.contains("application/fhir+json"))
+        .unwrap_or(false);
+
+    match query_timeline(&db, &id, query).await {
+        Ok(response) => {
+            if wants_fhir {
+                return (
+                    StatusCode::OK,
+                    [(header::CONTENT_TYPE, "application/fhir+json")],
+                    Json(to_fhir_history_bundle(&response.events)),
+                )
+                    .into_response();
+            }
+            (
+                StatusCode::OK,
+                Json(dmart_shared::models::ApiResponse::ok(response)),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(dmart_shared::models::ApiResponse::<TimelineResponse>::err(
+                e.to_string(),
+            )),
+        )
+            .into_response(),
     }
 }

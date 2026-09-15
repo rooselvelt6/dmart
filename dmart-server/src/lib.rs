@@ -10,6 +10,8 @@ pub mod api;
 pub mod audit;
 pub mod auth;
 pub mod cache;
+#[allow(dead_code)] // SPEC-016: Clinical Decision Support rules (ejercitado por test cds_rules)
+pub mod cds_rules;
 pub mod crypto;
 pub mod db;
 #[allow(dead_code)] // SPEC-014: Early-Warning Streaming EWS (ejercitado por test ews_streaming)
@@ -26,6 +28,8 @@ pub mod mfa;
 pub mod middleware;
 pub mod migrations;
 pub mod observability;
+#[allow(dead_code)] // SPEC-015: Patient Timeline API (ejercitado por test patient_timeline)
+pub mod patient_timeline;
 pub mod rbac;
 pub mod realtime;
 pub mod security;

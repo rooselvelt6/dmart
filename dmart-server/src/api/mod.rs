@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod auth;
+pub mod cds;
 pub mod diagnosticos;
 pub mod export;
 pub mod fhir;
@@ -170,6 +171,10 @@ pub fn build_api_router(
                 .delete(patients::delete_patient),
         )
         .route("/patients/{id}/egreso", post(patients::egreso_paciente))
+        .route("/patients/{id}/timeline", get(patients::patient_timeline))
+        // Clinical Decision Support
+        .route("/cds/plans", get(cds::list_plans))
+        .route("/cds/evaluate", post(cds::evaluate_cds))
         // Measurements (registro completo)
         .route(
             "/patients/{id}/measurements",
