@@ -7,6 +7,31 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-029 + SPEC-030: Fingerprint de Scores y Retención/Downsampling (2026-09-15)
+
+### Agregado
+- **SPEC-029 — Fingerprint y versionado de scores** (auditabilidad médico-legal):
+  - `ALGO_VERSION` (= `CARGO_PKG_VERSION`, semver) y `score_fingerprint(algo, version, inputs)` en `dmart-shared/src/scales.rs`: JSON canónico (claves ordenadas recursivas, compacto) → SHA-256 hex 64.
+  - `Measurement` persiste `algorithm_version` + `fingerprint` (defaults `<legacy>`/`""` para registros históricos); rellenados por `create_measurement` (API) y los 5 handlers de escala (`api/scales.rs`).
+  - Migración `029_measurement_fingerprint.surql`.
+  - `GET /admin/audit/scores` (admin, `audit:read`): recomputa el hash con la versión **guardada** y reporta `reproducible` por medición; legacy marcado "sin fingerprint".
+  - Tests: 6 (4 unit + 2 proptest en `scales.rs`, 2 sobre `score_audit`).
+
+- **SPEC-030 — Retención y downsampling**:
+  - `dmart-server/src/retention.rs`: downsampling `measurements` raw → `measurements_hourly` / `measurements_daily` (AVG/MIN/MAX de los 5 scores + `count`), UPSERT idempotente por bucket `patient_id#bucket`, keyset pagination (10k/batch), purga raw según `RETENTION_RAW_DAYS` y hourly según `RETENTION_HOURLY_MONTHS`, guard de disco crítico (statvfs <10%), trail en `retention_jobs`. Agregados sin PHI identificable.
+  - `spawn_retention_job()` diario tokio, no-op salvo `RETENTION_ENABLED=true` (default off).
+  - API admin: `POST /admin/retention/run`, `GET /admin/retention/config`, `GET /admin/retention/status`.
+  - Migración `030_measurements_downsample.surql`.
+  - Tests: 4 módulo (agregación+purga, idempotencia/upsert, defaults, tablas idempotentes).
+
+- **Wiring**: `pub mod retention;` en `lib.rs`, rutas en `api/mod.rs` (`.merge(retention::routes())`), migración `030` registrada en `migrations.rs` (catálogo → 11 versiones).
+
+### Notas
+- Gate verde: `cargo test -p dmart-server --lib` **71 passed** · `clippy -D warnings` **0/0** (lib+bin) · `api_tests` **31 passed** · `hl7_integration` **32 passed**.
+- Backlog load k6 `/api/stats?granularity=hourly` y restore-test SPEC-030 quedan pendientes.
+
+---
+
 ## [Unreleased] — SPEC-027: Coverage Gate en CI (cargo llvm-cov)
 
 ### Agregado

@@ -1795,6 +1795,7 @@ dependencies = [
  "http-body-util",
  "image",
  "jsonwebtoken",
+ "libc",
  "metrics 0.22.4",
  "metrics-exporter-prometheus",
  "metrics-process",
@@ -1853,6 +1854,7 @@ dependencies = [
  "rand 0.8.8",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum",
  "uuid",
 ]

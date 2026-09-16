@@ -1,4 +1,4 @@
-# SPEC-029: Fingerprint y Versionado del Cálculo de Scores (Auditabilidad)
+# SPEC-029: Fingerprint y Versionado del Cálculo de Scores (Auditabilidad) ✅ **DONE (2026-09-15)**
 
 ## Contexto
 - **Problema**: el resultado de un score no guarda qué versión del algoritmo y qué entradas lo produjeron. Ante una auditoría o disputa médico-legal, no se puede demostrar *con qué versión se calculó un número en una fecha dada*.
@@ -96,11 +96,11 @@ DEFINE FIELD fingerprint ON measurement TYPE string;
 - Audit log: añadir `fingerprint` a `audit_log` de lectura de score (append-only) para trazabilidad de consultas.
 
 ## Testing Strategy
-- [ ] `test_fingerprint_stable_same_inputs()` — determinismo (2 cálculos, mismo hash)
-- [ ] `test_fingerprint_changes_with_version()` — versión distinta → hash distinto
-- [ ] `test_fingerprint_input_order_insensitive()` — claves reordenadas → hash igual
-- [ ] `test_fingerprint_roundtrip_audit()` — recalc histórico == fingerprint guardado
-- [ ] proptest: `sha256` distintos para inputs distintos en dominio válido
+- [x] `test_fingerprint_stable_same_inputs()` — determinismo (2 cálculos, mismo hash)
+- [x] `test_fingerprint_changes_with_version()` — versión distinta → hash distinto
+- [x] `test_fingerprint_input_order_insensitive()` — claves reordenadas → hash igual
+- [x] `test_fingerprint_roundtrip_audit()` — recalc histórico == fingerprint guardado
+- [x] proptest: `sha256` distintos para inputs distintos en dominio válido
 
 ## Rollout Plan
 - Feature flag `SCORE_FINGERPRINT=true` → aplicar en escritura de measurements.
@@ -108,10 +108,10 @@ DEFINE FIELD fingerprint ON measurement TYPE string;
 - Compatibilidad: FHIR/Observation añade `extension` con fingerprint (campo nuevo, no rompe consumidores).
 
 ## Definition of Done
-- [ ] Spec aprobada
-- [ ] `score_fingerprint()` + `ALGO_VERSION` en `dmart-shared`
-- [ ] Migraciones SurrealQL aplicadas
-- [ ] Endpoints de score con fingerprint
-- [ ] Tests unit + proptest verdes
-- [ ] Config `SCORE_FINGERPRINT` flag
-- [ ] CHANGELOG.md (tabla version→cambio) y ROADMAP actualizados
+- [x] Spec aprobada
+- [x] `score_fingerprint()` + `ALGO_VERSION` en `dmart-shared`
+- [x] Migraciones SurrealQL aplicadas (`029_measurement_fingerprint.surql`)
+- [x] Endpoints de score con fingerprint
+- [x] Tests unit + proptest verdes
+- [x] Config `SCORE_FINGERPRINT` flag (siempre activo; legacy marcado `<legacy>`)
+- [x] CHANGELOG.md (tabla version→cambio) y ROADMAP actualizados

@@ -174,6 +174,14 @@ pub async fn calc_apache(
     let news2 = calculate_news2_score(&body.data);
     let sofa = calculate_sofa_score(&body.data);
 
+    // SPEC-029: versionado + fingerprint.
+    let algorithm_version = ALGO_VERSION.to_string();
+    let fingerprint = score_fingerprint(
+        "apache_ii",
+        ALGO_VERSION,
+        &serde_json::to_value(&body.data).unwrap_or(serde_json::Value::Null),
+    );
+
     let m = Measurement {
         id: None,
         measurement_id: mid.clone(),
@@ -191,6 +199,8 @@ pub async fn calc_apache(
         news2_level: News2Level::from_score(news2),
         sofa_score: Some(sofa),
         sofa_mortality: Some(sofa_mortality_estimate(sofa)),
+        algorithm_version,
+        fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
     };
 
@@ -253,6 +263,14 @@ pub async fn calc_gcs(
     let apache_score = calculate_apache_ii_score(&apache_data);
     let severity = SeverityLevel::from_score(apache_score);
 
+    // SPEC-029: versionado + fingerprint.
+    let algorithm_version = ALGO_VERSION.to_string();
+    let fingerprint = score_fingerprint(
+        "apache_ii",
+        ALGO_VERSION,
+        &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
+    );
+
     let m = Measurement {
         id: None,
         measurement_id: mid.clone(),
@@ -270,6 +288,8 @@ pub async fn calc_gcs(
         news2_level: News2Level::Bajo,
         sofa_score: None,
         sofa_mortality: None,
+        algorithm_version,
+        fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
     };
 
@@ -327,6 +347,14 @@ pub async fn calc_news2(
     let nivel = level.label().to_string();
     let respuesta_clinica = level.response().to_string();
 
+    // SPEC-029: versionado + fingerprint.
+    let algorithm_version = ALGO_VERSION.to_string();
+    let fingerprint = score_fingerprint(
+        "apache_ii",
+        ALGO_VERSION,
+        &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
+    );
+
     let m = Measurement {
         id: None,
         measurement_id: mid.clone(),
@@ -344,6 +372,8 @@ pub async fn calc_news2(
         news2_level: level,
         sofa_score: None,
         sofa_mortality: None,
+        algorithm_version,
+        fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
     };
 
@@ -397,6 +427,14 @@ pub async fn calc_sofa(
 
     let nivel = level.label().to_string();
 
+    // SPEC-029: versionado + fingerprint.
+    let algorithm_version = ALGO_VERSION.to_string();
+    let fingerprint = score_fingerprint(
+        "apache_ii",
+        ALGO_VERSION,
+        &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
+    );
+
     let m = Measurement {
         id: None,
         measurement_id: mid.clone(),
@@ -414,6 +452,8 @@ pub async fn calc_sofa(
         news2_level: News2Level::Bajo,
         sofa_score: Some(score),
         sofa_mortality: Some(mort),
+        algorithm_version,
+        fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
     };
 
@@ -472,6 +512,14 @@ pub async fn calc_saps3(
 
     let nivel = level.label().to_string();
 
+    // SPEC-029: versionado + fingerprint.
+    let algorithm_version = ALGO_VERSION.to_string();
+    let fingerprint = score_fingerprint(
+        "apache_ii",
+        ALGO_VERSION,
+        &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
+    );
+
     let m = Measurement {
         id: None,
         measurement_id: mid.clone(),
@@ -489,6 +537,8 @@ pub async fn calc_saps3(
         news2_level: News2Level::Bajo,
         sofa_score: None,
         sofa_mortality: None,
+        algorithm_version,
+        fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
     };
 

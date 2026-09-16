@@ -40,6 +40,9 @@ csv = "1.3"
 qrcode = "0.14"
 image = "0.25"
 
+# Filesystem (SPEC-030: statvfs para el chequeo de disco crítico de retención)
+libc = "0.2"
+
 # Environment
 dotenvy = "0.15"
 

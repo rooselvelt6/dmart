@@ -38,6 +38,8 @@ pub mod observability;
 pub mod patient_timeline;
 pub mod rbac;
 pub mod realtime;
+#[allow(dead_code)] // SPEC-030: Retención/downsampling (job + API; ejercitado por test retention)
+pub mod retention;
 pub mod security;
 pub mod server_ingest;
 #[allow(dead_code)] // SPEC-020: Tele-ICU (ejercitado por test teleicu)

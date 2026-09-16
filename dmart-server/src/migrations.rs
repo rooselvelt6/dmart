@@ -55,6 +55,14 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "020_teleicu",
         include_str!("../migrations/020_teleicu.surql"),
     ),
+    (
+        "029_measurement_fingerprint",
+        include_str!("../migrations/029_measurement_fingerprint.surql"),
+    ),
+    (
+        "030_measurements_downsample",
+        include_str!("../migrations/030_measurements_downsample.surql"),
+    ),
 ];
 
 pub async fn applied_versions(db: &Surreal<Db>) -> Result<Vec<u64>> {
@@ -117,7 +125,7 @@ mod tests {
         assert_eq!(first.len(), MIGRATIONS.len());
         let mut applied = applied_versions(&db).await.expect("applied");
         applied.sort_unstable();
-        assert_eq!(applied, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(applied, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 
         let second = run_migrations(&db).await.expect("second run");
         assert!(second.is_empty(), "no pending migrations after first run");

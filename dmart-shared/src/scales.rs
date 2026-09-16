@@ -18,6 +18,51 @@ use crate::models::{ApacheIIData, GcsData};
 /// Organ Failure Assessment) score to describe organ dysfunction/failure.
 /// Intensive Care Med 1996; 22(6):707-10.
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+
+/// Versión semver del algoritmo de cálculo de scores (SPEC-029).
+/// - `major`: cambio que rompe el cálculo (incompatibilidad de scores)
+/// - `minor`: corrección que altera valores en >1 pt
+/// - `patch` : refactor sin cambio de valor
+pub const ALGO_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Normaliza un `Value` a una forma canónica: claves de objetos ordenadas
+/// lexicográficamente y sin espacios de formato. De este modo el hash es
+/// insensible al orden/espaciado del JSON de entrada.
+fn canonicalize_value(v: &Value) -> Value {
+    match v {
+        Value::Object(map) => {
+            let sorted: BTreeMap<String, Value> = map
+                .iter()
+                .map(|(k, val)| (k.clone(), canonicalize_value(val)))
+                .collect();
+            Value::Object(Map::from_iter(sorted))
+        }
+        Value::Array(arr) => Value::Array(arr.iter().map(canonicalize_value).collect()),
+        other => other.clone(),
+    }
+}
+
+/// Fingerprint auditable (SPEC-029) de un cálculo de score: `SHA-256` (hex,
+/// 64 chars) de `"<algo>:<version>:<inputs canónicos>"`.
+///
+/// `inputs_normalized_json` debe ser el JSON de las entradas YA normalizadas
+/// (0-clip) que alimentaron al algoritmo. El hash es determinista e insensible
+/// al orden de campos / espacios del JSON. No es HMAC: aporta integridad y
+/// reproducibilidad, no confidencialidad.
+pub fn score_fingerprint(
+    algo: &str,
+    version: &str,
+    inputs_normalized_json: &serde_json::Value,
+) -> String {
+    let canonical = serde_json::to_string(&canonicalize_value(inputs_normalized_json))
+        .expect("serialize canonical inputs");
+    let payload = format!("{algo}:{version}:{canonical}");
+    let digest = Sha256::digest(payload.as_bytes());
+    format!("{digest:x}")
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APS — Acute Physiology Score (12 variables, max 60 points)
@@ -567,6 +612,64 @@ mod tests {
             "Critical patient mortality should be >= 30%, got: {}%",
             mort
         );
+    }
+
+    // ─── Fingerprint (SPEC-029) ────────────────────────────────────────────
+
+    #[test]
+    fn test_fingerprint_stable_same_inputs() {
+        let inputs = serde_json::json!({
+            "temperatura": 37.0,
+            "gcs_total": 15,
+            "edad": 40,
+            "pao2": null,
+        });
+        let a = score_fingerprint("apache_ii", ALGO_VERSION, &inputs);
+        let b = score_fingerprint("apache_ii", ALGO_VERSION, &inputs);
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64);
+    }
+
+    #[test]
+    fn test_fingerprint_changes_with_version() {
+        let inputs = serde_json::json!({
+            "temperatura": 37.0,
+            "gcs_total": 15,
+            "edad": 40,
+        });
+        let v1 = score_fingerprint("apache_ii", "0.1.0", &inputs);
+        let v2 = score_fingerprint("apache_ii", "0.1.1", &inputs);
+        assert_ne!(v1, v2);
+    }
+
+    #[test]
+    fn test_fingerprint_input_order_insensitive() {
+        let a = serde_json::json!({
+            "b": 2,
+            "a": 1,
+            "nested": {"y": true, "x": null},
+            "arr": [1, 2, { "z": 0, "k": "v" }],
+        });
+        let b = serde_json::json!({
+            "arr": [1, 2, { "k": "v", "z": 0 }],
+            "a": 1,
+            "nested": {"x": null, "y": true},
+            "b": 2,
+        });
+        assert_eq!(
+            score_fingerprint("apache_ii", ALGO_VERSION, &a),
+            score_fingerprint("apache_ii", ALGO_VERSION, &b)
+        );
+    }
+
+    #[test]
+    fn test_fingerprint_apache_data_serialization_roundtrip() {
+        let data = normal_patient();
+        let inputs = serde_json::to_value(&data).expect("serialize ApacheIIData");
+        let a = score_fingerprint("apache_ii", ALGO_VERSION, &inputs);
+        let inputs_again = serde_json::to_value(&data).expect("serialize ApacheIIData");
+        let b = score_fingerprint("apache_ii", ALGO_VERSION, &inputs_again);
+        assert_eq!(a, b);
     }
 }
 
@@ -1295,6 +1398,28 @@ mod proptests {
             prop_assert!(breakdown.box1 <= 42);
             prop_assert!(breakdown.box2 <= 14);
             prop_assert!(breakdown.box3 <= 48);
+        }
+
+        #[test]
+        fn fingerprint_is_stable_and_hex64(data in arb_apache_data()) {
+            let inputs = serde_json::to_value(&data).expect("serialize");
+            let fp = score_fingerprint("apache_ii", ALGO_VERSION, &inputs);
+            prop_assert_eq!(fp.len(), 64, "fingerprint must be 64 hex chars");
+            prop_assert!(fp.chars().all(|c| c.is_ascii_hexdigit()));
+            prop_assert_eq!(score_fingerprint("apache_ii", ALGO_VERSION, &inputs), fp);
+        }
+
+        #[test]
+        fn fingerprint_distinct_for_distinct_inputs(a in arb_apache_data(), b in arb_apache_data()) {
+            let ja = serde_json::to_value(&a).expect("serialize a");
+            let jb = serde_json::to_value(&b).expect("serialize b");
+            if ja != jb {
+                prop_assert_ne!(
+                    score_fingerprint("apache_ii", ALGO_VERSION, &ja),
+                    score_fingerprint("apache_ii", ALGO_VERSION, &jb),
+                    "distinct inputs must produce distinct fingerprints"
+                );
+            }
         }
     }
 }

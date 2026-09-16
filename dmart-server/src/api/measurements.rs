@@ -9,9 +9,9 @@ use axum::{
 use chrono::Utc;
 use dmart_shared::models::*;
 use dmart_shared::scales::{
-    calculate_apache_ii_score, calculate_gcs_score, calculate_news2_score,
+    ALGO_VERSION, calculate_apache_ii_score, calculate_gcs_score, calculate_news2_score,
     calculate_saps_iii_score, calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction,
-    sofa_mortality_estimate,
+    score_fingerprint, sofa_mortality_estimate,
 };
 use uuid::Uuid;
 
@@ -34,6 +34,12 @@ pub async fn create_measurement(
     let sofa_score = calculate_sofa_score(&body.apache_data);
     let sofa_mort = sofa_mortality_estimate(sofa_score);
 
+    // SPEC-029: versionado + fingerprint de los inputs ya normalizados.
+    let algorithm_version = ALGO_VERSION.to_string();
+    let normalized_inputs =
+        serde_json::to_value(&body.apache_data).unwrap_or(serde_json::Value::Null);
+    let fingerprint = score_fingerprint("apache_ii", ALGO_VERSION, &normalized_inputs);
+
     let measurement = Measurement {
         id: None,
         measurement_id: Uuid::new_v4().to_string(),
@@ -51,6 +57,8 @@ pub async fn create_measurement(
         news2_level,
         sofa_score: Some(sofa_score),
         sofa_mortality: Some(sofa_mort),
+        algorithm_version,
+        fingerprint,
         notas: body.notas,
     };
 

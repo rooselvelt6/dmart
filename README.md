@@ -146,11 +146,11 @@ curl -f http://localhost:3030/obs/health
 | **020** | **Tele-ICU** | `—` | 8 | 0/0 |
 | 027 | Coverage gate CI (llvm-cov ≥ 60 %) | — | — | ✅ |
 | 028 | Clinical reference vectors (conformance) | — | 38 | ✅ |
-| 029 | Score fingerprint auditability | — | — | ✅ |
-| 030 | Retention / downsampling | — | — | ✅ |
+| **029** | **Score fingerprint auditability** | `—` | 6 | 0/0 |
+| **030** | **Retention / downsampling** | `—` | 4 | 0/0 |
 | **031** | **Bin/lib HL7 dedupe → 0 dead-code** | `bfecaf0` | 63 | 0/0 |
 
-**Métricas globales:** **193 tests** pasando (65 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
+**Métricas globales:** **199 tests** pasando (71 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
 
 ### Backlog pendiente (8 SPECs numeradas)
 

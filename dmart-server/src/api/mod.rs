@@ -11,8 +11,10 @@ pub mod monitores;
 pub mod patients;
 pub mod quality;
 pub mod registry;
+pub mod retention;
 pub mod sandbox;
 pub mod scales;
+pub mod score_audit;
 pub mod stats;
 pub mod teleicu;
 
@@ -161,6 +163,10 @@ pub fn build_api_router(
             "/admin/audit/cleanup",
             post(admin::run_audit_retention_cleanup),
         )
+        // Auditoría de fingerprints de scores (SPEC-029)
+        .route("/admin/audit/scores", get(score_audit::verify_scores))
+        // Retención / downsampling (SPEC-030)
+        .merge(retention::routes())
         // Auth
         .nest("/auth", auth::router())
         // Patients

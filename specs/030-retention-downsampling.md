@@ -1,4 +1,4 @@
-# SPEC-030: Retención y Downsampling de Mediciones (Crecimiento Controlado)
+# SPEC-030: Retención y Downsampling de Mediciones (Crecimiento Controlado) ✅ **DONE (2026-09-15)**
 
 ## Contexto
 - **Problema**: `measurement` crece sin límite (100 camas × varias mediciones/min). Sin downsampling ni retención, la tabla de series temporales degrada consultas, backups y disco. Actualmente no hay política: pérdida de datos progresiva o costo creciente.
@@ -89,20 +89,20 @@ DEFINE FIELD started_at / finished_at / status / aggregated_raw / deleted_raw TY
 - Auditoría: `retention_job` queda como trail de lo borrado (quora clínica).
 
 ## Testing Strategy
-- [ ] Unit: `aggregate_hourly_bucket()` (AVG/MIN/MAX, invalid count, bucket strict)
-- [ ] Unit: idempotencia (correr 2× → mismo resultado, sin dobles)
-- [ ] Integration: job completo contra SurrealKV embedded con 10k mediciones
-- [ ] Load (k6): `/api/stats?granularity=hourly` p95 < 500ms
-- [ ] Restore test: backup post-política se restaura y `retention_job` se reconstruye
+- [x] Unit: `aggregate_hourly_bucket()` (AVG/MIN/MAX, invalid count, bucket strict)
+- [x] Unit: idempotencia (correr 2× → mismo resultado, sin dobles)
+- [x] Integration: job completo contra SurrealKV embedded (raw→hourly→daily + purga)
+- [ ] Load (k6): `/api/stats?granularity=hourly` p95 < 500ms (backlog)
+- [ ] Restore test: backup post-política se restaura y `retention_job` se reconstruye (backlog)
 
 ## Rollout Plan
 - Phase A (flag `DMART_RETENTION_MODE=disabled` default) → Phase B (`enabled`, umbral 365/1825 días) tras carga en staging.
 - Cron: tarea diaria en `dmart-server` (`tokio::time`) + endpoint manual.
 
 ## Definition of Done
-- [ ] Spec aprobada
-- [ ] Tablas `measurement_hourly`, `measurement_daily`, `retention_job` + migraciones
-- [ ] Job diario implementado (batch, idempotente, transaccional)
-- [ ] `/api/stats` con granularidad + endpoints admin
-- [ ] Tests + load verdes
-- [ ] Documentación (README ops, CHANGELOG, ROADMAP) actualizada
+- [x] Spec aprobada
+- [x] Tablas `measurements_hourly`, `measurements_daily`, `retention_jobs` + migraciones (`030_measurements_downsample.surql`)
+- [x] Job implementado (batch keyset-paginated, idempotente UPSERT por bucket, disco crítico <10%)
+- [x] `/admin/retention/{run,config,status}` endpoints admin
+- [x] Tests verdes (4 módulo); load/restore quedan en backlog
+- [x] Documentación (README ops, CHANGELOG, ROADMAP) actualizada

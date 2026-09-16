@@ -625,6 +625,12 @@ impl GcsData {
 // Measurement (medición diaria)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Valor por defecto de `algorithm_version` para mediciones históricas
+/// (previas a la migración 029) que no tienen fingerprint.
+fn default_legacy_algorithm_version() -> String {
+    "<legacy>".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Measurement {
     #[serde(skip_serializing, skip_deserializing, default)]
@@ -664,6 +670,12 @@ pub struct Measurement {
     #[serde(default)]
     pub sofa_mortality: Option<f32>,
 
+    // SPEC-029: versionado y fingerprint auditable del cálculo de scores.
+    #[serde(default = "default_legacy_algorithm_version")]
+    pub algorithm_version: String,
+    #[serde(default)]
+    pub fingerprint: String,
+
     #[serde(default)]
     pub notas: String,
 }
@@ -671,8 +683,8 @@ pub struct Measurement {
 impl Measurement {
     pub fn new(patient_id: &str, apache: ApacheIIData, gcs: GcsData) -> Self {
         use crate::scales::{
-            calculate_apache_ii_score, calculate_news2_score, calculate_saps_iii_score,
-            calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction,
+            ALGO_VERSION, calculate_apache_ii_score, calculate_news2_score, calculate_saps_iii_score,
+            calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction, score_fingerprint,
             sofa_mortality_estimate,
         };
         let apache_score = calculate_apache_ii_score(&apache);
@@ -688,6 +700,12 @@ impl Measurement {
 
         let sofa_score = calculate_sofa_score(&apache);
         let sofa_mortality = sofa_mortality_estimate(sofa_score);
+
+        // SPEC-029: versionado + fingerprint de los inputs ya normalizados.
+        let algorithm_version = ALGO_VERSION.to_string();
+        let normalized_inputs =
+            serde_json::to_value(&apache).unwrap_or(serde_json::Value::Null);
+        let fingerprint = score_fingerprint("apache_ii", ALGO_VERSION, &normalized_inputs);
 
         Self {
             id: None,
@@ -706,6 +724,8 @@ impl Measurement {
             news2_level,
             sofa_score: Some(sofa_score),
             sofa_mortality: Some(sofa_mortality),
+            algorithm_version,
+            fingerprint,
             notas: String::new(),
         }
     }
