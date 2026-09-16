@@ -7,7 +7,25 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
-## [Unreleased] — SPEC-021..026 + SPEC-032..033: 8 specs SDD de Fase 8 y ML serving (2026-09-16)
+## [Unreleased] — SPEC-021..026 + SPEC-031..035: Fase 8 implementada — todas las SPECs completadas (2026-09-16)
+
+### Agregado
+- **SPEC-021 — Kubernetes Helm Chart (HA)**: `helm/dmart/` con Deployment server, StatefulSet SurrealDB, HPA, Ingress, NetworkPolicy, PDB, ServiceAccounts y secrets.
+- **SPEC-022 — GitOps ArgoCD/Flux**: `.argocd/` (AppProject + Application) y `flux/` (GitRepository + HelmRelease + Kustomization), workflow de sync `gitops-sync.yml`.
+- **SPEC-023 — SurrealDB Cluster**: `docker-compose.cluster.yml` (3 nodos) + `docs/SURREALDB_CLUSTER.md`.
+- **SPEC-024 — Disaster Recovery**: `scripts/dr_backup.sh`, `dr_restore.sh`, `dr_verify.sh`, `dr_drill.sh` (test de restore cubierto).
+- **SPEC-025 — Multi-tenancy**: tabla `tenant`, `tenant_id` en JWT `Claims` y en `User`/`UserInfo`/`StaffInfo`/`Patient`/`Measurement`; filtrado por tenant en pacientes; `GET/POST /admin/tenants`, `POST /admin/tenants/{id}/impersonate`; RBAC `tenants:read`/`tenants:manage`; migración `025_multi_tenancy.surql`.
+- **SPEC-026 — Blue/Green + Canary Deploy**: `scripts/deploy_blue_green.sh`, `deploy_canary.sh`, `deploy_rollback.sh`, `deploy_status.sh`.
+- **SPEC-032 — ML Serving**: `ml_serving.rs` (registry DashMap, `Predictor` trait pluggable, backend `StatPredictor` determinístico), API `/ml/predict`, `/ml/predict_batch`, `/ml/models`, `/ml/models/swap`; métricas `ml_inference_*`, `ml_model_loaded`, `ml_batch_size`.
+- **SPEC-033 — Patient Similarity Engine**: `similarity.rs` (embeddings clínicos 128d por feature-hashing, cosine, top-K con scope tenant), API `/ml/similarity/search|explain|status|embeddings/regenerate`; métricas `ml_embedding_generated_*`, `ml_similarity_search_*`, `ml_vector_index_size`.
+- **SPEC-034 — HIPAA/NIST/ISO 27001 Evidence Pack**: `docs/compliance/` (control catalog, data flows, incidents, legal) + `scripts/compliance_generate.sh`/`compliance_check.sh`.
+- **SPEC-035 — Cost Optimization**: `scripts/cost_*.sh` (report, forecast, idle detect, rightsize).
+
+### Notas
+- **Fase 8 completa: SPECs 001–035 todas implementadas** (2026-09-16).
+- Gate verde: **210 tests** (82 lib + 128 integración) · `clippy -D warnings` 0/0 (lib + bin).
+
+---
 
 ### Agregado
 - **Specs SDD escritas** (pendientes de implementación, alineadas a acuerdo Fase 8):

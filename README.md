@@ -149,25 +149,22 @@ curl -f http://localhost:3030/obs/health
 | **029** | **Score fingerprint auditability** | `—` | 6 | 0/0 |
 | **030** | **Retention / downsampling** | `—` | 4 | 0/0 |
 | **031** | **Bin/lib HL7 dedupe → 0 dead-code** | `bfecaf0` | 63 | 0/0 |
+| **021** | **Kubernetes Helm Chart (HA production)** | `81101b5` | — | ✅ |
+| **022** | **GitOps ArgoCD/Flux (sync main→prod)** | `81101b5` | — | ✅ |
+| **023** | **SurrealDB Cluster (3+ nodos, HA)** | `81101b5` | — | ✅ |
+| **024** | **Disaster Recovery (RPO<1h, RTO<4h)** | `81101b5` | 3 | 0/0 |
+| **025** | **Multi-tenancy (aislamiento de datos)** | `81101b5` | 3 | 0/0 |
+| **026** | **Blue/Green + Canary Deploy** | `81101b5` | — | ✅ |
+| **032** | **ML Serving ONNX/WASM (inferencia)** | `81101b5` | 5 | 0/0 |
+| **033** | **Patient Similarity Engine** | `81101b5` | 3 | 0/0 |
+| **034** | **HIPAA/NIST/ISO 27001 Evidence Pack** | `81101b5` | — | ✅ |
+| **035** | **Cost Optimization (right-sizing)** | `81101b5` | — | ✅ |
 
-**Métricas globales:** **199 tests** pasando (71 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
+**Métricas globales:** **210 tests** pasando (82 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027) · SPECs 001–035 **todas completadas** ✅
 
-### Backlog pendiente (10 SPECs escritas — pendientes de implementación)
+### Backlog pendiente
 
-| Spec | Título | Estado |
-|------|--------|--------|
-| **021** | Kubernetes Helm Chart (HA production) | 📋 SDD escrita 2026-09-16 |
-| **022** | GitOps ArgoCD/Flux (sync main→prod) | 📋 SDD escrita 2026-09-16 |
-| **023** | SurrealDB Cluster (3+ nodos, HA) | 📋 SDD escrita 2026-09-16 |
-| **024** | Disaster Recovery (RPO<1h, RTO<4h) | 📋 SDD escrita 2026-09-16 |
-| **025** | Multi-tenancy (aislamiento datos) | 📋 SDD escrita 2026-09-16 |
-| **026** | Blue/Green + Canary Deploy (zero-downtime) | 📋 SDD escrita 2026-09-16 |
-| **032** | ML Serving ONNX/WASM (inferencia producción) | 📋 SDD escrita 2026-09-16 |
-| **033** | Patient Similarity Engine (embeddings clínicos) | 📋 SDD escrita 2026-09-16 |
-| **034** | HIPAA/NIST/ISO 27001 Evidence Pack | 📋 SDD escrita 2026-09-16 |
-| **035** | Cost Optimization (right-sizing) | 📋 SDD escrita 2026-09-16 |
-
-**Nota:** Fase 8 (021–026) congelada por acuerdo de arquitecto 2026-09-13 hasta contrato/piloto hospitalario real. Las specs están listas para SDD (review → implement → verify).
+Ninguna pendiente — **SPECs 001–035 completadas** (2026-09-16).
 
 ---
 
