@@ -273,6 +273,10 @@ pub struct Patient {
     #[serde(default)]
     pub patient_id: String,
 
+    // Tenant (hospital) al que pertenece el paciente (SPEC-025).
+    #[serde(default = "default_tenant_id")]
+    pub tenant_id: String,
+
     // Identificación
     #[serde(default)]
     pub nombre: String,
@@ -381,6 +385,7 @@ impl Patient {
         Self {
             id: None,
             patient_id: Uuid::new_v4().to_string(),
+            tenant_id: default_tenant_id(),
             nombre: String::new(),
             apellido: String::new(),
             sexo: Sexo::Masculino,
@@ -678,6 +683,9 @@ pub struct Measurement {
 
     #[serde(default)]
     pub notas: String,
+
+    #[serde(default = "default_tenant_id")]
+    pub tenant_id: String,
 }
 
 impl Measurement {
@@ -727,6 +735,7 @@ impl Measurement {
             algorithm_version,
             fingerprint,
             notas: String::new(),
+            tenant_id: default_tenant_id(),
         }
     }
 }
@@ -827,6 +836,11 @@ impl UserRole {
     }
 }
 
+/// Tenant por defecto en modo single-tenant (SPEC-025, feature flag OFF).
+pub fn default_tenant_id() -> String {
+    "default".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub user_id: String,
@@ -836,6 +850,9 @@ pub struct User {
     pub nombre: String,
     pub activo: bool,
     pub created_at: String,
+    /// Slug del hospital/tenant al que pertenece el usuario (SPEC-025).
+    #[serde(default = "default_tenant_id")]
+    pub tenant_id: String,
 }
 
 impl Default for User {
@@ -848,6 +865,7 @@ impl Default for User {
             nombre: String::new(),
             activo: true,
             created_at: Utc::now().to_rfc3339(),
+            tenant_id: default_tenant_id(),
         }
     }
 }
@@ -870,6 +888,8 @@ pub struct UserInfo {
     pub username: String,
     pub rol: UserRole,
     pub nombre: String,
+    #[serde(default = "default_tenant_id")]
+    pub tenant_id: String,
 }
 
 impl From<&User> for UserInfo {
@@ -879,6 +899,7 @@ impl From<&User> for UserInfo {
             username: u.username.clone(),
             rol: u.rol.clone(),
             nombre: u.nombre.clone(),
+            tenant_id: u.tenant_id.clone(),
         }
     }
 }
@@ -901,6 +922,8 @@ pub struct StaffInfo {
     pub rol: UserRole,
     pub nombre: String,
     pub activo: bool,
+    #[serde(default = "default_tenant_id")]
+    pub tenant_id: String,
 }
 
 impl From<&User> for StaffInfo {
@@ -911,6 +934,7 @@ impl From<&User> for StaffInfo {
             rol: u.rol.clone(),
             nombre: u.nombre.clone(),
             activo: u.activo,
+            tenant_id: u.tenant_id.clone(),
         }
     }
 }

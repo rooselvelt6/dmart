@@ -95,6 +95,48 @@ pub fn register() {
         Unit::Count,
         "Reported model accuracy per model/phase"
     );
+    // SPEC-032: ML Serving ONNX/WASM
+    describe_counter!(
+        "ml_inference_total",
+        Unit::Count,
+        "ML inference calls by model (SPEC-032)"
+    );
+    describe_histogram!(
+        "ml_inference_duration_ms",
+        Unit::Seconds,
+        "ML inference latency per request (SPEC-032)"
+    );
+    describe_gauge!(
+        "ml_model_loaded",
+        Unit::Count,
+        "Active ML model loaded (1=yes, SPEC-032)"
+    );
+    describe_histogram!(
+        "ml_batch_size",
+        Unit::Count,
+        "Batch prediction size (SPEC-032)"
+    );
+    // SPEC-033: Patient Similarity
+    describe_counter!(
+        "ml_embedding_generated_total",
+        Unit::Count,
+        "Patient embeddings generated (SPEC-033)"
+    );
+    describe_counter!(
+        "ml_similarity_search_total",
+        Unit::Count,
+        "Patient similarity searches by k (SPEC-033)"
+    );
+    describe_histogram!(
+        "ml_similarity_search_duration_ms",
+        Unit::Seconds,
+        "Patient similarity search latency (SPEC-033)"
+    );
+    describe_gauge!(
+        "ml_vector_index_size",
+        Unit::Count,
+        "Active embeddings in vector index (SPEC-033)"
+    );
 
     // Realtime / señales
     describe_gauge!(
@@ -217,6 +259,35 @@ pub fn scale_calculated(scale: &str) {
 
 pub fn ml_prediction(model: &str) {
     counter!("ml_predictions_total", "model" => model.to_string()).increment(1);
+}
+
+// ─── ML Serving (SPEC-032) + Patient Similarity (SPEC-033) ──────────────
+
+pub fn ml_inference(model: &str, latency_ms: f64) {
+    counter!("ml_inference_total", "model" => model.to_string()).increment(1);
+    histogram!("ml_inference_duration_ms", "model" => model.to_string()).record(latency_ms / 1000.0);
+}
+
+pub fn ml_model_loaded(model: &str) {
+    gauge!("ml_model_loaded", "model" => model.to_string()).set(1);
+}
+
+pub fn ml_batch(model: &str, size: f64, latency_ms: f64) {
+    histogram!("ml_batch_size", "model" => model.to_string()).record(size);
+    histogram!("ml_inference_duration_ms", "model" => model.to_string(), "batch" => "true").record(latency_ms / 1000.0);
+}
+
+pub fn ml_embedding_generated(model_version: &str) {
+    counter!("ml_embedding_generated_total", "model_version" => model_version.to_string())
+        .increment(1);
+}
+
+pub fn ml_similarity_search(k: usize) {
+    counter!("ml_similarity_search_total", "k" => k.to_string()).increment(1);
+}
+
+pub fn ml_vector_index_size(n: usize) {
+    gauge!("ml_vector_index_size").set(n as i32);
 }
 
 // ─── Realtime / HL7 ──────────────────────────────────────────────────────

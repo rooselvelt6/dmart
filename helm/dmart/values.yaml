@@ -1,0 +1,107 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/ucigtm/dmart-server
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: dmart.hospital.cu
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dmart-tls
+      hosts:
+        - dmart.hospital.cu
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+surrealdb:
+  enabled: true
+  image:
+    repository: surrealdb/surrealdb
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+
+healthcheck:
+  liveness:
+    path: /obs/health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  readiness:
+    path: /obs/health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+env:
+  DMART_PORT: "3000"
+  DMART_DB_PATH: "/app/data/dmart.db"
+  DMART_SURREALDB_URL: "ws://surrealdb-svc:8000/rpc"
+  DMART_SURREALDB_NS: "dmart"
+  DMART_SURREALDB_DB: "dmart"
+  DMART_LOG_LEVEL: "info"
+  DMART_METRICS_ENABLED: "true"
+
+secretEnv:
+  DMART_MASTER_KEY: "changeme"
+  DMART_SURREALDB_USER: "changeme"
+  DMART_SURREALDB_PASS: "changeme"

@@ -1,0 +1,84 @@
+services:
+  surrealdb-node-1:
+    image: surrealdb/surrealdb:latest
+    container_name: surrealdb-node-1
+    command: >
+      surreal start
+      --cluster dmart-cluster
+      --node surrealdb-node-1
+      --bind 0.0.0.0:8000
+      --relationships /data
+      --strict
+      --log info
+    ports:
+      - "8001:8000"
+    volumes:
+      - surrealdb-node-1-data:/data
+    networks:
+      - dmart-cluster-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  surrealdb-node-2:
+    image: surrealdb/surrealdb:latest
+    container_name: surrealdb-node-2
+    command: >
+      surreal start
+      --cluster dmart-cluster
+      --node surrealdb-node-2
+      --bind 0.0.0.0:8000
+      --relationships /data
+      --strict
+      --log info
+    ports:
+      - "8002:8000"
+    volumes:
+      - surrealdb-node-2-data:/data
+    networks:
+      - dmart-cluster-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  surrealdb-node-3:
+    image: surrealdb/surrealdb:latest
+    container_name: surrealdb-node-3
+    command: >
+      surreal start
+      --cluster dmart-cluster
+      --node surrealdb-node-3
+      --bind 0.0.0.0:8000
+      --relationships /data
+      --strict
+      --log info
+    ports:
+      - "8003:8000"
+    volumes:
+      - surrealdb-node-3-data:/data
+    networks:
+      - dmart-cluster-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  surrealdb-node-1-data:
+  surrealdb-node-2-data:
+  surrealdb-node-3-data:
+
+networks:
+  dmart-cluster-net:
+    driver: bridge

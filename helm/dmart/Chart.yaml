@@ -1,0 +1,14 @@
+apiVersion: v2
+name: dmart
+description: Helm chart for dMart — hospital clinical management system with SurrealDB backend
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: UCI GTM
+    email: devops@hospital.cu
+keywords:
+  - dmart
+  - hospital
+  - clinical
+  - surrealdb

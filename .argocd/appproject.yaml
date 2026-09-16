@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: dmart-project
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: dmart
+spec:
+  description: dMart clinical management system project
+  sourceRepos:
+    - "https://github.com/rooselvelt6/dmart.git"
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: dmart
+    - server: https://kubernetes.default.svc
+      namespace: dmart-staging
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: "*"
+    - group: apps
+      kind: "*"
+    - group: networking.k8s.io
+      kind: "*"
+    - group: autoscaling
+      kind: "*"
+    - group: policy
+      kind: "*"

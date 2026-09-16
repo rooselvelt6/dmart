@@ -138,6 +138,7 @@ mod tests {
             iat: chrono::Utc::now().timestamp(),
             jti: "jti-test-001".into(),
             scope: scope.into(),
+            tenant_id: "default".into(),
         }
     }
 

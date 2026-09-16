@@ -1,0 +1,20 @@
+{{- if .Values.surrealdb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: surrealdb-svc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dmart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: rpc
+      protocol: TCP
+      name: rpc
+  selector:
+    {{- include "dmart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+{{- end }}

@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dmart-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: dmart
+    app.kubernetes.io/part-of: dmart
+spec:
+  project: dmart-project
+  source:
+    repoURL: https://github.com/rooselvelt6/dmart.git
+    targetRevision: main
+    path: helm/dmart
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dmart
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

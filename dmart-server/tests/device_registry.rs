@@ -303,6 +303,7 @@ async fn seed_user(
         nombre: username.into(),
         activo: true,
         created_at: chrono::Utc::now().to_rfc3339(),
+        tenant_id: "default".into(),
     };
     dmart_server::db::create_user(db, user)
         .await

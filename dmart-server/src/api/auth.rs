@@ -116,6 +116,7 @@ async fn me(
             username: claims.username.clone(),
             rol: parse_role(&claims.rol),
             nombre: claims.username.clone(),
+            tenant_id: claims.tenant_id.clone(),
         },
     };
     Ok(Json(ApiResponse::ok(user_info)))

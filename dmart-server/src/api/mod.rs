@@ -7,6 +7,7 @@ pub mod export;
 pub mod fhir;
 pub mod institucion;
 pub mod measurements;
+pub mod ml;
 pub mod monitores;
 pub mod patients;
 pub mod quality;
@@ -17,6 +18,7 @@ pub mod scales;
 pub mod score_audit;
 pub mod stats;
 pub mod teleicu;
+pub mod tenant;
 
 use axum::{
     Router,
@@ -165,6 +167,17 @@ pub fn build_api_router(
         )
         // Auditoría de fingerprints de scores (SPEC-029)
         .route("/admin/audit/scores", get(score_audit::verify_scores))
+        // Multi-tenancy (SPEC-025) — solo super_admin
+        .route(
+            "/admin/tenants",
+            get(tenant::list_tenants_api).post(tenant::create_tenant_api),
+        )
+        .route(
+            "/admin/tenants/{id}/impersonate",
+            post(tenant::impersonate_tenant_api),
+        )
+        // ML Serving (SPEC-032) + Patient Similarity (SPEC-033)
+        .merge(ml::routes())
         // Retención / downsampling (SPEC-030)
         .merge(retention::routes())
         // Auth

@@ -365,9 +365,36 @@ pub async fn list_patients(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<
     Ok(patients)
 }
 
+/// SPEC-025: listado de pacientes filtrado por tenant (RLS).
+pub async fn list_patients_for_tenant(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Patient>> {
+    let patients: Vec<Patient> = db
+        .query("SELECT * FROM patients WHERE tenant_id = $tenant ORDER BY created_at DESC LIMIT $limit START $offset")
+        .bind(("tenant", tenant_id.to_string()))
+        .bind(("limit", limit as i64))
+        .bind(("offset", offset as i64))
+        .await?
+        .take(0)?;
+    Ok(patients)
+}
+
 pub async fn count_patients(db: &Surreal<Db>) -> Result<u64> {
     let count: Vec<serde_json::Value> = db
         .query("SELECT count() as count FROM patients GROUP BY count")
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+}
+
+/// SPEC-025: recuento de pacientes filtrado por tenant (RLS).
+pub async fn count_patients_for_tenant(db: &Surreal<Db>, tenant_id: &str) -> Result<u64> {
+    let count: Vec<serde_json::Value> = db
+        .query("SELECT count() as count FROM patients WHERE tenant_id = $tenant GROUP BY count")
+        .bind(("tenant", tenant_id.to_string()))
         .await?
         .take(0)?;
     Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
@@ -394,6 +421,42 @@ pub async fn search_patients_count(db: &Surreal<Db>, query: &str) -> Result<u64>
     let q = format!("%{}%", query);
     let count: Vec<serde_json::Value> = db
         .query("SELECT count() as count FROM patients WHERE nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q GROUP BY count")
+        .bind(("q", q))
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+}
+
+/// SPEC-025: búsqueda de pacientes filtrada por tenant (RLS).
+pub async fn search_patients_for_tenant(
+    db: &Surreal<Db>,
+    query: &str,
+    tenant_id: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Patient>> {
+    let q = format!("%{}%", query);
+    let patients: Vec<Patient> = db
+        .query("SELECT * FROM patients WHERE tenant_id = $tenant AND (nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q) ORDER BY created_at DESC LIMIT $limit START $offset")
+        .bind(("tenant", tenant_id.to_string()))
+        .bind(("q", q))
+        .bind(("limit", limit as i64))
+        .bind(("offset", offset as i64))
+        .await?
+        .take(0)?;
+    Ok(patients)
+}
+
+/// SPEC-025: recuento de búsqueda filtrado por tenant (RLS).
+pub async fn search_patients_count_for_tenant(
+    db: &Surreal<Db>,
+    query: &str,
+    tenant_id: &str,
+) -> Result<u64> {
+    let q = format!("%{}%", query);
+    let count: Vec<serde_json::Value> = db
+        .query("SELECT count() as count FROM patients WHERE tenant_id = $tenant AND (nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q) GROUP BY count")
+        .bind(("tenant", tenant_id.to_string()))
         .bind(("q", q))
         .await?
         .take(0)?;

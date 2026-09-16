@@ -1,0 +1,33 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta2
+kind: HelmRelease
+metadata:
+  name: dmart
+  namespace: dmart
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./helm/dmart
+      sourceRef:
+        kind: GitRepository
+        name: dmart-repo
+        namespace: flux-system
+  values:
+    replicaCount: 3
+    image:
+      tag: "latest"
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 8
+    surrealdb:
+      enabled: true
+      persistence:
+        size: 10Gi
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true

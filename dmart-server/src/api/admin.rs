@@ -310,6 +310,9 @@ pub struct CreateStaffRequest {
     pub nombre: String,
     pub rol: String,
     pub password: String,
+    /// Slug del tenant (SPEC-025). Default: "default".
+    #[serde(default = "dmart_shared::models::default_tenant_id")]
+    pub tenant_id: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -358,6 +361,7 @@ pub async fn create_staff_api(
         nombre: req.nombre,
         activo: true,
         created_at: chrono::Utc::now().to_rfc3339(),
+        tenant_id: req.tenant_id,
     };
     let created = crate::db::create_user(&db, user)
         .await

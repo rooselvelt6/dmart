@@ -229,14 +229,37 @@ impl AuditService {
         .await
     }
 
-    pub async fn log_logout(&self, user_id: &str, username: &str) -> Result<AuditLog, String> {
+pub async fn log_logout(&self, user_id: &str, username: &str) -> Result<AuditLog, String> {
         self.log(
-            AuditAction::Logout,
-            "auth",
+            AuditAction::AuthChange,
+            "auth/logout",
             None,
             Some(user_id),
             Some(username),
+            Some("logout"),
             None,
+            None,
+            true,
+            None,
+        )
+        .await
+    }
+
+    /// Registra un evento de sistema (p.ej. impersonación de tenant, SPEC-025).
+    pub async fn log_system_event(
+        &self,
+        user_id: &str,
+        username: &str,
+        resource: &str,
+        details: &str,
+    ) -> Result<AuditLog, String> {
+        self.log(
+            AuditAction::ConfigChange,
+            resource,
+            None,
+            Some(user_id),
+            Some(username),
+            Some(details),
             None,
             None,
             true,

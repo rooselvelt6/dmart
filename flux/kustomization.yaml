@@ -1,0 +1,22 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: dmart
+  namespace: flux-system
+spec:
+  interval: 5m
+  path: ./helm/dmart
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: dmart-repo
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: dmart-server
+      namespace: dmart
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: surrealdb
+      namespace: dmart
+  timeout: 3m

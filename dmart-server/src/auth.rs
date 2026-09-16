@@ -187,6 +187,9 @@ pub struct Claims {
     pub jti: String,
     #[serde(default = "default_token_scope")]
     pub scope: String,
+    /// Slug del tenant/hospital (SPEC-025). Default: "default" (single-tenant).
+    #[serde(default = "dmart_shared::models::default_tenant_id")]
+    pub tenant_id: String,
 }
 
 fn default_token_scope() -> String {
@@ -259,6 +262,9 @@ pub struct RegisterRequest {
     pub password: String,
     pub nombre: String,
     pub rol: String,
+    /// Slug del tenant (SPEC-025). Default: "default".
+    #[serde(default = "dmart_shared::models::default_tenant_id")]
+    pub tenant_id: String,
 }
 
 #[derive(Clone)]
@@ -286,6 +292,7 @@ impl AuthService {
             nombre: req.nombre,
             activo: true,
             created_at: chrono::Utc::now().to_rfc3339(),
+            tenant_id: req.tenant_id,
         };
 
         let created: Option<User> = self
@@ -365,6 +372,7 @@ impl AuthService {
                 iat,
                 jti: Uuid::new_v4().to_string(),
                 scope: "mfa".to_string(),
+                tenant_id: user.tenant_id.clone(),
             };
             let token = encode(
                 &Header::default(),
@@ -452,6 +460,7 @@ impl AuthService {
             iat,
             jti: Uuid::new_v4().to_string(),
             scope: scope.to_string(),
+            tenant_id: user.tenant_id.clone(),
         };
         encode(
             &Header::default(),
@@ -758,6 +767,7 @@ pub async fn seed_default_admin(db: &Surreal<Db>) -> Result<bool> {
         nombre: "Administrador".to_string(),
         activo: true,
         created_at: chrono::Utc::now().to_rfc3339(),
+        tenant_id: dmart_shared::models::default_tenant_id(),
     };
 
     let created: Option<User> = db

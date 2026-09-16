@@ -202,6 +202,7 @@ pub async fn calc_apache(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
+        tenant_id: dmart_shared::models::default_tenant_id(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -291,6 +292,7 @@ pub async fn calc_gcs(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
+        tenant_id: dmart_shared::models::default_tenant_id(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -375,6 +377,7 @@ pub async fn calc_news2(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
+        tenant_id: dmart_shared::models::default_tenant_id(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -455,6 +458,7 @@ pub async fn calc_sofa(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
+        tenant_id: dmart_shared::models::default_tenant_id(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -540,6 +544,7 @@ pub async fn calc_saps3(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
+        tenant_id: dmart_shared::models::default_tenant_id(),
     };
 
     match db_ops::create_measurement(&db, m).await {

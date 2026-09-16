@@ -1,0 +1,64 @@
+{{- if .Values.surrealdb.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: surrealdb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dmart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  serviceName: surrealdb-headless
+  replicas: {{ .Values.surrealdb.replicas }}
+  selector:
+    matchLabels:
+      {{- include "dmart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "dmart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+        - name: surrealdb
+          image: "{{ .Values.surrealdb.image.repository }}:{{ .Values.surrealdb.image.tag }}"
+          imagePullPolicy: {{ .Values.surrealdb.image.pullPolicy }}
+          args:
+            - start
+            - --bind
+            - 0.0.0.0:8000
+            - --strict
+            - --log
+            - info
+          ports:
+            - name: rpc
+              containerPort: 8000
+              protocol: TCP
+          {{- if .Values.surrealdb.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+  {{- if .Values.surrealdb.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.surrealdb.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.surrealdb.persistence.size }}
+  {{- end }}
+{{- end }}

@@ -30,9 +30,11 @@ pub struct ListPatientsQuery {
 
 // GET /api/patients?q=<search>&limit=50&offset=0
 pub async fn list_patients(
+    claims: Claims,
     State(db): State<Database>,
     Query(params): Query<ListPatientsQuery>,
 ) -> impl IntoResponse {
+    let tenant_id = claims.tenant_id.clone();
     let pagination = PaginationParams {
         limit: params.limit,
         offset: params.offset,
@@ -41,8 +43,10 @@ pub async fn list_patients(
     let offset = pagination.offset();
 
     if let Some(q) = params.q.filter(|s| !s.is_empty()) {
-        let result = db_ops::search_patients(&db, &q, limit, offset).await;
-        let total = db_ops::search_patients_count(&db, &q).await.unwrap_or(0);
+        let result = db_ops::search_patients_for_tenant(&db, &q, &tenant_id, limit, offset).await;
+        let total = db_ops::search_patients_count_for_tenant(&db, &q, &tenant_id)
+            .await
+            .unwrap_or(0);
         match result {
             Ok(patients) => {
                 let items = patients_to_list_items(&patients);
@@ -66,8 +70,10 @@ pub async fn list_patients(
                 .into_response(),
         }
     } else {
-        let result = db_ops::list_patients(&db, limit, offset).await;
-        let total = db_ops::count_patients(&db).await.unwrap_or(0);
+        let result = db_ops::list_patients_for_tenant(&db, &tenant_id, limit, offset).await;
+        let total = db_ops::count_patients_for_tenant(&db, &tenant_id)
+            .await
+            .unwrap_or(0);
         match result {
             Ok(patients) => {
                 let items = patients_to_list_items(&patients);
@@ -137,9 +143,11 @@ pub async fn create_patient(
     State(db): State<Database>,
     Json(req): Json<CreatePatientRequest>,
 ) -> impl IntoResponse {
-    let patient = req.patient;
+    let mut patient = req.patient;
     let equipos_ids = req.equipos_ids;
     let pid = patient.patient_id.clone();
+    // SPEC-025: el tenant del paciente es el del JWT (nunca del cliente).
+    patient.tenant_id = claims.tenant_id.clone();
 
     match db_ops::create_patient_with_assignments(&db, patient, &equipos_ids).await {
         Ok(p) => {
@@ -182,7 +190,15 @@ pub async fn get_patient(
             .await;
     }
     match db_ops::get_patient(&db, &id).await {
-        Ok(Some(p)) => (StatusCode::OK, Json(ApiResponse::ok(p))).into_response(),
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => {
+            (StatusCode::OK, Json(ApiResponse::ok(p))).into_response()
+        }
+        // SPEC-025: cross-tenant → 404 (no 403, para no revelar existencia).
+        Ok(Some(_)) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<Patient>::err("Patient not found")),
+        )
+            .into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ApiResponse::<Patient>::err("Patient not found")),

@@ -365,6 +365,7 @@ async fn test_auth_register() {
             password: "TestPass123!".into(),
             nombre: "Doctor Test".into(),
             rol: "medico".into(),
+            tenant_id: "default".into(),
         })
         .await
         .expect("register failed");
@@ -432,6 +433,7 @@ async fn test_password_hash_not_plaintext_and_revocation() {
             password: "Secreto_123!".into(),
             nombre: "Hash Check".into(),
             rol: "enfermero".into(),
+            tenant_id: "default".into(),
         })
         .await
         .expect("register failed");
@@ -491,6 +493,7 @@ async fn seed_user(
         nombre: nombre.into(),
         activo: true,
         created_at: chrono::Utc::now().to_rfc3339(),
+        tenant_id: "default".into(),
     };
     dmart_server::db::create_user(db, user)
         .await

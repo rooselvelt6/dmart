@@ -60,6 +60,7 @@ pub async fn create_measurement(
         algorithm_version,
         fingerprint,
         notas: body.notas,
+        tenant_id: dmart_shared::models::default_tenant_id(),
     };
 
     match db_ops::create_measurement(&db, measurement).await {

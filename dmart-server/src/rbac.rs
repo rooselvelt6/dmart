@@ -55,6 +55,10 @@ impl Role {
                 "audit:read".to_string(),
                 "config:read".to_string(),
                 "config:write".to_string(),
+                "tenants:read".to_string(),
+                "tenants:manage".to_string(),
+                "ml:predict".to_string(),
+                "ml:read".to_string(),
             ],
             Role::Doctor => vec![
                 "patients:create".to_string(),
@@ -67,6 +71,8 @@ impl Role {
                 "scales:write".to_string(),
                 "export:csv".to_string(),
                 "export:pdf".to_string(),
+                "ml:predict".to_string(),
+                "ml:read".to_string(),
             ],
             Role::Nurse => vec![
                 "patients:read".to_string(),
@@ -75,6 +81,8 @@ impl Role {
                 "scales:read".to_string(),
                 "scales:write".to_string(),
                 "export:csv".to_string(),
+                "ml:predict".to_string(),
+                "ml:read".to_string(),
             ],
             Role::Viewer => vec![
                 "patients:read".to_string(),
@@ -268,8 +276,24 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
                 _ => Some("config:write"),
             };
         }
+        // Multi-tenancy (SPEC-025): solo administradores gestionan tenants.
+        if path.starts_with("/admin/tenants") {
+            return match m.as_str() {
+                "GET" => Some("tenants:read"),
+                "POST" => Some("tenants:manage"),
+                _ => None,
+            };
+        }
         // /admin/stats — panel de operaciones (solo administradores).
         Some("config:read")
+    } else if path.starts_with("/ml") {
+        match m.as_str() {
+            // Predicciones y búsqueda de similaridad: roles clínicos.
+            "POST" => Some("ml:predict"),
+            // GET /ml/models, /ml/similarity/status, explain → lectura.
+            "GET" => Some("ml:read"),
+            _ => None,
+        }
     } else if path.starts_with("/auth/users") {
         match m.as_str() {
             "GET" => Some("users:read"),
