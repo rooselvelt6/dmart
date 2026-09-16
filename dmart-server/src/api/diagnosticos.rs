@@ -12,7 +12,7 @@ pub struct SearchQuery {
 pub async fn list_diagnosticos(State(db): State<Database>) -> ApiResult<Vec<Diagnostico>> {
     let diagnosticos = crate::db::list_diagnosticos(&db)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, crate::security::sanitize_internal_error(&e)))?;
     Ok(Json(ApiResponse::ok(diagnosticos)))
 }
 
@@ -23,6 +23,6 @@ pub async fn search_diagnosticos(
     let query = params.q.unwrap_or_default();
     let filtered = crate::db::search_diagnosticos(&db, &query)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, crate::security::sanitize_internal_error(&e)))?;
     Ok(Json(ApiResponse::ok(filtered)))
 }

@@ -74,7 +74,10 @@ async fn predict_api(
     let features = crate::ml_serving::MlFeatures::from_value(&req.features);
     match server.predict(&req.model, &features) {
         Ok(r) => ok(r),
-        Err(e) => err(StatusCode::NOT_FOUND, e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            err(StatusCode::NOT_FOUND, msg)
+        }
     }
 }
 
@@ -86,7 +89,10 @@ async fn predict_batch_api(
     let inputs: Vec<_> = req.inputs.iter().map(crate::ml_serving::MlFeatures::from_value).collect();
     match server.predict_batch(&req.model, &inputs) {
         Ok(r) => ok(r),
-        Err(e) => err(StatusCode::NOT_FOUND, e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            err(StatusCode::NOT_FOUND, msg)
+        }
     }
 }
 
@@ -105,7 +111,10 @@ async fn swap_model_api(
     let server = crate::ml_serving::server();
     match server.swap(&req.name, &req.version) {
         Ok(m) => ok(m),
-        Err(e) => err(StatusCode::NOT_FOUND, e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            err(StatusCode::NOT_FOUND, msg)
+        }
     }
 }
 
@@ -133,7 +142,10 @@ async fn similarity_search_api(
                 results: hits,
             })
         }
-        Err(e) => err(StatusCode::NOT_FOUND, e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            err(StatusCode::NOT_FOUND, msg)
+        }
     }
 }
 

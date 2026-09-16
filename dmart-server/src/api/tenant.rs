@@ -49,17 +49,20 @@ pub async fn list_tenants_api(
                         active: t.active,
                         patient_count: patient_count(&db, &slug).await,
                     });
-                }
-                v
-            };
-            (StatusCode::OK, Json(ApiResponse::ok(items))).into_response()
-        }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Vec<TenantListItem>>::err(e.to_string())),
-        )
-            .into_response(),
+}
+            v
+        };
+        (StatusCode::OK, Json(ApiResponse::ok(items))).into_response()
     }
+    Err(e) => {
+        let msg = crate::security::sanitize_internal_error(&e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<Vec<TenantListItem>>::err(msg)),
+        )
+            .into_response()
+    }
+}
 }
 
 /// POST /api/admin/tenants — crea un tenant (super_admin).
@@ -146,11 +149,14 @@ pub async fn audit_tenancy_api(
             Json(ApiResponse::ok(report)),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<crate::db::TenancyAuditReport>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<crate::db::TenancyAuditReport>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 

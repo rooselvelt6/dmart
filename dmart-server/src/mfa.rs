@@ -12,17 +12,18 @@ use std::sync::OnceLock;
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use totp_rs::{Algorithm, Secret, TOTP};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::auth::{AuthService, Claims, LoginResponse};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct MfaSetupResponse {
     pub secret: String,
     pub otpauth_uri: String,
     pub backup_codes: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct MfaCodeRequest {
     #[serde(default)]
     pub code: Option<String>,

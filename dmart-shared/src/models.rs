@@ -1,6 +1,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enums
@@ -237,6 +238,11 @@ impl Saps3Level {
 // Pagination
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Tope duro para cualquier paginación expuesta por API (evita OOM por
+/// `limit=999999`). Se aplica en la capa de handlers y, defensivamente, en la
+/// capa de base de datos.
+pub const MAX_PAGE_LIMIT: u32 = 200;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaginationParams {
     pub limit: Option<u32>,
@@ -245,7 +251,7 @@ pub struct PaginationParams {
 
 impl PaginationParams {
     pub fn limit(&self) -> u32 {
-        self.limit.unwrap_or(50).min(200)
+        self.limit.unwrap_or(50).min(MAX_PAGE_LIMIT)
     }
     pub fn offset(&self) -> u32 {
         self.offset.unwrap_or(0)
@@ -904,7 +910,7 @@ impl From<&User> for UserInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct MfaSettings {
     pub user_id: String,
     pub enabled: bool,

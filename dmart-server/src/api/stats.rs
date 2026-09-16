@@ -145,10 +145,13 @@ pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
 
             (StatusCode::OK, Json(ApiResponse::ok(stats))).into_response()
         }
-        (Err(e), _) | (_, Err(e)) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<UciStats>::err(e.to_string())),
-        )
-            .into_response(),
+        (Err(e), _) | (_, Err(e)) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<UciStats>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }

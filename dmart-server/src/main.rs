@@ -1,7 +1,7 @@
 use axum::{
     Router,
     extract::DefaultBodyLimit,
-    http::{HeaderValue, Method, StatusCode},
+    http::{HeaderValue, Method, StatusCode, header},
     middleware as axum_mw,
     response::{Html, IntoResponse},
     routing::get,
@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::{
-    cors::{AllowOrigin, Any, CorsLayer},
+    cors::{AllowOrigin, CorsLayer},
     services::ServeDir,
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
@@ -145,6 +145,9 @@ async fn main() -> anyhow::Result<()> {
     let security_state = create_security_state();
 
     // ── CORS ────────────────────────────────────────────────────────
+    // Orígenes permitidos vía `DMART_CORS_ORIGIN` (CSV). Si la variable está
+    // vacía o mal formada se hace *fail-closed* a los orígenes locales por
+    // defecto, nunca se abre la API a cualquier origen.
 
     let cors_origins = std::env::var("DMART_CORS_ORIGIN")
         .unwrap_or_else(|_| "http://localhost:3000,http://127.0.0.1:3000".to_string());
@@ -154,9 +157,22 @@ async fn main() -> anyhow::Result<()> {
         .filter_map(|s| HeaderValue::from_str(s.trim()).ok())
         .collect();
 
+    // Allowlist estricta de headers: el frontend (Leptos) solo envía
+    // `Authorization` y `Content-Type`; no hace falta `Any`.
+    let allowed_headers = [
+        header::AUTHORIZATION,
+        header::CONTENT_TYPE,
+        header::ACCEPT,
+    ];
+
+    let default_origins = [
+        HeaderValue::from_static("http://localhost:3000"),
+        HeaderValue::from_static("http://127.0.0.1:3000"),
+    ];
+
     let cors = if origins.is_empty() {
         tracing::warn!(
-            "⚠️ DMART_CORS_ORIGIN empty! Allowing all origins (not recommended for production)"
+            "⚠️ DMART_CORS_ORIGIN vacío o inválido — fallback a localhost; NO se habilita cualquier origen"
         );
         CorsLayer::new()
             .allow_methods([
@@ -166,8 +182,8 @@ async fn main() -> anyhow::Result<()> {
                 Method::DELETE,
                 Method::OPTIONS,
             ])
-            .allow_headers(Any)
-            .allow_origin(Any)
+            .allow_headers(allowed_headers)
+            .allow_origin(AllowOrigin::list(default_origins))
     } else {
         tracing::info!("🔒 CORS restricted to origins: {:?}", origins);
         CorsLayer::new()
@@ -178,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
                 Method::DELETE,
                 Method::OPTIONS,
             ])
-            .allow_headers(Any)
+            .allow_headers(allowed_headers)
             .allow_origin(AllowOrigin::list(origins))
     };
 

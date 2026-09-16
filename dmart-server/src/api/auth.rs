@@ -49,17 +49,22 @@ async fn login(
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    let ip_address = Some(addr.ip().to_string());
+    let client_ip = addr.ip().to_string();
 
     match auth_service
-        .authenticate(&req.username, &req.password, user_agent, ip_address)
+        .authenticate(
+            &req.username,
+            &req.password,
+            user_agent,
+            Some(client_ip.clone()),
+        )
         .await
     {
         Ok(response) => {
             crate::metrics::auth_login("success");
             if let Some(audit) = crate::audit::audit() {
                 let _ = audit
-                    .log_login_success(&response.user.user_id, &response.user.username, None)
+                    .log_login_success(&response.user.user_id, &response.user.username, Some(&client_ip))
                     .await;
             }
             let mut resp =
@@ -71,7 +76,9 @@ async fn login(
             crate::metrics::auth_login("failure");
             crate::metrics::auth_failure("login");
             if let Some(audit) = crate::audit::audit() {
-                let _ = audit.log_login_failed(&req.username, &e, None).await;
+                let _ = audit
+                    .log_login_failed(&req.username, &e, Some(&client_ip))
+                    .await;
             }
             (
                 StatusCode::UNAUTHORIZED,
@@ -164,7 +171,7 @@ async fn refresh(
         .map(str::to_string);
 
     let token = crate::auth::refresh_token_from_cookie(&headers)
-        .or_else(|| body.and_then(|Json(b)| b.refresh_token));
+        .or_else(|| body.and_then(|Json(b)| b.refresh_token.clone()));
 
     let Some(token) = token else {
         crate::metrics::auth_refresh("failure");

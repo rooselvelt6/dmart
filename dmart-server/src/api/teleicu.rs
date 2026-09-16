@@ -83,9 +83,10 @@ pub async fn start_session(State(db): State<Database>, body: Json<Value>) -> Res
                 .into_response();
         }
         Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<()>::err(e.to_string())),
+                Json(ApiResponse::<()>::err(msg)),
             )
                 .into_response();
         }
@@ -113,18 +114,24 @@ pub async fn start_session(State(db): State<Database>, body: Json<Value>) -> Res
                     );
                     (StatusCode::CREATED, Json(ApiResponse::ok(created))).into_response()
                 }
-                Err(e) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiResponse::<TeleIcuSession>::err(e.to_string())),
-                )
-                    .into_response(),
+                Err(e) => {
+                    let msg = crate::security::sanitize_internal_error(&e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::<TeleIcuSession>::err(msg)),
+                    )
+                        .into_response()
+                }
             }
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 

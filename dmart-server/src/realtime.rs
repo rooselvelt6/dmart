@@ -12,16 +12,58 @@ pub mod keepalive {
 }
 
 use axum::{
+    extract::ConnectInfo,
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     response::sse::{Event, KeepAlive, Sse},
 };
 use dmart_shared::models::ApiResponse;
 use futures_util::stream::unfold;
 use serde_json::json;
+use std::collections::HashMap;
 use std::convert::Infallible;
+use std::net::SocketAddr;
 use std::sync::OnceLock;
 use tokio::sync::broadcast;
+
+/// Máximo de conexiones SSE concurrentes por IP (previene acaparar el hub con
+/// miles de streams desde un único origen).
+pub const MAX_SSE_PER_IP: usize = 10;
+
+/// Registro de conexiones SSE activas por IP.
+static SSE_CONNECTIONS: OnceLock<std::sync::RwLock<HashMap<String, usize>>> = OnceLock::new();
+
+fn sse_connections() -> &'static std::sync::RwLock<HashMap<String, usize>> {
+    SSE_CONNECTIONS.get_or_init(|| std::sync::RwLock::new(HashMap::new()))
+}
+
+/// Intenta reservar una plaza SSE para `ip`. Devuelve `false` si la IP ya tiene
+/// `MAX_SSE_PER_IP` conexiones activas.
+fn sse_try_acquire(ip: &str) -> bool {
+    let mut map = sse_connections()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let count = map.entry(ip.to_string()).or_default();
+    if *count >= MAX_SSE_PER_IP {
+        false
+    } else {
+        *count += 1;
+        true
+    }
+}
+
+/// Libera una plaza SSE para `ip` (llamado cuando el stream se cae).
+fn sse_release(ip: &str) {
+    let mut map = sse_connections()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(count) = map.get_mut(ip) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            map.remove(ip);
+        }
+    }
+}
 
 type EventSender = broadcast::Sender<String>;
 
@@ -49,9 +91,11 @@ impl RealtimeHub {
         self.tx.subscribe()
     }
 
-    /// Construye un stream SSE que emite los eventos del hub.
-    pub fn sse_stream(&self) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+    /// Construye un stream SSE que emite los eventos del hub. `client_ip` se
+    /// usa para el registro de conexiones concurrentes por IP.
+    pub fn sse_stream(&self, client_ip: String) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
         let rx = self.subscribe();
+        let ip = client_ip;
 
         let stream = unfold(rx, |mut rx| async move {
             loop {
@@ -66,21 +110,24 @@ impl RealtimeHub {
         });
 
         crate::metrics::sse_connect();
-        Sse::new(CountedStream { inner: stream }).keep_alive(
+        Sse::new(CountedStream { inner: stream, ip }).keep_alive(
             KeepAlive::new().interval(std::time::Duration::from_secs(keepalive::INTERVAL_SECS)),
         )
     }
 }
 
-/// Wrapper de stream que decrementa `sse_connections_active` cuando la conexión
-/// se cierra (el `Drop` se ejecuta al terminar/abandonar el stream).
+/// Wrapper de stream que decrementa `sse_connections_active` y libera la plaza
+/// por IP cuando la conexión se cierra (el `Drop` se ejecuta al terminar o
+/// abandonar el stream).
 struct CountedStream<S> {
     inner: S,
+    ip: String,
 }
 
 impl<S> Drop for CountedStream<S> {
     fn drop(&mut self) {
         crate::metrics::sse_disconnect();
+        sse_release(&self.ip);
     }
 }
 
@@ -134,8 +181,20 @@ pub fn publish(event_type: &str, payload: serde_json::Value) {
 }
 
 /// GET /api/realtime/stream — Streaming SSE de eventos del hub global.
-pub async fn realtime_stream() -> impl IntoResponse {
-    global_hub().sse_stream().into_response()
+///
+/// Limita a `MAX_SSE_PER_IP` conexiones concurrentes por IP origen.
+pub async fn realtime_stream(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
+    let ip = addr.ip().to_string();
+    if !sse_try_acquire(&ip) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            axum::Json(ApiResponse::<()>::err(
+                "Demasiadas conexiones en tiempo real desde esta IP".to_string(),
+            )),
+        )
+            .into_response();
+    }
+    global_hub().sse_stream(ip).into_response()
 }
 
 /// GET /api/realtime/ping — Público, para probar el canal sin autenticación.
@@ -170,5 +229,23 @@ mod tests {
         let mut rx = hub.subscribe();
         let received = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv()).await;
         assert!(received.is_err(), "no debe recuperar mensajes previos");
+    }
+
+    #[test]
+    fn sse_per_ip_limit_enforced() {
+        let ip = "10.0.0.99";
+        // limpiar por si quedó basura de otros tests
+        sse_release(ip);
+        assert!(sse_try_acquire(ip));
+        for _ in 1..MAX_SSE_PER_IP {
+            assert!(sse_try_acquire(ip), "debe permitir hasta MAX_SSE_PER_IP");
+        }
+        assert!(
+            !sse_try_acquire(ip),
+            "debe rechazar la conexión #(MAX_SSE_PER_IP + 1)"
+        );
+        sse_release(ip);
+        assert!(sse_try_acquire(ip), "debe liberar plaza tras release");
+        sse_release(ip);
     }
 }

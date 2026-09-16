@@ -16,12 +16,18 @@ pub async fn export_csv(
     let patient = match db_ops::get_patient(&db, &patient_id).await {
         Ok(Some(p)) => p,
         Ok(None) => return error_response("Paciente no encontrado"),
-        Err(e) => return error_response(&e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return error_response(&msg);
+        }
     };
 
     let measurements = match db_ops::get_measurements_for_patient(&db, &patient_id).await {
         Ok(m) => m,
-        Err(e) => return error_response(&e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return error_response(&msg);
+        }
     };
 
     let mut wtr = csv::WriterBuilder::new()
@@ -80,11 +86,8 @@ pub async fn export_csv(
     }
 
     let data = wtr.into_inner().unwrap_or_default();
-    let filename = format!(
-        "UCI_{}_{}.csv",
-        patient.apellido.replace(' ', "_"),
-        patient.cedula
-    );
+    let (apellido, cedula) = sanitize_filename(&patient);
+    let filename = format!("UCI_{}_{}.csv", apellido, cedula);
 
     Response::builder()
         .status(StatusCode::OK)
@@ -105,21 +108,24 @@ pub async fn export_pdf(
     let patient = match db_ops::get_patient(&db, &patient_id).await {
         Ok(Some(p)) => p,
         Ok(None) => return error_response("Paciente no encontrado"),
-        Err(e) => return error_response(&e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return error_response(&msg);
+        }
     };
 
     let measurements = match db_ops::get_measurements_for_patient(&db, &patient_id).await {
         Ok(m) => m,
-        Err(e) => return error_response(&e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return error_response(&msg);
+        }
     };
 
     match generate_pdf(&patient, &measurements) {
         Ok(bytes) => {
-            let filename = format!(
-                "UCI_{}_{}.pdf",
-                patient.apellido.replace(' ', "_"),
-                patient.cedula
-            );
+            let (apellido, cedula) = sanitize_filename(&patient);
+            let filename = format!("UCI_{}_{}.pdf", apellido, cedula);
             Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, "application/pdf")
@@ -338,6 +344,27 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     Ok(bytes)
 }
 
+/// Genera un nombre de archivo seguro para `Content-Disposition`.
+///
+/// Los datos del paciente (apellido, cédula) son input de usuario: si contienen
+/// comillas, `CR`/`LF` o `;` podrían inyectar headers HTTP y romper el
+/// `filename="..."`. Se reemplazan caracteres de control por `_` y se eliminan
+/// los caracteres peligrosos para header injection.
+fn sanitize_filename(patient: &Patient) -> (String, String) {
+    fn clean(v: &str) -> String {
+        v.chars()
+            .map(|c| match c {
+                '"' | ';' | '\r' | '\n' | '\\' => '_',
+                _ => c,
+            })
+            .collect()
+    }
+    (
+        clean(&patient.apellido).replace(' ', "_"),
+        clean(&patient.cedula),
+    )
+}
+
 fn error_response(msg: &str) -> Response {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -353,6 +380,28 @@ fn error_response(msg: &str) -> Response {
 mod tests {
     use super::*;
     use dmart_shared::models::{Patient, SeverityLevel};
+
+    #[test]
+    fn sanitize_filename_prevents_header_injection() {
+        let mut patient = Patient::new();
+        patient.apellido = "González\";\r\nX-Evil: 1".into();
+        patient.cedula = "8801\n011;2345".into();
+
+        let (apellido, cedula) = sanitize_filename(&patient);
+        assert!(!apellido.contains('"'), "debe eliminar comillas");
+        assert!(!apellido.contains('\r'), "debe eliminar CR");
+        assert!(!apellido.contains('\n'), "debe eliminar LF");
+        assert!(!apellido.contains(';'), "debe eliminar punto y coma");
+        assert!(!cedula.contains('\n'), "cedula sin saltos de línea");
+
+        // no se puede romper el header `filename="..."` con lo sanitizado
+        let filename = format!("UCI_{}_{}.csv", apellido, cedula);
+        assert!(!filename.contains("\""), "filename sin comillas");
+        assert!(
+            !filename.contains('\n') && !filename.contains('\r'),
+            "filename sin CR/LF"
+        );
+    }
 
     #[test]
     fn generate_pdf_produces_valid_document() {

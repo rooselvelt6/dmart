@@ -22,6 +22,9 @@ use tokio::sync::RwLock;
 pub struct SecurityState {
     pub rate_limiter: Arc<RateLimiter>,
     pub login_throttle: Arc<LoginThrottle>,
+    /// Dedicated throttle for the MFA challenge flow (`/auth/mfa/verify`).
+    /// Stricter than the generic login throttle to prevent TOTP brute-force.
+    pub mfa_throttle: Arc<LoginThrottle>,
 }
 
 /// Rate Limiter using in-memory sliding window (backup for Valkey)
@@ -232,14 +235,25 @@ fn get_client_key(req: &Request) -> String {
 }
 
 /// Middleware for login throttling
+///
+/// The generic throttle counts failed authentication attempts (401) per IP
+/// across the whole API. The MFA challenge flow (`/auth/mfa/verify`) is carved
+/// out and gets its own stricter throttle (3 attempts / 5 min) so a TOTP code
+/// cannot be brute-forced even by replaying the challenge token.
 pub async fn login_throttle_middleware(
     State(state): State<SecurityState>,
     req: Request,
     next: Next,
 ) -> Response {
     let key = get_client_key(&req);
+    let is_mfa_verify = req.uri().path().ends_with("/auth/mfa/verify");
+    let throttle = if is_mfa_verify {
+        &state.mfa_throttle
+    } else {
+        &state.login_throttle
+    };
 
-    if let Some(remaining) = state.login_throttle.is_locked(&key).await {
+    if let Some(remaining) = throttle.is_locked(&key).await {
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, &remaining.to_string())],
@@ -253,7 +267,7 @@ pub async fn login_throttle_middleware(
 
     let res = next.run(req).await;
 
-    if res.status() == StatusCode::UNAUTHORIZED && state.login_throttle.record_failure(&key).await {
+    if res.status() == StatusCode::UNAUTHORIZED && throttle.record_failure(&key).await {
         tracing::warn!("Login throttle triggered for IP: {}", key);
         return (
             StatusCode::TOO_MANY_REQUESTS,
@@ -261,6 +275,10 @@ pub async fn login_throttle_middleware(
             "Too many failed attempts. Account locked for 5 minutes.",
         )
             .into_response();
+    }
+
+    if is_mfa_verify && res.status().is_success() {
+        throttle.record_success(&key).await;
     }
 
     res
@@ -299,16 +317,27 @@ pub fn escape_html(input: &str) -> String {
         .replace('\'', "&#x27;")
 }
 
+/// Mensaje genérico para errores internos (base de datos, SurrealDB internals,
+/// etc.). El detalle real se registra en los logs y NO se expone al cliente
+/// HTTP para no filtrar el modelo de datos ni la infraestructura.
+pub fn sanitize_internal_error(detail: &dyn std::fmt::Display) -> String {
+    tracing::error!("Internal error (ocultado al cliente): {}", detail);
+    "Error interno del servidor".to_string()
+}
+
 /// Create global security state
 pub fn create_security_state() -> SecurityState {
     // 100 requests per minute for general endpoints
     let rate_limiter = Arc::new(RateLimiter::new(100, 60));
     // 5 failed logins before 5 minute lockout
     let login_throttle = Arc::new(LoginThrottle::new(5, 300));
+    // 3 failed TOTP codes before 5 minute lockout (brute-force protection)
+    let mfa_throttle = Arc::new(LoginThrottle::new(3, 300));
 
     SecurityState {
         rate_limiter,
         login_throttle,
+        mfa_throttle,
     }
 }
 
@@ -363,5 +392,14 @@ mod tests {
         // Success clears
         throttle.record_success("user1").await;
         assert!(throttle.is_locked("user1").await.is_none());
+    }
+
+    #[test]
+    fn test_mfa_throttle_is_stricter_than_login() {
+        let state = create_security_state();
+        // 3 failed attempts allowed for the MFA challenge flow
+        assert_eq!(state.mfa_throttle.max_attempts, 3);
+        // while the generic login throttle allows 5
+        assert_eq!(state.login_throttle.max_attempts, 5);
     }
 }

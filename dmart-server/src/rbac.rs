@@ -230,7 +230,7 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
 
         match m.as_str() {
             "GET" => Some("patients:read"),
-            "POST" | "PUT" | "DELETE" => {
+            "POST" | "PUT" => {
                 if path.contains("/measurements") {
                     Some("measurements:create")
                 } else if path.contains("/scales") {
@@ -241,6 +241,9 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
                     Some("patients:create")
                 }
             }
+            // Un DELETE de paciente requiere permiso de borrado (`patients:delete`),
+            // no de alta (`patients:create`).
+            "DELETE" => Some("patients:delete"),
             _ => None,
         }
     } else if path.starts_with("/admin") {
@@ -342,7 +345,7 @@ mod tests {
         );
         assert_eq!(
             permission_for("DELETE", "/patients/abc"),
-            Some("patients:create")
+            Some("patients:delete")
         );
         assert_eq!(
             permission_for("POST", "/patients/abc/egreso"),

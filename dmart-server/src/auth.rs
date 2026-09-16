@@ -8,6 +8,7 @@ use axum::{
     http::{StatusCode, request::Parts},
 };
 use base64::Engine;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use rand::RngCore;
@@ -208,7 +209,7 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct LoginResponse {
     /// Access token (nombre histórico, mantiene compatibilidad API/frontend).
     pub token: String,
@@ -217,11 +218,12 @@ pub struct LoginResponse {
     pub expires_in: i64,
     /// Refresh token rotativo single-use. Vacio en el reto MFA.
     pub refresh_token: String,
+    #[zeroize(skip)]
     pub user: UserInfo,
     pub mfa_required: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct RefreshRequest {
     pub refresh_token: Option<String>,
 }
@@ -230,7 +232,7 @@ pub struct RefreshRequest {
 /// token (entropia: 256 bits aleatorios => lookup indexado O(1); Argon2id se
 /// reserva para passwords de baja entropia). Los registros revocados se
 /// conservan para poder detectar reuso (posible robo) y revocar la familia.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 struct RefreshTokenRecord {
     token_hash: String,
     user_id: String,
@@ -243,14 +245,14 @@ struct RefreshTokenRecord {
     ip_address: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct MfaSetupResponse {
     pub secret: String,
     pub qr_code: String,
     pub backup_codes: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct MfaVerifyRequest {
     pub code: String,
     pub backup_code: Option<String>,

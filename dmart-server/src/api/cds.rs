@@ -37,11 +37,14 @@ pub async fn list_plans(
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<serde_json::Value>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<serde_json::Value>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -88,11 +91,14 @@ pub async fn evaluate_cds(
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<serde_json::Value>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<serde_json::Value>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 

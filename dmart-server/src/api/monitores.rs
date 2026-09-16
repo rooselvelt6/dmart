@@ -36,11 +36,14 @@ async fn ingest(db: &Database, msg: VitalsMessage) -> Response {
             }))),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ApiResponse::<serde_json::Value>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ApiResponse::<serde_json::Value>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -60,11 +63,14 @@ pub async fn hl7_ingest(
     }
     match parse_oru_message(&body.message) {
         Ok(msg) => ingest(&db, msg).await,
-        Err(e) => (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ApiResponse::<serde_json::Value>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ApiResponse::<serde_json::Value>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 

@@ -92,7 +92,9 @@ pub async fn create_measurement(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Measurement>::err(e.to_string())),
+            Json(ApiResponse::<Measurement>::err(
+                crate::security::sanitize_internal_error(&e),
+            )),
         )
             .into_response(),
     }
@@ -107,7 +109,9 @@ pub async fn get_measurements(
         Ok(ms) => (StatusCode::OK, Json(ApiResponse::ok(ms))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Vec<Measurement>>::err(e.to_string())),
+            Json(ApiResponse::<Vec<Measurement>>::err(
+                crate::security::sanitize_internal_error(&e),
+            )),
         )
             .into_response(),
     }
@@ -122,7 +126,9 @@ pub async fn get_last_measurement(
         Ok(m) => (StatusCode::OK, Json(ApiResponse::ok(m))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Option<Measurement>>::err(e.to_string())),
+            Json(ApiResponse::<Option<Measurement>>::err(
+                crate::security::sanitize_internal_error(&e),
+            )),
         )
             .into_response(),
     }

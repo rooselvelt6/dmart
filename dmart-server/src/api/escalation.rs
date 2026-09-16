@@ -32,11 +32,14 @@ pub struct SetPolicyInput {
 pub async fn list_policies(State(db): State<Database>) -> Response {
     match escalation_ops::list_policies(&db).await {
         Ok(policies) => (StatusCode::OK, Json(ApiResponse::ok(policies))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Vec<EscalationPolicy>>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Vec<EscalationPolicy>>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -72,22 +75,28 @@ pub async fn set_policy(State(db): State<Database>, body: Json<Value>) -> Respon
     };
     match escalation_ops::upsert_policy(&db, policy).await {
         Ok(saved) => (StatusCode::OK, Json(ApiResponse::ok(saved))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<EscalationPolicy>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<EscalationPolicy>::err(msg)),
+            )
+                .into_response()
     }
+}
 }
 
 pub async fn active_escalations(State(db): State<Database>) -> Response {
     match escalation_ops::active_escalations(&db).await {
         Ok(escalations) => (StatusCode::OK, Json(ApiResponse::ok(escalations))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Vec<Escalation>>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Vec<Escalation>>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -104,11 +113,14 @@ pub async fn acknowledge_alert(State(db): State<Database>, Path(id): Path<String
             Json(ApiResponse::<Escalation>::err("escalación no encontrada")),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Escalation>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Escalation>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -125,10 +137,13 @@ pub async fn escalate_alert(State(db): State<Database>, Path(id): Path<String>) 
             Json(ApiResponse::<Escalation>::err("escalación no encontrada")),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Escalation>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Escalation>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }

@@ -356,6 +356,7 @@ pub async fn update_patient(
 }
 
 pub async fn list_patients(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Patient>> {
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let patients: Vec<Patient> = db
         .query("SELECT * FROM patients ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("limit", limit as i64))
@@ -372,6 +373,7 @@ pub async fn list_patients_for_tenant(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Patient>> {
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let patients: Vec<Patient> = db
         .query("SELECT * FROM patients WHERE tenant_id = $tenant ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("tenant", tenant_id.to_string()))
@@ -406,6 +408,7 @@ pub async fn search_patients(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Patient>> {
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let q = format!("%{}%", query);
     let patients: Vec<Patient> = db
         .query("SELECT * FROM patients WHERE nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q ORDER BY created_at DESC LIMIT $limit START $offset")
@@ -435,6 +438,7 @@ pub async fn search_patients_for_tenant(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Patient>> {
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let q = format!("%{}%", query);
     let patients: Vec<Patient> = db
         .query("SELECT * FROM patients WHERE tenant_id = $tenant AND (nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q) ORDER BY created_at DESC LIMIT $limit START $offset")
@@ -613,6 +617,7 @@ pub async fn list_camas(db: &Surreal<Db>) -> Result<Vec<Cama>> {
 }
 
 pub async fn list_camas_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Cama>> {
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let camas: Vec<Cama> = db
         .query("SELECT * FROM camas ORDER BY numero ASC LIMIT $limit START $offset")
         .bind(("limit", limit as i64))
@@ -768,6 +773,7 @@ pub async fn list_equipos_paginated(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Equipo>> {
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let equipos: Vec<Equipo> = db
         .query("SELECT * FROM equipos ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("limit", limit as i64))
@@ -949,6 +955,7 @@ pub async fn list_staff(db: &Surreal<Db>) -> Result<Vec<User>> {
 }
 
 pub async fn list_staff_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<User>> {
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let staff: Vec<User> = db
         .query("SELECT * FROM users WHERE rol = $medico OR rol = $enfermero ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("medico", "Medico"))

@@ -61,13 +61,14 @@ pub async fn list_patients(
                 )
                     .into_response()
             }
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<PaginatedResponse<PatientListItem>>::err(
-                    e.to_string(),
-                )),
-            )
-                .into_response(),
+            Err(e) => {
+                let msg = crate::security::sanitize_internal_error(&e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<PaginatedResponse<PatientListItem>>::err(msg)),
+                )
+                    .into_response()
+            }
         }
     } else {
         let result = db_ops::list_patients_for_tenant(&db, &tenant_id, limit, offset).await;
@@ -88,13 +89,14 @@ pub async fn list_patients(
                 )
                     .into_response()
             }
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<PaginatedResponse<PatientListItem>>::err(
-                    e.to_string(),
-                )),
-            )
-                .into_response(),
+            Err(e) => {
+                let msg = crate::security::sanitize_internal_error(&e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<PaginatedResponse<PatientListItem>>::err(msg)),
+                )
+                    .into_response()
+            }
         }
     }
 }
@@ -164,15 +166,17 @@ pub async fn create_patient(
             }
             (StatusCode::CREATED, Json(ApiResponse::ok(p))).into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Patient>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+                let msg = crate::security::sanitize_internal_error(&e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<Patient>::err(msg)),
+                )
+                    .into_response()
+}
     }
 }
 
-// GET /api/patients/:id
 pub async fn get_patient(
     State(db): State<Database>,
     Path(id): Path<String>,
@@ -204,11 +208,14 @@ pub async fn get_patient(
             Json(ApiResponse::<Patient>::err("Patient not found")),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Patient>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Patient>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -237,11 +244,14 @@ pub async fn update_patient(
             Json(ApiResponse::<Patient>::err("Patient not found")),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Patient>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Patient>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -264,11 +274,14 @@ pub async fn delete_patient(
     }
     match db_ops::delete_patient(&db, &id).await {
         Ok(_) => (StatusCode::OK, Json(ApiResponse::ok(()))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -302,22 +315,28 @@ pub async fn egreso_paciente(
                 )),
             )
                 .into_response(),
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<String>::err(e.to_string())),
-            )
-                .into_response(),
+            Err(e) => {
+                let msg = crate::security::sanitize_internal_error(&e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<String>::err(msg)),
+                )
+                    .into_response()
+            }
         },
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ApiResponse::<String>::err("Paciente no encontrado")),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<String>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<String>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -377,12 +396,13 @@ pub async fn patient_timeline(
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(dmart_shared::models::ApiResponse::<TimelineResponse>::err(
-                e.to_string(),
-            )),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(dmart_shared::models::ApiResponse::<TimelineResponse>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }

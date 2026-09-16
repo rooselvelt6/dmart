@@ -29,9 +29,10 @@ dMart UCI se construye con un triple objetivo:
 | 3 | DevOps y observabilidad | ✅ Completada |
 | 4 | Frontend y UX | ✅ Completada |
 | 5 | Clínico y QA avanzado | ✅ Completada |
-| 6 | Hardening & CI/CD | 🔄 En ejecución (SPEC-001/002/003/004/005/006/007/008/009/012/031/028/027 done) |
-| 7 | ML & Analytics v2 | 🔄 En planificación |
-| 8 | Deployment & Ops | 🔄 En planificación |
+| 6 | Hardening & CI/CD | ✅ Completada (SPEC-001–009, 012, 015–019, 027–035 done) |
+| 7 | ML & Analytics v2 | ✅ Completada (SPEC-032, 033 done) |
+| 8 | Deployment & Ops | ✅ Completada (SPEC-021–026 done) |
+| 9 | Security Hardening Web | ✅ Completada (MFA throttle, filename sanitize, pagination cap, IP audit, CORS, SSE limit, RBAC delete, error sanitization, Zeroize) |
 
 ---
 
@@ -306,21 +307,21 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | **SPEC-018** | ML Retraining Pipeline (drift detection) | 7 | 🟡 Media | SPEC-015 | 2 días | ⏳ PENDING |
 | **SPEC-019** | Alert Escalation (notificaciones clínicas) | 4 | 🟡 Media | SPEC-008, SPEC-014 | 2 días | ✅ DONE |
 | **SPEC-020** | Tele-ICU (sesiones monitorización remota) | 4 | 🟡 Media | SPEC-015, SPEC-019 | 2 días | ✅ DONE |
-| **SPEC-021** | Kubernetes Helm Chart (HA production) | 8 | 🔴 Crítica | SPEC-006, SPEC-012 | 3 días | 📋 SDD READY |
-| **SPEC-022** | GitOps ArgoCD/Flux (sync main→prod) | 8 | 🔴 Crítica | SPEC-021 | 2 días | 📋 SDD READY |
-| **SPEC-023** | SurrealDB Cluster (3+ nodos, HA) | 8 | 🔴 Crítica | SPEC-021 | 2 días | 📋 SDD READY |
-| **SPEC-024** | Disaster Recovery (RPO<1h, RTO<4h) | 8 | 🟠 Alta | SPEC-023 | 2 días | 📋 SDD READY |
-| **SPEC-025** | Multi-tenancy (aislamiento datos) | 8 | 🟡 Media | SPEC-004 | 3 días | 📋 SDD READY |
-| **SPEC-026** | Blue/Green + Canary Deploy (zero-downtime) | 8 | 🟡 Media | SPEC-022 | 2 días | 📋 SDD READY |
+| **SPEC-021** | Kubernetes Helm Chart (HA production) | 8 | 🔴 Crítica | SPEC-006, SPEC-012 | 3 días | ✅ DONE |
+| **SPEC-022** | GitOps ArgoCD/Flux (sync main→prod) | 8 | 🔴 Crítica | SPEC-021 | 2 días | ✅ DONE |
+| **SPEC-023** | SurrealDB Cluster (3+ nodos, HA) | 8 | 🔴 Crítica | SPEC-021 | 2 días | ✅ DONE |
+| **SPEC-024** | Disaster Recovery (RPO<1h, RTO<4h) | 8 | 🟠 Alta | SPEC-023 | 2 días | ✅ DONE |
+| **SPEC-025** | Multi-tenancy (aislamiento datos) | 8 | 🟡 Media | SPEC-004 | 3 días | ✅ DONE |
+| **SPEC-026** | Blue/Green + Canary Deploy (zero-downtime) | 8 | 🟡 Media | SPEC-022 | 2 días | ✅ DONE |
 | **SPEC-027** | Coverage gate en CI (`cargo llvm-cov`) para HL7 y clínica | 6 | 🔴 Crítica | SPEC-003, SPEC-007 | 0.5 día | ✅ **DONE (2026-09-14)** |
 | **SPEC-028** | Suite de casos de referencia clínica (test vectors Knaus/GCS/NEWS2) | 6 | 🟠 Alta | scales existentes en `shared` | 2 días | ✅ **DONE (2026-09-14)** |
 | **SPEC-029** | Fingerprint + versionado del cálculo de scores (auditabilidad) | 6 | 🟡 Media | SPEC-004 | 2 días | ✅ **DONE (2026-09-15)** |
 | **SPEC-030** | Retención y downsampling de mediciones (raw → hourly → daily) | 6 | 🟡 Media | SPEC-004 | 2 días | ✅ **DONE (2026-09-15)** |
 | **SPEC-031** | Hardening ingest HL7 (rate-limit, circuit breaker, data-quality) | 6 | 🟠 Alta | SPEC-003, SPEC-005 | 2 días | ✅ DONE |
-| **SPEC-032** | ML Serving ONNX/WASM (inferencia producción) | 7 | 🟠 Alta | SPEC-002, SPEC-015 | 3 días | 📋 SDD READY |
-| **SPEC-033** | Patient Similarity Engine (embeddings clínicos) | 7 | 🟡 Media | SPEC-032, SPEC-015 | 3 días | 📋 SDD READY |
-| **SPEC-034** | HIPAA/NIST/ISO 27001 Evidence Pack | 8 | 🟠 Alta | SPEC-004, SPEC-024 | 3 días | 📋 SDD READY |
-| **SPEC-035** | Cost Optimization (right-sizing) | 8 | 🟢 Baja | SPEC-021 | 1 día | 📋 SDD READY |
+| **SPEC-032** | ML Serving ONNX/WASM (inferencia producción) | 7 | 🟠 Alta | SPEC-002, SPEC-015 | 3 días | ✅ DONE |
+| **SPEC-033** | Patient Similarity Engine (embeddings clínicos) | 7 | 🟡 Media | SPEC-032, SPEC-015 | 3 días | ✅ DONE |
+| **SPEC-034** | HIPAA/NIST/ISO 27001 Evidence Pack | 8 | 🟠 Alta | SPEC-004, SPEC-024 | 3 días | ✅ DONE |
+| **SPEC-035** | Cost Optimization (right-sizing) | 8 | 🟢 Baja | SPEC-021 | 1 día | ✅ DONE |
 
 ### Próximos 3 Specs a ejecutar (Sprint actual)
 
@@ -336,8 +337,9 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 > 5. ✅ **SPEC-028** Vectores clínicos (conformidad con Knaus) — **DONE 2026-09-14**  
 > 6. ✅ **SPEC-029** Fingerprint de scores (auditabilidad) — **DONE 2026-09-15**  
 > 7. ✅ **SPEC-030** Retención/downsampling (raw→hourly→daily) — **DONE 2026-09-15**  
-> 8. **SPEC-010** Semantic Versioning + git-cliff Changelog  
-> 9. **SPEC-011** WASM Opt en CI (wasm-opt 2.2MB → 600KB)
+> 8. ✅ **SPEC-021–035** Todas las specs 021–035 completadas — **DONE 2026-09-16**  
+> 9. **SPEC-010** Semantic Versioning + git-cliff Changelog  
+> 10. **SPEC-011** WASM Opt en CI (wasm-opt 2.2MB → 600KB)
 
 ---
 
@@ -537,6 +539,38 @@ jobs:
 - **NUEVO**: auditabilidad médico-legal → **SPEC-029** (fingerprint + semver de algoritmos): ningún score sin versión y hash reproducer.
 - **NUEVO**: el crecimiento de `measurement` es el riesgo de largo plazo → **SPEC-030** (retención raw→hourly→daily; resta ops y backups).
 - **NUEVO**: un monitor flood/rebote no debe degradar el resto de la UCI → **SPEC-031** (token bucket + circuit breaker + gap/fault detection expuestos en Grafana via SPEC-005).
+
+---
+
+## Fase 9 — Security Hardening Web ✅
+
+### Objetivo
+Cerrar los hallazgos de seguridad web residuales identificados en la auditoría post-Fase 6/7/8 para endurecer la superficie de ataque antes de cierre del proyecto.
+
+### Hallazgos abordados (fuente: auditoría interna 2026-09-16)
+
+| # | Hallazgo | Archivos | Severidad | Fix |
+|---|----------|----------|-----------|-----|
+| 1 | TOTP brute-force: `/auth/mfa/verify` sin rate-limit (hasta 1M intentos) | `security.rs`, `api/auth.rs` | 🔴 Crítica | MFA throttle dedicado: 3 intentos / 5 min por IP |
+| 2 | Header injection en CSV export: `patient.apellido` en `Content-Disposition` sin sanitizar | `api/export.rs` | 🔴 Crítica | `sanitize_filename()` regex `[a-zA-Z0-9_-]` + CR/LF/`"`/`;` strip |
+| 3 | Paginación sin límite: `list_patients`/`list_camas`/`list_equipos` aceptan `limit=999999` | `db.rs`, `models.rs` | 🟠 Alta | `MAX_PAGE_LIMIT = 200` en shared + cap defensivo en DB layer |
+| 4 | IP no loggeada en login fallido (HIPAA) | `api/auth.rs`, `audit.rs` | 🟠 Alta | `client_ip` capturado y pasado a `log_login_failed` / `log_login_success` |
+| 5 | CORS `allow_headers(Any)` + env var vacía abre server silenciosamente | `main.rs` | 🟡 Media | Allowlist explícita (`Authorization, Content-Type, Accept`) + fail-closed a localhost |
+| 6 | SSE sin límite de conexiones por IP | `realtime.rs` | 🟡 Media | `MAX_SSE_PER_IP = 10` con registry global + RAII guard en `CountedStream` |
+| 7 | `DELETE /patients` requiere `patients:create` en vez de `patients:delete` | `rbac.rs` | 🟡 Media | `permission_for("DELETE", "/patients/...") → "patients:delete"` |
+| 8 | Errores DB (`e.to_string()`) filtran internals de SurrealDB al cliente | `security.rs` + 20+ handlers API | 🟢 Baja | `sanitize_internal_error()` loggea real + devuelve genérico |
+| 9 | Sin zeroize en tokens/keys/passwords en memoria | `auth.rs`, `mfa.rs`, `crypto.rs`, `models.rs` | 🟡 Media | `#[derive(Zeroize, ZeroizeOnDrop)]` en `LoginResponse`, `RefreshRequest`, `RefreshTokenRecord`, `MfaSetupResponse`, `MfaCodeRequest`, `MfaSettings`; `MasterKey` ya tenía |
+
+### Criterios de éxito
+- `cargo clippy -p dmart-server --lib --bin dmart-server -- -D warnings` → 0 warnings
+- Tests existentes verdes (147 server + 63 integración = 210 total)
+- `cargo audit` sin advisories críticos
+
+### KPIs
+- 0 endpoints expuestos a header injection
+- 0 endpoints con paginación ilimitada
+- MFA challenge bloqueado tras 3 fallos/IP/5min
+- 100% errores DB sanitizados al cliente
 
 ---
 

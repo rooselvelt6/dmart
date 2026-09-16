@@ -36,7 +36,8 @@ pub async fn validate_message(State(db): State<Database>, body: Json<Value>) -> 
     match validate_and_store(&db, &msg).await {
         Ok(issues) => (StatusCode::OK, Json(ApiResponse::ok(issues))).into_response(),
         Err(e) => {
-            err_response::<Vec<QualityIssue>>(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            let msg = crate::security::sanitize_internal_error(&e);
+            err_response::<Vec<QualityIssue>>(StatusCode::INTERNAL_SERVER_ERROR, msg)
         }
     }
 }
@@ -47,7 +48,8 @@ pub async fn quality_report(State(db): State<Database>) -> Response {
     match report_issues(&db, ReportQuery::default()).await {
         Ok(issues) => (StatusCode::OK, Json(ApiResponse::ok(issues))).into_response(),
         Err(e) => {
-            err_response::<Vec<QualityIssue>>(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            let msg = crate::security::sanitize_internal_error(&e);
+            err_response::<Vec<QualityIssue>>(StatusCode::INTERNAL_SERVER_ERROR, msg)
         }
     }
 }
@@ -56,6 +58,9 @@ pub async fn quality_report(State(db): State<Database>) -> Response {
 pub async fn quality_summary(State(db): State<Database>) -> Response {
     match summarize(&db).await {
         Ok(summary) => (StatusCode::OK, Json(ApiResponse::ok(summary))).into_response(),
-        Err(e) => err_response::<QualitySummary>(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            err_response::<QualitySummary>(StatusCode::INTERNAL_SERVER_ERROR, msg)
+        }
     }
 }

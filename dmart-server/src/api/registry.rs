@@ -52,11 +52,14 @@ pub async fn list_devices(State(db): State<Database>, query: Query<DeviceQuery>)
     let estado = query.estado.as_deref();
     match crate::device_registry::list(&db, estado).await {
         Ok(devices) => (StatusCode::OK, Json(ApiResponse::ok(devices))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Vec<crate::device_registry::ClinicalDevice>>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Vec<crate::device_registry::ClinicalDevice>>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -70,13 +73,14 @@ pub async fn register_device(State(db): State<Database>, body: Json<Value>) -> R
 
     match crate::device_registry::register(&db, input).await {
         Ok(device) => (StatusCode::CREATED, Json(ApiResponse::ok(device))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(
-                e.to_string(),
-            )),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -90,13 +94,14 @@ pub async fn get_device(State(db): State<Database>, id: Path<String>) -> Respons
             )),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(
-                e.to_string(),
-            )),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -110,23 +115,27 @@ pub async fn heartbeat_device(State(db): State<Database>, id: Path<String>) -> R
             )),
         )
             .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(
-                e.to_string(),
-            )),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
 pub async fn device_status_summary(State(db): State<Database>) -> Response {
     match crate::device_registry::status_summary(&db).await {
         Ok(summary) => (StatusCode::OK, Json(ApiResponse::ok(summary))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Value>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Value>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }

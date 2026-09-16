@@ -26,11 +26,14 @@ pub fn routes() -> Router<Database> {
 async fn run_job(State(db): State<Database>) -> impl IntoResponse {
     match crate::retention::run_downsample(&db).await {
         Ok(report) => (StatusCode::OK, Json(ApiResponse::ok(report))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<crate::retention::RetentionRunReport>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<crate::retention::RetentionRunReport>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -43,10 +46,13 @@ async fn config(State(_db): State<Database>) -> impl IntoResponse {
 async fn status(State(db): State<Database>) -> impl IntoResponse {
     match crate::retention::retention_status(&db).await {
         Ok(s) => (StatusCode::OK, Json(ApiResponse::ok(s))).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<crate::retention::RetentionStatus>::err(e.to_string())),
-        )
-            .into_response(),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<crate::retention::RetentionStatus>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
