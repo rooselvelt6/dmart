@@ -172,6 +172,7 @@ pub fn build_api_router(
             "/admin/tenants",
             get(tenant::list_tenants_api).post(tenant::create_tenant_api),
         )
+        .route("/admin/tenants/audit", get(tenant::audit_tenancy_api))
         .route(
             "/admin/tenants/{id}/impersonate",
             post(tenant::impersonate_tenant_api),

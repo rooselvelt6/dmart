@@ -130,6 +130,30 @@ pub async fn impersonate_tenant_api(
     })))).into_response()
 }
 
+/// GET /api/admin/tenants/audit — auditoría de aislamiento de datos.
+/// Escanea pacientes, mediciones, usuarios y embeddings en busca de registros
+/// sin `tenant_id` o con `tenant_id` no registrado (huérfanos).
+pub async fn audit_tenancy_api(
+    State(db): State<Database>,
+) -> impl IntoResponse {
+    match crate::db::audit_tenancy(&db).await {
+        Ok(report) => (
+            if report.healthy {
+                StatusCode::OK
+            } else {
+                StatusCode::CONFLICT
+            },
+            Json(ApiResponse::ok(report)),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<crate::db::TenancyAuditReport>::err(e.to_string())),
+        )
+            .into_response(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

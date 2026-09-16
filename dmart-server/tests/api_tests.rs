@@ -1949,3 +1949,99 @@ async fn test_e2e_granular_rbac_permissions() {
     let (s, _) = send(&http, Method::GET, "/admin/institucion", Some(&admin), None).await;
     assert_eq!(s, StatusCode::OK, "admin reads institucion");
 }
+
+// ─── Auditoría de aislamiento multi-tenant (SPEC-025) ──────────────────────
+
+#[tokio::test]
+async fn test_tenancy_audit_detects_missing_and_orphan_tenant_ids() {
+    let (db, _dir) = test_db().await;
+
+    // Baseline: BD vacía → healthy.
+    let report = dmart_server::db::audit_tenancy(&db)
+        .await
+        .expect("audit empty db");
+    assert!(report.healthy, "empty DB must be healthy");
+    assert_eq!(report.tables.len(), 4, "escanea patients/measurements/users/embeddings");
+    assert_eq!(report.total_records, 0);
+
+    // Paciente con tenant default → sigue healthy.
+    let p = dmart_shared::models::Patient::new();
+    let pid = p.patient_id.clone();
+    dmart_server::db::create_patient(&db, p).await.expect("create patient");
+    let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
+    assert!(report.healthy, "default-tenant patient is healthy");
+
+    // Fuga simulada: paciente legacy sin tenant_id (vacío).
+    let p2 = dmart_shared::models::Patient::new();
+    let pid2 = p2.patient_id.clone();
+    dmart_server::db::create_patient(&db, p2).await.expect("create patient");
+    let upd = db
+        .query("UPDATE patients SET tenant_id = '' WHERE patient_id = $p")
+        .bind(("p", pid2.clone()))
+        .await
+        .expect("update patient tenant");
+    assert!(upd.check().is_ok(), "update ok");
+
+    let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
+    let patients = report.tables.iter().find(|t| t.table == "patients").expect("patients row");
+    assert_eq!(patients.missing_tenant_id, 1, "detecta tenant ausente");
+    assert!(!report.healthy, "unhealthy con fuga");
+
+    // Huérfano: tenant_id no registrado en el catálogo de tenants.
+    db.query("UPDATE patients SET tenant_id = 'ghost-tenant' WHERE patient_id = $p")
+        .bind(("p", pid.clone()))
+        .await
+        .expect("update patient to ghost tenant");
+    let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
+    let patients = report.tables.iter().find(|t| t.table == "patients").expect("patients row");
+    assert!(
+        patients.orphan_tenant_ids.contains(&"ghost-tenant".to_string()),
+        "tenants huérfanos listados"
+    );
+    assert_eq!(patients.orphan_count, 1, "cuenta de huérfanos");
+
+    // Tras registrar el tenant en el catálogo → ya no es huérfano.
+    dmart_server::tenant::create_tenant(&db, "ghost-tenant", "Ghost Hospital")
+        .await
+        .expect("create tenant");
+    let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
+    let patients = report.tables.iter().find(|t| t.table == "patients").expect("patients row");
+    assert!(patients.orphan_tenant_ids.is_empty(), "no más huérfanos tras registrar");
+    assert_eq!(patients.orphan_count, 0);
+}
+
+#[tokio::test]
+async fn test_e2e_tenants_audit_endpoint() {
+    let (db, _dir) = test_db().await;
+    let http = build_app(&db).await;
+
+    seed_user(&db, "tenant_admin", "SuperSecreto_01!", dmart_shared::models::UserRole::Admin, "Tenant Admin")
+        .await;
+    let token = login_token(&http, "tenant_admin", "SuperSecreto_01!").await;
+
+    // Endpoint sin auth → 401.
+    let (s, _) = send(&http, Method::GET, "/admin/tenants/audit", None, None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "audit requiere auth");
+
+    // BD vacía → healthy=true.
+    let (s, json) = send(&http, Method::GET, "/admin/tenants/audit", Some(&token), None).await;
+    assert_eq!(s, StatusCode::OK, "audit healthy retorna 200");
+    assert_eq!(json["data"]["healthy"], true, "BD vacía healthy");
+    assert_eq!(json["data"]["tables"].as_array().map(|a| a.len()), Some(4));
+
+    // Fuga: paciente sin tenant → el endpoint reporta unhealthy (409).
+    let p = dmart_shared::models::Patient::new();
+    dmart_server::db::create_patient(&db, p).await.expect("create patient");
+    db.query("UPDATE patients SET tenant_id = '' WHERE tenant_id = $t")
+        .bind(("t", "default".to_string()))
+        .await
+        .expect("wipe tenant id");
+    let (s, json) = send(&http, Method::GET, "/admin/tenants/audit", Some(&token), None).await;
+    assert_eq!(s, StatusCode::CONFLICT, "fuga reportada como conflicto");
+    assert_eq!(json["data"]["healthy"], false);
+    assert_eq!(
+        json["data"]["tables"][0]["missing_tenant_id"],
+        1,
+        "detecta el registro sin tenant"
+    );
+}

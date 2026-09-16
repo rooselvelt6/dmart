@@ -1017,3 +1017,132 @@ pub async fn seed_institucion_config(db: &Surreal<Db>) -> Result<()> {
     tracing::info!("🏥 Seeded default institution config");
     Ok(())
 }
+
+// ─── Auditoría de aislamiento multi-tenant (SPEC-025) ─────────────────────
+
+/// Resultado de la auditoría para una tabla de datos con `tenant_id`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableTenancyAudit {
+    pub table: String,
+    pub total: u64,
+    /// Registros con `tenant_id` ausente (NONE) o vacío — fugas de aislamiento.
+    pub missing_tenant_id: u64,
+    /// Registros cuyo `tenant_id` no existe en el catálogo `tenant` ni es el default.
+    pub orphan_tenant_ids: Vec<String>,
+    pub orphan_count: u64,
+}
+
+/// Reporte global de la auditoría de tenants.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TenancyAuditReport {
+    pub healthy: bool,
+    pub tables: Vec<TableTenancyAudit>,
+    pub total_records: u64,
+    /// Suma de registros con tenant ausente/o huérfano (riesgo de fuga cruzada).
+    pub records_at_risk: u64,
+}
+
+/// Auditoría SEC-025: escanea pacientes, mediciones, usuarios y embeddings
+/// buscando registros sin `tenant_id` o con `tenant_id` no registrado.
+/// Devuelve filas problemáticas agrupadas por tabla (útil para un comando
+/// de soporte `GET /admin/tenants/audit`).
+pub async fn audit_tenancy(db: &Surreal<Db>) -> Result<TenancyAuditReport> {
+    // Conjunto de tenants válidos: slugs registrados + el tenant por defecto
+    // (siempre válido; prevalece en single-tenant legacy).
+    let mut valid: std::collections::HashSet<String> = std::collections::HashSet::new();
+    valid.insert(crate::tenant::default_tenant());
+    let known: Vec<String> = db
+        .query("SELECT VALUE slug FROM tenant")
+        .await?
+        .take(0)?;
+    for slug in &known {
+        valid.insert(slug.clone());
+    }
+
+    const TABLES: [&str; 4] = ["patients", "measurements", "users", "patient_embedding"];
+
+    // Lista de tenants válidos (usada en la query de huérfanos).
+    let valid_list: Vec<String> = valid.iter().cloned().collect();
+
+    let mut tables = Vec::with_capacity(TABLES.len());
+    let mut total_records = 0u64;
+    let mut records_at_risk = 0u64;
+
+    for table in TABLES {
+        // Total de registros.
+        let total = count_all(db, table).await?;
+        total_records += total;
+
+        // Ausentes/vacíos.
+        let missing = count_tenant_missing(db, table).await?;
+
+        // Distinct tenant_id presentes en la tabla (excluye NONE/vacío).
+        let present: Vec<serde_json::Value> = db
+            .query(format!(
+                "SELECT tenant_id FROM {table} WHERE tenant_id IS NOT NONE AND tenant_id != '' GROUP BY tenant_id"
+            ))
+            .await?
+            .take(0)?;
+        let mut orphans: Vec<String> = Vec::new();
+        for v in &present {
+            let Some(tid) = v.get("tenant_id").and_then(|t| t.as_str()) else {
+                continue;
+            };
+            if !valid.contains(tid) {
+                orphans.push(tid.to_string());
+            }
+        }
+
+        // Registros con tenant_id huérfano (no en el catálogo ni default).
+        let orphan_count = if orphans.is_empty() {
+            0
+        } else {
+            let count: Vec<serde_json::Value> = db
+                .query(format!(
+                    "SELECT count() as count FROM {table} \
+                     WHERE tenant_id IS NOT NONE AND tenant_id != '' AND tenant_id NOT IN $valid \
+                     GROUP BY count"
+                ))
+                .bind(("valid", valid_list.clone()))
+                .await?
+                .take(0)?;
+            count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0)
+        };
+
+        records_at_risk += missing + orphan_count;
+        tables.push(TableTenancyAudit {
+            table: table.to_string(),
+            total,
+            missing_tenant_id: missing,
+            orphan_tenant_ids: orphans,
+            orphan_count,
+        });
+    }
+
+    Ok(TenancyAuditReport {
+        healthy: records_at_risk == 0,
+        tables,
+        total_records,
+        records_at_risk,
+    })
+}
+
+async fn count_all(db: &Surreal<Db>, table: &str) -> Result<u64> {
+    let count: Vec<serde_json::Value> = db
+        .query(format!(
+            "SELECT count() as count FROM {table} GROUP BY count"
+        ))
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+}
+
+async fn count_tenant_missing(db: &Surreal<Db>, table: &str) -> Result<u64> {
+    let count: Vec<serde_json::Value> = db
+        .query(format!(
+            "SELECT count() as count FROM {table} WHERE tenant_id IS NONE OR tenant_id = '' GROUP BY count"
+        ))
+        .await?
+        .take(0)?;
+    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+}
