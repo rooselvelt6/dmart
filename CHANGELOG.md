@@ -7,6 +7,26 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-021..026 + SPEC-032..033: 8 specs SDD de Fase 8 y ML serving (2026-09-16)
+
+### Agregado
+- **Specs SDD escritas** (pendientes de implementación, alineadas a acuerdo Fase 8):
+  - `specs/021-kubernetes-helm-chart.md` — Helm chart HA: Deployment, StatefulSet, HPA, Ingress, NetworkPolicy, PDB.
+  - `specs/022-gitops-argocd-flux.md` — ArgoCD/Flux: sync automático main→prod, self-healing, rollback por git revert.
+  - `specs/023-surrealdb-cluster.md` — Cluster SurrealDB 3 nodos: failover < 30s, replicación, PDB minAvailable=2.
+  - `specs/024-disaster-recovery.md` — Backup incremental/hora en S3/MinIO, restore point-in-time, DR drill trimestral (RPO<1h, RTO<4h).
+  - `specs/025-multi-tenancy.md` — Aislamiento por tenant: RLS pattern, `tenant_id` en JWT y todas las tablas, API super_admin.
+  - `specs/026-blue-green-canary-deploy.md` — Zero-downtime: Blue/Green + Canary 5→25→100% con auto-rollback por métricas.
+  - `specs/032-ml-serving-onnx-wasm.md` — ONNX Runtime en Rust: predict/batch, model swap atómico, fallback CPU.
+  - `specs/033-patient-similarity-engine.md` — Embeddings clínicos 128d, HNSW index, búsqueda K similares < 100ms + explainability.
+- **ROADMAP.md**: master list 019/020 alineada a specs reales; 021–026 y 032–033 marcadas `📋 SDD READY (2026-09-16)`.
+- **README.md**: backlog pendiente detallado con las 8 specs escritas.
+
+### Notas
+- HUECO pendiente: tarea Fase 8.5 (HIPAA/NIST/ISO 27001 evidence pack) y 8.8 (Cost optimization) no tienen spec numerada aún.
+
+---
+
 ## [Unreleased] — SPEC-029 + SPEC-030: Fingerprint de Scores y Retención/Downsampling (2026-09-15)
 
 ### Agregado

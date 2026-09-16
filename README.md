@@ -152,14 +152,20 @@ curl -f http://localhost:3030/obs/health
 
 **Métricas globales:** **199 tests** pasando (71 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
 
-### Backlog pendiente (8 SPECs numeradas)
+### Backlog pendiente (8 SPECs escritas — pendientes de implementación)
 
-| Rango | Cuenta | Próxima acción |
-|-------|--------|----------------|
-| 021–026 | 6 | Core platform: cohort extraction, DR drill, plus remaining platform modules |
-| 032–033 | 2 | ML serving ONNX/WASM + Patient similarity engine (embeddings) |
+| Spec | Título | Estado |
+|------|--------|--------|
+| **021** | Kubernetes Helm Chart (HA production) | 📋 SDD escrita 2026-09-16 |
+| **022** | GitOps ArgoCD/Flux (sync main→prod) | 📋 SDD escrita 2026-09-16 |
+| **023** | SurrealDB Cluster (3+ nodos, HA) | 📋 SDD escrita 2026-09-16 |
+| **024** | Disaster Recovery (RPO<1h, RTO<4h) | 📋 SDD escrita 2026-09-16 |
+| **025** | Multi-tenancy (aislamiento datos) | 📋 SDD escrita 2026-09-16 |
+| **026** | Blue/Green + Canary Deploy (zero-downtime) | 📋 SDD escrita 2026-09-16 |
+| **032** | ML Serving ONNX/WASM (inferencia producción) | 📋 SDD escrita 2026-09-16 |
+| **033** | Patient Similarity Engine (embeddings clínicos) | 📋 SDD escrita 2026-09-16 |
 
-**Próximo paso natural:** abrir **SPEC-021–026** en paralelo — cohort extraction, DR drill, y módulos restantes de plataforma core sobre SPECs 015–020 ya operativas.
+**Nota:** Fase 8 (021–026) congelada por acuerdo de arquitecto 2026-09-13 hasta contrato/piloto hospitalario real. Las specs están listas para SDD (review → implement → verify).
 
 ---
 

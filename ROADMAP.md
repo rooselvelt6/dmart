@@ -304,19 +304,21 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | **SPEC-016** | ML A/B Testing Framework | 7 | 🟡 Media | SPEC-015 | 2 días | ⏳ PENDING |
 | **SPEC-017** | ML SHAP Explainability | 7 | 🟡 Media | SPEC-015 | 2 días | ⏳ PENDING |
 | **SPEC-018** | ML Retraining Pipeline (drift detection) | 7 | 🟡 Media | SPEC-015 | 2 días | ⏳ PENDING |
-| **SPEC-019** | Kubernetes Helm Chart | 8 | 🔴 Crítica | SPEC-006, SPEC-012 | 3 días | ⏳ PENDING |
-| **SPEC-020** | GitOps ArgoCD/Flux | 8 | 🔴 Crítica | SPEC-019 | 2 días | ⏳ PENDING |
-| **SPEC-021** | SurrealDB Cluster (3+ nodos) | 8 | 🔴 Crítica | SPEC-019 | 2 días | ⏳ PENDING |
-| **SPEC-022** | Disaster Recovery (RPO<1h, RTO<4h) | 8 | 🟠 Alta | SPEC-021 | 2 días | ⏳ PENDING |
-| **SPEC-023** | HIPAA/NIST/ISO 27001 Evidence Pack | 8 | 🟠 Alta | SPEC-019 | 3 días | ⏳ PENDING |
-| **SPEC-024** | Multi-tenancy (aislamiento datos) | 8 | 🟡 Media | SPEC-004 | 3 días | ⏳ PENDING |
-| **SPEC-025** | Blue/Green + Canary Deploy | 8 | 🟡 Media | SPEC-020 | 2 días | ⏳ PENDING |
-| **SPEC-026** | Cost Optimization (right-sizing) | 8 | 🟢 Baja | SPEC-019 | 1 día | ⏳ PENDING |
+| **SPEC-019** | Alert Escalation (notificaciones clínicas) | 4 | 🟡 Media | SPEC-008, SPEC-014 | 2 días | ✅ DONE |
+| **SPEC-020** | Tele-ICU (sesiones monitorización remota) | 4 | 🟡 Media | SPEC-015, SPEC-019 | 2 días | ✅ DONE |
+| **SPEC-021** | Kubernetes Helm Chart (HA production) | 8 | 🔴 Crítica | SPEC-006, SPEC-012 | 3 días | 📋 SDD READY |
+| **SPEC-022** | GitOps ArgoCD/Flux (sync main→prod) | 8 | 🔴 Crítica | SPEC-021 | 2 días | 📋 SDD READY |
+| **SPEC-023** | SurrealDB Cluster (3+ nodos, HA) | 8 | 🔴 Crítica | SPEC-021 | 2 días | 📋 SDD READY |
+| **SPEC-024** | Disaster Recovery (RPO<1h, RTO<4h) | 8 | 🟠 Alta | SPEC-023 | 2 días | 📋 SDD READY |
+| **SPEC-025** | Multi-tenancy (aislamiento datos) | 8 | 🟡 Media | SPEC-004 | 3 días | 📋 SDD READY |
+| **SPEC-026** | Blue/Green + Canary Deploy (zero-downtime) | 8 | 🟡 Media | SPEC-022 | 2 días | 📋 SDD READY |
 | **SPEC-027** | Coverage gate en CI (`cargo llvm-cov`) para HL7 y clínica | 6 | 🔴 Crítica | SPEC-003, SPEC-007 | 0.5 día | ✅ **DONE (2026-09-14)** |
 | **SPEC-028** | Suite de casos de referencia clínica (test vectors Knaus/GCS/NEWS2) | 6 | 🟠 Alta | scales existentes en `shared` | 2 días | ✅ **DONE (2026-09-14)** |
 | **SPEC-029** | Fingerprint + versionado del cálculo de scores (auditabilidad) | 6 | 🟡 Media | SPEC-004 | 2 días | ✅ **DONE (2026-09-15)** |
 | **SPEC-030** | Retención y downsampling de mediciones (raw → hourly → daily) | 6 | 🟡 Media | SPEC-004 | 2 días | ✅ **DONE (2026-09-15)** |
 | **SPEC-031** | Hardening ingest HL7 (rate-limit, circuit breaker, data-quality) | 6 | 🟠 Alta | SPEC-003, SPEC-005 | 2 días | ✅ DONE |
+| **SPEC-032** | ML Serving ONNX/WASM (inferencia producción) | 7 | 🟠 Alta | SPEC-002, SPEC-015 | 3 días | 📋 SDD READY |
+| **SPEC-033** | Patient Similarity Engine (embeddings clínicos) | 7 | 🟡 Media | SPEC-032, SPEC-015 | 3 días | 📋 SDD READY |
 
 ### Próximos 3 Specs a ejecutar (Sprint actual)
 
@@ -342,6 +344,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | Métrica | Target | Actual |
 |---------|--------|--------|
 | Specs completadas | 33 totales (25/33 = 76%, 8 pendientes) | 25 (001–020, 027–031) |
+| Specs SDD escritas (pendientes implementación) | — | 8 (021–026, 032–033) — **2026-09-16** |
 | Specs en progreso | 0 | 0 (sprint: SPEC-029/030 ✅ 2026-09-15) |
 | Specs bloqueadas | 0 | 0 (Fase 8 congelada por acuerdo: 021–026) |
 | Cobertura HL7 (parser + MLLP + ingest) | >90% | ✅ 96.5% / 93.8% / 91.8% |
@@ -382,21 +385,23 @@ Producción hospitalaria real: k8s, GitOps, disaster recovery, compliance.
 
 | # | Tarea | Archivos | Criterio | Prioridad |
 |---|-------|----------|----------|-----------|
-| 8.1 | Kubernetes manifests (Helm chart) | `helm/dmart/` | Deploy HA en k8s | Alta → **SPEC-019** |
-| 8.2 | GitOps con ArgoCD / Flux | `.argocd/`, `flux/` | Sync automático main→prod | Alta → **SPEC-020** |
-| 8.3 | SurrealDB cluster (3+ nodos, replication) | `docker-compose.cluster.yml` | HA database | Alta → **SPEC-021** |
-| 8.4 | Disaster Recovery: RPO < 1h, RTO < 4h | `scripts/dr_test.sh` | Test trimestral documentado | Alta → **SPEC-022** |
-| 8.5 | HIPAA/NIST 800-53 / ISO 27001 evidence pack | `docs/compliance/` | Auditoría lista | Media → **SPEC-023** |
-| 8.6 | Multi-tenancy (varios hospitales, aislamiento datos) | `db.rs`, `rbac.rs` | Tenant isolation | Media → **SPEC-024** |
-| 8.7 | Blue/Green deploy + canary releases | `.github/workflows/deploy.yml` | Zero-downtime deploys | Media → **SPEC-025** |
-| 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja → **SPEC-026** |
+| 8.1 | Kubernetes manifests (Helm chart) | `helm/dmart/` | Deploy HA en k8s | Alta → **SPEC-021** |
+| 8.2 | GitOps con ArgoCD / Flux | `.argocd/`, `flux/` | Sync automático main→prod | Alta → **SPEC-022** |
+| 8.3 | SurrealDB cluster (3+ nodos, replication) | `docker-compose.cluster.yml` | HA database | Alta → **SPEC-023** |
+| 8.4 | Disaster Recovery: RPO < 1h, RTO < 4h | `scripts/dr_test.sh` | Test trimestral documentado | Alta → **SPEC-024** |
+| 8.5 | HIPAA/NIST 800-53 / ISO 27001 evidence pack | `docs/compliance/` | Auditoría lista | Media → ⏳ (spec pendiente) |
+| 8.6 | Multi-tenancy (varios hospitales, aislamiento datos) | `db.rs`, `rbac.rs` | Tenant isolation | Media → **SPEC-025** |
+| 8.7 | Blue/Green deploy + canary releases | `.github/workflows/deploy.yml` | Zero-downtime deploys | Media → **SPEC-026** |
+| 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja → ⏳ (spec pendiente) |
 
-> ⚠️ **ACUERDO 2026-09-13 (decisión de arquitecto):** la Fase 8 (SPEC-019–026) queda
+> ⚠️ **ACUERDO 2026-09-13 (decisión de arquitecto):** la Fase 8 (SPEC-021–026) queda
 > **congelada hasta que exista un contrato/piloto hospitalario real**. El sprint de
 > producción se define como *MVP de piloto*: **SPEC-004 → 005(→007) → 006 → 008 → 009 → 012**.
 > Antes de tocar Fase 8, deben cerrarse los huecos clínicos críticos: **SPEC-027 (gate
 > cobertura), SPEC-028 (vectores clínicos), SPEC-031 (ingest hardening)**. k8s/GitOps/
 > cluster no aportan valor a un piloto de 5 camas y sí suman riesgo operativo.
+> Specs de Fase 8 (021–026) escritas como SDD el 2026-09-16, pendientes de
+> implementación alineadas al acuerdo.
 
 > 🎯 **DEFINICIÓN DE PILOTO ROBUSTO (ACUERDO 2026-09-13):** "robusto" NO es
 > completar 31 specs; es que **el sistema sobreviva 30 días en una UCI de 5 camas
