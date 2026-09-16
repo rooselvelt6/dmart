@@ -152,7 +152,7 @@ curl -f http://localhost:3030/obs/health
 
 **Métricas globales:** **199 tests** pasando (71 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027)
 
-### Backlog pendiente (8 SPECs escritas — pendientes de implementación)
+### Backlog pendiente (10 SPECs escritas — pendientes de implementación)
 
 | Spec | Título | Estado |
 |------|--------|--------|
@@ -164,6 +164,8 @@ curl -f http://localhost:3030/obs/health
 | **026** | Blue/Green + Canary Deploy (zero-downtime) | 📋 SDD escrita 2026-09-16 |
 | **032** | ML Serving ONNX/WASM (inferencia producción) | 📋 SDD escrita 2026-09-16 |
 | **033** | Patient Similarity Engine (embeddings clínicos) | 📋 SDD escrita 2026-09-16 |
+| **034** | HIPAA/NIST/ISO 27001 Evidence Pack | 📋 SDD escrita 2026-09-16 |
+| **035** | Cost Optimization (right-sizing) | 📋 SDD escrita 2026-09-16 |
 
 **Nota:** Fase 8 (021–026) congelada por acuerdo de arquitecto 2026-09-13 hasta contrato/piloto hospitalario real. Las specs están listas para SDD (review → implement → verify).
 

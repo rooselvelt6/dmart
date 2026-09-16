@@ -27,6 +27,18 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-034 + SPEC-035: HIPAA/ISO 27001 Evidence Pack + Cost Optimization (2026-09-16)
+
+### Agregado
+- `specs/034-hippa-iso27001-evidence-pack.md` — Control catalog mapeado a NIST 800-53 / HIPAA 45 CFR 164 / ISO 27001 Anexo A, evidencia auto-generada (`compliance_generate.sh`), risk assessment trimestral, plantilla BAA, cumplimiento legal cubano.
+- `specs/035-cost-optimization.md` — Baseline de coste, right-sizing (p99), storage tiering, spot instances para jobs no críticos con checkpoint, idle detection, reporte mensual y forecast; métricas `cost_*` en Prometheus.
+
+### Notas
+- Fase 8 completa: todas las tareas 8.1–8.8 con spec SDD numerada.
+- Gate verde (docs): `git status` limpio.
+
+---
+
 ## [Unreleased] — SPEC-029 + SPEC-030: Fingerprint de Scores y Retención/Downsampling (2026-09-15)
 
 ### Agregado

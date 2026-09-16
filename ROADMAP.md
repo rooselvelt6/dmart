@@ -319,6 +319,8 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | **SPEC-031** | Hardening ingest HL7 (rate-limit, circuit breaker, data-quality) | 6 | 🟠 Alta | SPEC-003, SPEC-005 | 2 días | ✅ DONE |
 | **SPEC-032** | ML Serving ONNX/WASM (inferencia producción) | 7 | 🟠 Alta | SPEC-002, SPEC-015 | 3 días | 📋 SDD READY |
 | **SPEC-033** | Patient Similarity Engine (embeddings clínicos) | 7 | 🟡 Media | SPEC-032, SPEC-015 | 3 días | 📋 SDD READY |
+| **SPEC-034** | HIPAA/NIST/ISO 27001 Evidence Pack | 8 | 🟠 Alta | SPEC-004, SPEC-024 | 3 días | 📋 SDD READY |
+| **SPEC-035** | Cost Optimization (right-sizing) | 8 | 🟢 Baja | SPEC-021 | 1 día | 📋 SDD READY |
 
 ### Próximos 3 Specs a ejecutar (Sprint actual)
 
@@ -344,7 +346,7 @@ Cerrar deuda técnica de Fase 3, automatizar pipeline completo y preparar stagin
 | Métrica | Target | Actual |
 |---------|--------|--------|
 | Specs completadas | 33 totales (25/33 = 76%, 8 pendientes) | 25 (001–020, 027–031) |
-| Specs SDD escritas (pendientes implementación) | — | 8 (021–026, 032–033) — **2026-09-16** |
+| Specs SDD escritas (pendientes implementación) | — | 10 (021–026, 032–035) — **2026-09-16** |
 | Specs en progreso | 0 | 0 (sprint: SPEC-029/030 ✅ 2026-09-15) |
 | Specs bloqueadas | 0 | 0 (Fase 8 congelada por acuerdo: 021–026) |
 | Cobertura HL7 (parser + MLLP + ingest) | >90% | ✅ 96.5% / 93.8% / 91.8% |
@@ -389,10 +391,10 @@ Producción hospitalaria real: k8s, GitOps, disaster recovery, compliance.
 | 8.2 | GitOps con ArgoCD / Flux | `.argocd/`, `flux/` | Sync automático main→prod | Alta → **SPEC-022** |
 | 8.3 | SurrealDB cluster (3+ nodos, replication) | `docker-compose.cluster.yml` | HA database | Alta → **SPEC-023** |
 | 8.4 | Disaster Recovery: RPO < 1h, RTO < 4h | `scripts/dr_test.sh` | Test trimestral documentado | Alta → **SPEC-024** |
-| 8.5 | HIPAA/NIST 800-53 / ISO 27001 evidence pack | `docs/compliance/` | Auditoría lista | Media → ⏳ (spec pendiente) |
+| 8.5 | HIPAA/NIST 800-53 / ISO 27001 evidence pack | `docs/compliance/` | Auditoría lista | Media → **SPEC-034** |
 | 8.6 | Multi-tenancy (varios hospitales, aislamiento datos) | `db.rs`, `rbac.rs` | Tenant isolation | Media → **SPEC-025** |
 | 8.7 | Blue/Green deploy + canary releases | `.github/workflows/deploy.yml` | Zero-downtime deploys | Media → **SPEC-026** |
-| 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja → ⏳ (spec pendiente) |
+| 8.8 | Cost optimization (right-sizing, spot instances) | `scripts/cost_analysis.py` | < $X/mes por cama UCI | Baja → **SPEC-035** |
 
 > ⚠️ **ACUERDO 2026-09-13 (decisión de arquitecto):** la Fase 8 (SPEC-021–026) queda
 > **congelada hasta que exista un contrato/piloto hospitalario real**. El sprint de
