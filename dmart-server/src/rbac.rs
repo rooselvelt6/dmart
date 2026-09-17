@@ -33,63 +33,7 @@ impl From<Role> for UserRole {
 
 impl Role {
     pub fn permissions(&self) -> Vec<String> {
-        match self {
-            Role::Admin => vec![
-                "*".to_string(),
-                "users:create".to_string(),
-                "users:read".to_string(),
-                "users:update".to_string(),
-                "users:delete".to_string(),
-                "patients:create".to_string(),
-                "patients:read".to_string(),
-                "patients:update".to_string(),
-                "patients:delete".to_string(),
-                "measurements:create".to_string(),
-                "measurements:read".to_string(),
-                "measurements:update".to_string(),
-                "measurements:delete".to_string(),
-                "scales:read".to_string(),
-                "scales:write".to_string(),
-                "export:csv".to_string(),
-                "export:pdf".to_string(),
-                "audit:read".to_string(),
-                "config:read".to_string(),
-                "config:write".to_string(),
-                "tenants:read".to_string(),
-                "tenants:manage".to_string(),
-                "ml:predict".to_string(),
-                "ml:read".to_string(),
-            ],
-            Role::Doctor => vec![
-                "patients:create".to_string(),
-                "patients:read".to_string(),
-                "patients:update".to_string(),
-                "measurements:create".to_string(),
-                "measurements:read".to_string(),
-                "measurements:update".to_string(),
-                "scales:read".to_string(),
-                "scales:write".to_string(),
-                "export:csv".to_string(),
-                "export:pdf".to_string(),
-                "ml:predict".to_string(),
-                "ml:read".to_string(),
-            ],
-            Role::Nurse => vec![
-                "patients:read".to_string(),
-                "measurements:create".to_string(),
-                "measurements:read".to_string(),
-                "scales:read".to_string(),
-                "scales:write".to_string(),
-                "export:csv".to_string(),
-                "ml:predict".to_string(),
-                "ml:read".to_string(),
-            ],
-            Role::Viewer => vec![
-                "patients:read".to_string(),
-                "measurements:read".to_string(),
-                "scales:read".to_string(),
-            ],
-        }
+        UserRole::from(*self).permissions().into_iter().map(String::from).collect()
     }
 
     pub fn can(&self, permission: &str) -> bool {

@@ -847,6 +847,73 @@ impl UserRole {
     pub fn can_view(&self) -> bool {
         true
     }
+
+    /// Permisos RBAC del rol (single source of truth, compartido con el server).
+    pub fn permissions(&self) -> Vec<&'static str> {
+        match self {
+            UserRole::Admin => vec![
+                "*",
+                "users:create",
+                "users:read",
+                "users:update",
+                "users:delete",
+                "patients:create",
+                "patients:read",
+                "patients:update",
+                "patients:delete",
+                "measurements:create",
+                "measurements:read",
+                "measurements:update",
+                "measurements:delete",
+                "scales:read",
+                "scales:write",
+                "export:csv",
+                "export:pdf",
+                "audit:read",
+                "config:read",
+                "config:write",
+                "tenants:read",
+                "tenants:manage",
+                "ml:predict",
+                "ml:read",
+            ],
+            UserRole::Medico => vec![
+                "patients:create",
+                "patients:read",
+                "patients:update",
+                "measurements:create",
+                "measurements:read",
+                "measurements:update",
+                "scales:read",
+                "scales:write",
+                "export:csv",
+                "export:pdf",
+                "ml:predict",
+                "ml:read",
+            ],
+            UserRole::Enfermero => vec![
+                "patients:read",
+                "measurements:create",
+                "measurements:read",
+                "scales:read",
+                "scales:write",
+                "export:csv",
+                "ml:predict",
+                "ml:read",
+            ],
+            UserRole::Viewer => vec![
+                "patients:read",
+                "measurements:read",
+                "scales:read",
+            ],
+        }
+    }
+
+    pub fn can(&self, permission: &str) -> bool {
+        self.permissions()
+            .iter()
+            .any(|p| *p == "*" || *p == permission)
+    }
 }
 
 /// Tenant por defecto en modo single-tenant (SPEC-025, feature flag OFF).
