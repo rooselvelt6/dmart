@@ -1,5 +1,4 @@
 use crate::api;
-use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
@@ -27,7 +26,7 @@ pub fn LoginPage() -> impl IntoView {
         spawn_local(async move {
             match api::login(&u, &p).await {
                 Ok(response) => {
-                    let _ = LocalStorage::set("dmart_auth", &response.token);
+                    crate::stores::session::save_session(&response);
                     if let Some(setter) = set_auth {
                         setter.set(true);
                     }

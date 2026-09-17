@@ -2,9 +2,8 @@ use crate::components::theme_toggle::ThemeToggle;
 use crate::pages::{
     admin::AdminPage, dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
     patient_detail::PatientDetailPage, patient_edit::PatientEditPage, patients::PatientsPage,
-    register::RegisterPage,
+    perfil::PerfilPage, register::RegisterPage,
 };
-use gloo_storage::{LocalStorage, Storage};
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -12,14 +11,20 @@ use leptos_router::components::{A, Redirect, Route, Router, Routes};
 use leptos_router::hooks::*;
 use leptos_router::path;
 
-use crate::stores::{fetch_patients_cached, load_patients_cached};
+use crate::stores::{
+    clear_session, fetch_patients_cached, has_token, is_admin, load_patients_cached, user_has,
+};
+use crate::stores::start_session_refresh;
 
 #[component]
 pub fn App() -> impl IntoView {
-    let (is_auth, set_is_auth) = signal(LocalStorage::get::<String>("dmart_auth").is_ok());
+    let (is_auth, set_is_auth) = signal(has_token());
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
     let _ = crate::stores::create_theme_store();
+    if has_token() {
+        start_session_refresh();
+    }
 
     // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).
     let _realtime = crate::stores::use_realtime();
@@ -73,6 +78,8 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/patients/new") view=move || {
                             if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("patients:create") {
+                                Either::Left(view! { <Redirect path="/patients"/> })
                             } else {
                                 Either::Right(view! { <RegisterPage /> })
                             }
@@ -105,8 +112,18 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("/admin") view=move || {
                             if !is_auth.get() {
                                 Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !is_admin() {
+                                Either::Left(view! { <Redirect path="/"/> })
                             } else {
                                 Either::Right(view! { <AdminPage /> })
+                            }
+                        } />
+
+                        <Route path=path!("/perfil") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else {
+                                Either::Right(view! { <PerfilPage /> })
                             }
                         } />
                     </Routes>
@@ -218,18 +235,29 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px; font-size:8px;"></i>ACCIONES
                 </div>
 
-                <A href="/patients/new" attr:class=move || format!("nav-link {}", if is_active_exact("/patients/new") { "active" } else { "" })>
-                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
-                        <i class="fa-solid fa-user-plus w-6 text-center text-lg" style="color:white;"></i>
-                    </div>
-                    <span style="font-weight:500;">Nuevo Paciente</span>
-                </A>
+                <Show when=move || user_has("patients:create")>
+                    <A href="/patients/new" attr:class=move || format!("nav-link {}", if is_active_exact("/patients/new") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+                            <i class="fa-solid fa-user-plus w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">Nuevo Paciente</span>
+                    </A>
+                </Show>
 
-                <A href="/admin" attr:class=move || format!("nav-link {}", if is_active("/admin") { "active" } else { "" })>
-                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);">
-                        <i class="fa-solid fa-gears w-6 text-center text-lg" style="color:white;"></i>
+                <Show when=move || is_admin()>
+                    <A href="/admin" attr:class=move || format!("nav-link {}", if is_active("/admin") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);">
+                            <i class="fa-solid fa-gears w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">Administración</span>
+                    </A>
+                </Show>
+
+                <A href="/perfil" attr:class=move || format!("nav-link {}", if is_active_exact("/perfil") { "active" } else { "" })>
+                    <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #14B8A6 0%, #0D9488 100%);">
+                        <i class="fa-solid fa-user-gear w-6 text-center text-lg" style="color:white;"></i>
                     </div>
-                    <span style="font-weight:500;">Administración</span>
+                    <span style="font-weight:500;">Mi Perfil</span>
                 </A>
 
                 {move || active_patient_id().map(|pid| {
@@ -259,13 +287,38 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
             </div>
 
             <div style="padding:16px; border-top:1px solid var(--uci-border);">
+                <Show when=move || crate::stores::current_user().is_some() fallback=|| ()>
+                    <div style="margin-bottom:12px; padding:10px 12px; border-radius:10px; background:rgba(14,165,233,0.06); border:1px solid var(--uci-border); display:flex; align-items:center; gap:10px;">
+                        <div style="width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#0EA5E9,#6366F1); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; flex-shrink:0;">
+                            {move || {
+                                let u = crate::stores::current_user();
+                                u.map(|x| x.nombre.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or("?".into())).unwrap_or_default()
+                            }}
+                        </div>
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-size:13px; font-weight:700; color:var(--uci-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                {move || crate::stores::current_user().map(|x| x.nombre).unwrap_or_default()}
+                            </div>
+                            <div style="font-size:10px; color:var(--uci-muted); text-transform:uppercase; letter-spacing:0.5px;">
+                                {move || crate::stores::current_user().map(|x| x.rol.label()).unwrap_or_default()}
+                            </div>
+                        </div>
+                    </div>
+                </Show>
                 <div style="margin-bottom:12px;">
                     <ThemeToggle />
                 </div>
                 <button
                     on:click=move |_| {
-                        LocalStorage::delete("dmart_auth");
-                        window().location().reload().unwrap_or_default();
+                        let set_auth = use_context::<WriteSignal<bool>>();
+                        spawn_local(async move {
+                            let _ = crate::api::logout().await;
+                            clear_session();
+                            if let Some(setter) = set_auth {
+                                setter.set(false);
+                            }
+                            window().location().reload().unwrap_or_default();
+                        });
                     }
                     aria-label="Cerrar sesión"
                     style="

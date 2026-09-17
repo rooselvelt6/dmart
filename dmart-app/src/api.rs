@@ -4,6 +4,7 @@ use gloo_net::http::Request;
 use gloo_storage::{LocalStorage, Storage};
 use serde::Deserialize;
 use serde_json::Value;
+use web_sys::RequestCredentials;
 
 const API_BASE: &str = "/api";
 
@@ -50,6 +51,62 @@ fn authed_delete(url: &str) -> gloo_net::http::RequestBuilder {
 pub async fn login(username: &str, password: &str) -> ApiResult<LoginResponse> {
     let body = serde_json::json!({ "username": username, "password": password });
     let resp: ApiResponse<LoginResponse> = authed_post(&format!("{}/auth/login", API_BASE))
+        .json(&body)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+/// Identidad del usuario autenticado (rol, nombre, ...).
+pub async fn me() -> ApiResult<UserInfo> {
+    let resp: ApiResponse<UserInfo> = authed_get(&format!("{}/auth/me", API_BASE))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+/// Renueva el access token usando la cookie httpOnly del refresh token.
+pub async fn refresh_session() -> ApiResult<LoginResponse> {
+    let resp: ApiResponse<LoginResponse> = Request::post(&format!("{}/auth/refresh", API_BASE))
+        .credentials(RequestCredentials::Include)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+/// Cierre de sesión real: revoca tokens en servidor y limpia la cookie.
+pub async fn logout() -> ApiResult<()> {
+    let _: ApiResponse<()> = authed_post(&format!("{}/auth/logout", API_BASE))
+        .credentials(RequestCredentials::Include)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Cambio de contraseña autenticado (verifica la actual y cierra sesiones).
+pub async fn change_password(current: &str, new: &str) -> ApiResult<()> {
+    let body = serde_json::json!({
+        "current_password": current,
+        "new_password": new,
+    });
+    let resp: ApiResponse<()> = authed_post(&format!("{}/auth/change-password", API_BASE))
         .json(&body)
         .map_err(|e| e.to_string())?
         .send()

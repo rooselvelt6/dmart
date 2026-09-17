@@ -5,4 +5,5 @@ pub mod measurement;
 pub mod patient_detail;
 pub mod patient_edit;
 pub mod patients;
+pub mod perfil;
 pub mod register;

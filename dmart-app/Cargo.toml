@@ -33,6 +33,7 @@ web-sys = { version = "0.3", features = [
     "Blob", "Url", "HtmlAnchorElement",
     "EventSource", "MessageEvent",
     "MediaQueryList",
+    "RequestCredentials",
     "console",
 ] }
 js-sys = "0.3"
