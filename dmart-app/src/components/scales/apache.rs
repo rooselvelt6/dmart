@@ -216,9 +216,14 @@ fn SliderField(
                 </span>
             </div>
             <input
-                type="range" class="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                type="range" class="w-full"
                 min=min max=max step=step
                 prop:value=move || value.get()
+                aria-label=label
+                style=move || {
+                    let pct = ((value.get() - min) / (max - min) * 100.0).clamp(0.0, 100.0);
+                    format!("--slider-fill:{}; --pct:{:.4}%;", color, pct)
+                }
                 on:input=move |ev| {
                     if let Ok(v) = event_target_value(&ev).parse::<f32>() {
                         on_change.run(v);
@@ -242,9 +247,14 @@ fn GcsSlider(
         <div class="text-center p-2 rounded-lg" style="background:var(--uci-surface);">
             <label class="text-[10px] font-bold block mb-1" style="color:var(--uci-muted);">{label}</label>
             <input
-                type="range" class="w-full h-1.5"
+                type="range" class="w-full"
                 min=min max=max step=1
                 prop:value=move || value.get()
+                aria-label=label
+                style=move || {
+                    let pct = ((value.get() as f32 - min as f32) / (max as f32 - min as f32) * 100.0).clamp(0.0, 100.0);
+                    format!("--slider-fill:{}; --pct:{:.4}%;", color, pct)
+                }
                 on:input=move |ev| {
                     if let Ok(v) = event_target_value(&ev).parse::<u8>() {
                         on_change.run(v);

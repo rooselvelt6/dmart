@@ -74,9 +74,14 @@ fn GcsSlider(
                 </span>
             </div>
             <input
-                type="range" class="w-full h-2 rounded-lg appearance-none cursor-pointer"
+                type="range" class="w-full"
                 min=min max=max step=1
                 prop:value=move || value.get()
+                aria-label=label
+                style=move || {
+                    let pct = ((value.get() as f32 - min as f32) / (max as f32 - min as f32) * 100.0).clamp(0.0, 100.0);
+                    format!("--slider-fill:{}; --pct:{:.4}%;", color, pct)
+                }
                 on:input=move |ev| {
                     if let Ok(v) = event_target_value(&ev).parse::<u8>() {
                         set_value.run(v);

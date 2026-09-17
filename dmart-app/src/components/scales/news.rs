@@ -141,9 +141,14 @@ fn NewsMetric(
                 </div>
             </div>
             <input
-                type="range" class="w-full h-2"
+                type="range" class="w-full"
                 min=min max=max step=step
                 prop:value=move || value.get()
+                aria-label=label
+                style=move || {
+                    let pct = ((value.get() - min) / (max - min) * 100.0).clamp(0.0, 100.0);
+                    format!("--slider-fill:{}; --pct:{:.4}%;", color, pct)
+                }
                 on:input=move |ev| {
                     if let Ok(v) = event_target_value(&ev).parse::<f32>() {
                         on_change.run(v);

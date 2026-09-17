@@ -239,11 +239,13 @@ pub fn MeasurementPage() -> impl IntoView {
                                                 "Scores en Tiempo Real"
                                             </h3>
                                             <div class="flex justify-center">
-                                                <RadarChart data={vec![
-                                                    RadarData { label: "APACHE II", value: apache_score.get() as f32, max: 71.0, warning: 20.0, critical: 30.0 },
-                                                    RadarData { label: "GCS", value: gcs_score.get() as f32, max: 15.0, warning: 12.0, critical: 8.0 },
-                                                    RadarData { label: "SOFA", value: sofa_score.get() as f32, max: 24.0, warning: 12.0, critical: 18.0 },
-                                                ]} size=260 />
+                                                {move || view! {
+                                                    <RadarChart data={vec![
+                                                        RadarData { label: "APACHE II", value: apache_score.get() as f32, max: 71.0, warning: 20.0, critical: 30.0 },
+                                                        RadarData { label: "GCS", value: gcs_score.get() as f32, max: 15.0, warning: 12.0, critical: 8.0 },
+                                                        RadarData { label: "SOFA", value: sofa_score.get() as f32, max: 24.0, warning: 12.0, critical: 18.0 },
+                                                    ]} size=260 />
+                                                }}
                                             </div>
                                         </div>
 
@@ -275,12 +277,12 @@ pub fn MeasurementPage() -> impl IntoView {
                                         </div>
 
                                         // Observaciones y guardar
-                                        <div class="rounded-2xl p-4 space-y-4" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
+                                        <div class="rounded-2xl p-4 space-y-4 sticky bottom-4 z-10 xl:static" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                                             <div>
-                                                <label class="text-xs font-black uppercase tracking-[0.2em] mb-2 block" style="color:var(--uci-muted);">"Observaciones"</label>
+                                                <label for="obs-notas" class="text-xs font-black uppercase tracking-[0.2em] mb-2 block" style="color:var(--uci-muted);">"Observaciones"</label>
                                                 <textarea
-                                                    class="w-full p-3 rounded-xl text-sm resize-none"
-                                                    style="background:var(--uci-card); border:1px solid var(--uci-border); color:var(--uci-text);"
+                                                    id="obs-notas"
+                                                    class="form-input text-sm resize-none"
                                                     rows="2"
                                                     placeholder="Notas clínicas..."
                                                     prop:value=move || notas.get()
@@ -297,9 +299,8 @@ pub fn MeasurementPage() -> impl IntoView {
                                             })}
 
                                             <button
-                                                class="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all"
-                                                style="background:var(--uci-accent); color:white;"
-    on:click=move |_| on_save.run(())
+                                                class="btn-primary w-full flex items-center justify-center gap-2"
+                                                on:click=move |_| on_save.run(())
                                                 disabled=move || guardando.get()
                                             >
                                                 {move || if guardando.get() {
