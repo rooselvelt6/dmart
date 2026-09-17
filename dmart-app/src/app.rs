@@ -11,11 +11,11 @@ use leptos_router::components::{A, Redirect, Route, Router, Routes};
 use leptos_router::hooks::*;
 use leptos_router::path;
 
+use crate::stores::start_session_refresh;
 use crate::stores::{
     clear_session, current_user, fetch_patients_cached, has_token, is_admin, load_patients_cached,
     save_user, user_has,
 };
-use crate::stores::start_session_refresh;
 
 #[component]
 pub fn App() -> impl IntoView {

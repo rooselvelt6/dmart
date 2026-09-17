@@ -2,18 +2,18 @@
 name = "dmart-app"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-dmart-shared = { path = "../dmart-shared" }
+dmart-shared = { path = "../dmart-shared", features = ["wasm-time"] }
 
 # Leptos 0.8 - Full-stack reactive framework
 leptos = { version = "0.8", features = ["csr"] }
 leptos_router = { version = "0.8" }
 console_error_panic_hook = "0.1"
-regex = "1.10"
 
 # HTTP client (WASM)
 gloo-net = { version = "0.7", features = ["http"] }
@@ -42,7 +42,7 @@ wasm-bindgen-futures = "0.4"
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
-chrono = { workspace = true }
+chrono = { version = "0.4", features = ["serde", "wasmbind"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

@@ -999,17 +999,15 @@ pub async fn list_users(db: &Surreal<Db>) -> Result<Vec<User>> {
 /// `Enfermero`, `Viewer`) o `None` para incluir todos los roles.
 pub async fn list_staff(db: &Surreal<Db>, rol: Option<&str>) -> Result<Vec<User>> {
     let staff: Vec<User> = match rol {
-        Some(rol) => {
-            db.query("SELECT * FROM users WHERE rol = $rol ORDER BY created_at DESC")
-                .bind(("rol", rol.to_string()))
-                .await?
-                .take(0)?
-        }
-        None => {
-            db.query("SELECT * FROM users ORDER BY created_at DESC")
-                .await?
-                .take(0)?
-        }
+        Some(rol) => db
+            .query("SELECT * FROM users WHERE rol = $rol ORDER BY created_at DESC")
+            .bind(("rol", rol.to_string()))
+            .await?
+            .take(0)?,
+        None => db
+            .query("SELECT * FROM users ORDER BY created_at DESC")
+            .await?
+            .take(0)?,
     };
     Ok(staff)
 }
@@ -1044,17 +1042,15 @@ pub async fn list_staff_paginated(
 /// Cuenta el personal. `rol` es el nombre canónico o `None` para todos los roles.
 pub async fn count_staff(db: &Surreal<Db>, rol: Option<&str>) -> Result<u64> {
     let count: Vec<serde_json::Value> = match rol {
-        Some(rol) => {
-            db.query("SELECT count() as count FROM users WHERE rol = $rol GROUP BY count")
-                .bind(("rol", rol.to_string()))
-                .await?
-                .take(0)?
-        }
-        None => {
-            db.query("SELECT count() as count FROM users GROUP BY count")
-                .await?
-                .take(0)?
-        }
+        Some(rol) => db
+            .query("SELECT count() as count FROM users WHERE rol = $rol GROUP BY count")
+            .bind(("rol", rol.to_string()))
+            .await?
+            .take(0)?,
+        None => db
+            .query("SELECT count() as count FROM users GROUP BY count")
+            .await?
+            .take(0)?,
     };
     Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
@@ -1140,10 +1136,7 @@ pub async fn audit_tenancy(db: &Surreal<Db>) -> Result<TenancyAuditReport> {
     // (siempre válido; prevalece en single-tenant legacy).
     let mut valid: std::collections::HashSet<String> = std::collections::HashSet::new();
     valid.insert(crate::tenant::default_tenant());
-    let known: Vec<String> = db
-        .query("SELECT VALUE slug FROM tenant")
-        .await?
-        .take(0)?;
+    let known: Vec<String> = db.query("SELECT VALUE slug FROM tenant").await?.take(0)?;
     for slug in &known {
         valid.insert(slug.clone());
     }
@@ -1234,4 +1227,121 @@ async fn count_tenant_missing(db: &Surreal<Db>, table: &str) -> Result<u64> {
         .await?
         .take(0)?;
     Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+}
+
+// ─── Feature Flags ──────────────────────────────────────────────────────
+
+use dmart_shared::models::{FeatureFlag, CreateFeatureFlagRequest, UpdateFeatureFlagRequest};
+
+/// Crea una nueva feature flag.
+pub async fn create_feature_flag(db: &Surreal<Db>, req: CreateFeatureFlagRequest) -> Result<FeatureFlag> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let flag = FeatureFlag {
+        key: req.key.clone(),
+        description: req.description,
+        enabled: req.enabled,
+        tenant_id: req.tenant_id,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    let created: Option<FeatureFlag> = db
+        .query(
+            "CREATE type::thing('feature_flag', $key) CONTENT $data RETURN AFTER"
+        )
+        .bind(("key", req.key))
+        .bind(("data", flag))
+        .await?
+        .take(0)?;
+
+    created.ok_or_else(|| anyhow::anyhow!("failed to create feature flag"))
+}
+
+/// Lista todas las feature flags (opcionalmente filtradas por tenant).
+pub async fn list_feature_flags(db: &Surreal<Db>, tenant_id: Option<String>) -> Result<Vec<FeatureFlag>> {
+    let flags: Vec<FeatureFlag> = if let Some(tid) = tenant_id {
+        db.query(
+            "SELECT * FROM feature_flag WHERE tenant_id = $tid OR tenant_id IS NONE ORDER BY key"
+        )
+        .bind(("tid", tid))
+        .await?
+        .take(0)?
+    } else {
+        db.query(
+            "SELECT * FROM feature_flag ORDER BY key"
+        )
+        .await?
+        .take(0)?
+    };
+    Ok(flags)
+}
+
+/// Obtiene una feature flag por key y tenant.
+pub async fn get_feature_flag(db: &Surreal<Db>, key: &str, tenant_id: Option<String>) -> Result<Option<FeatureFlag>> {
+    let flag: Option<FeatureFlag> = if let Some(tid) = tenant_id {
+        db.query(
+            "SELECT * FROM feature_flag WHERE key = $key AND (tenant_id = $tid OR tenant_id IS NONE) ORDER BY tenant_id DESC LIMIT 1"
+        )
+        .bind(("key", key.to_string()))
+        .bind(("tid", tid))
+        .await?
+        .take(0)?
+    } else {
+        db.query(
+            "SELECT * FROM feature_flag WHERE key = $key AND tenant_id IS NONE LIMIT 1"
+        )
+        .bind(("key", key.to_string()))
+        .await?
+        .take(0)?
+    };
+    Ok(flag)
+}
+
+/// Actualiza una feature flag.
+pub async fn update_feature_flag(db: &Surreal<Db>, key: &str, req: UpdateFeatureFlagRequest) -> Result<FeatureFlag> {
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Build update query dynamically based on provided fields
+    let mut query = "UPDATE type::thing('feature_flag', $key) SET updated_at = $now".to_string();
+    if req.description.is_some() {
+        query.push_str(", description = $description");
+    }
+    if req.enabled.is_some() {
+        query.push_str(", enabled = $enabled");
+    }
+    if req.tenant_id.is_some() {
+        query.push_str(", tenant_id = $tenant_id");
+    }
+    query.push_str(" RETURN AFTER");
+
+    let mut q = db.query(query).bind(("key", key.to_string())).bind(("now", now));
+
+    if let Some(desc) = req.description {
+        q = q.bind(("description", desc));
+    }
+    if let Some(enabled) = req.enabled {
+        q = q.bind(("enabled", enabled));
+    }
+    if let Some(tid) = req.tenant_id {
+        q = q.bind(("tenant_id", tid));
+    }
+
+    let updated: Option<FeatureFlag> = q.await?.take(0)?;
+    updated.ok_or_else(|| anyhow::anyhow!("feature flag not found"))
+}
+
+/// Elimina una feature flag.
+pub async fn delete_feature_flag(db: &Surreal<Db>, key: &str) -> Result<()> {
+    let deleted: Option<FeatureFlag> = db.delete(("feature_flag", key)).await?;
+    if deleted.is_none() {
+        return Err(anyhow::anyhow!("feature flag not found"));
+    }
+    Ok(())
+}
+
+/// Evalúa una feature flag para un tenant (con cache TTL).
+/// Devuelve true si la flag está enabled para el tenant, false en caso contrario (fail-closed).
+pub async fn evaluate_feature_flag(db: &Surreal<Db>, key: &str, tenant_id: Option<String>) -> Result<bool> {
+    let flag = get_feature_flag(db, key, tenant_id).await?;
+    Ok(flag.map(|f| f.enabled).unwrap_or(false))
 }

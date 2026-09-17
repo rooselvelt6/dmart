@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::time::{now_rfc3339, now_date_string};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -387,7 +387,7 @@ pub struct Patient {
 
 impl Patient {
     pub fn new() -> Self {
-        let now = Utc::now().to_rfc3339();
+        let now = now_rfc3339();
         Self {
             id: None,
             patient_id: Uuid::new_v4().to_string(),
@@ -697,9 +697,9 @@ pub struct Measurement {
 impl Measurement {
     pub fn new(patient_id: &str, apache: ApacheIIData, gcs: GcsData) -> Self {
         use crate::scales::{
-            ALGO_VERSION, calculate_apache_ii_score, calculate_news2_score, calculate_saps_iii_score,
-            calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction, score_fingerprint,
-            sofa_mortality_estimate,
+            ALGO_VERSION, calculate_apache_ii_score, calculate_news2_score,
+            calculate_saps_iii_score, calculate_sofa_score, mortality_risk,
+            saps_iii_mortality_prediction, score_fingerprint, sofa_mortality_estimate,
         };
         let apache_score = calculate_apache_ii_score(&apache);
         let gcs_score = gcs.total();
@@ -717,15 +717,14 @@ impl Measurement {
 
         // SPEC-029: versionado + fingerprint de los inputs ya normalizados.
         let algorithm_version = ALGO_VERSION.to_string();
-        let normalized_inputs =
-            serde_json::to_value(&apache).unwrap_or(serde_json::Value::Null);
+        let normalized_inputs = serde_json::to_value(&apache).unwrap_or(serde_json::Value::Null);
         let fingerprint = score_fingerprint("apache_ii", ALGO_VERSION, &normalized_inputs);
 
         Self {
             id: None,
             measurement_id: Uuid::new_v4().to_string(),
             patient_id: patient_id.to_string(),
-            timestamp: Utc::now().to_rfc3339(),
+            timestamp: now_rfc3339(),
             apache_data: apache,
             gcs_data: gcs,
             apache_score,
@@ -901,11 +900,7 @@ impl UserRole {
                 "ml:predict",
                 "ml:read",
             ],
-            UserRole::Viewer => vec![
-                "patients:read",
-                "measurements:read",
-                "scales:read",
-            ],
+            UserRole::Viewer => vec!["patients:read", "measurements:read", "scales:read"],
         }
     }
 
@@ -944,7 +939,7 @@ impl Default for User {
             rol: UserRole::Admin,
             nombre: String::new(),
             activo: true,
-            created_at: Utc::now().to_rfc3339(),
+            created_at: now_rfc3339(),
             tenant_id: default_tenant_id(),
         }
     }
@@ -959,7 +954,20 @@ pub struct LoginRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginResponse {
     pub token: String,
+    /// Access token explícito (mismo valor que `token`; compatibilidad API).
+    #[serde(default)]
+    pub access_token: String,
+    /// Segundos de validez del access token.
+    #[serde(default)]
+    pub expires_in: i64,
+    /// Refresh token (vacío cuando se exige segundo factor).
+    #[serde(default)]
+    pub refresh_token: String,
     pub user: UserInfo,
+    /// `true` cuando el primer factor fue correcto pero falta el código TOTP:
+    /// `token` es entonces un token de reto (scope `mfa`) de corta duración.
+    #[serde(default)]
+    pub mfa_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -992,6 +1000,96 @@ pub struct MfaSettings {
     pub pending_secret: Option<String>,
     pub backup_codes: Vec<String>,
     pub created_at: String,
+}
+
+/// Estado MFA del usuario autenticado (nunca expone el secreto).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MfaStatus {
+    pub enabled: bool,
+}
+
+/// Predicción de serie temporal (point forecast + cuantiles).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForecastPoint {
+    pub step: usize,              // 1..horizon
+    pub point: f32,               // predicción puntual (mediana)
+    pub quantiles: Vec<f32>,      // q10, q20, ..., q90 (9 valores)
+}
+
+/// Solicitud de forecast para una serie univariada.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForecastRequest {
+    pub series_id: String,        // identifica la serie (p. ej. "vitals:MAP:patient-123")
+    pub values: Vec<f32>,         // serie histórica (p. ej. 512 puntos)
+    pub horizon: usize,           // pasos a predecir
+    #[serde(default = "default_quantiles")]
+    pub quantiles: Vec<f32>,      // lista de cuantiles (default 0.1..0.9)
+    #[serde(default)]
+    pub covariates: Option<Vec<f32>>, // covariables opcionales (past-only)
+}
+
+fn default_quantiles() -> Vec<f32> {
+    vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+}
+
+/// Respuesta de forecast con banda de incertidumbre.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForecastResponse {
+    pub series_id: String,
+    pub horizon: usize,
+    pub points: Vec<ForecastPoint>,
+    pub model: String,
+    pub model_version: String,
+    pub latency_ms: f64,
+}
+
+/// Estado del forecaster activo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForecastStatus {
+    pub enabled: bool,
+    pub backend: String,          // "timesfm" | "naive"
+    pub model_version: String,
+    pub context_length: usize,
+    pub max_horizon: usize,
+}
+
+/// Feature Flag para rollout controlado por tenant.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct FeatureFlag {
+    pub key: String,
+    pub description: String,
+    pub enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Solicitud para crear feature flag.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CreateFeatureFlagRequest {
+    pub key: String,
+    pub description: String,
+    pub enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+}
+
+/// Solicitud para actualizar feature flag.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, utoipa::ToSchema)]
+pub struct UpdateFeatureFlagRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+}
+
+/// Respuesta de lista de feature flags.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct FeatureFlagListResponse {
+    pub flags: Vec<FeatureFlag>,
 }
 
 /// Staff representation without sensitive fields (never exposes `password_hash`).
@@ -1123,7 +1221,7 @@ impl Cama {
             estado: EstadoCama::Libre,
             paciente_id: None,
             paciente_nombre: None,
-            created_at: Utc::now().to_rfc3339(),
+            created_at: now_rfc3339(),
         }
     }
 }
@@ -1252,10 +1350,10 @@ impl Equipo {
             estado: EstadoEquipo::Activo,
             cama_id: None,
             proveedor: String::new(),
-            fecha_compra: Utc::now().format("%Y-%m-%d").to_string(),
+            fecha_compra: now_date_string(),
             garantia_hasta: None,
             notas: String::new(),
-            created_at: Utc::now().to_rfc3339(),
+            created_at: now_rfc3339(),
         }
     }
 }
@@ -1364,7 +1462,7 @@ pub struct InstitucionConfig {
 
 impl Default for InstitucionConfig {
     fn default() -> Self {
-        let now = Utc::now().to_rfc3339();
+        let now = now_rfc3339();
         Self {
             id: None,
             config_id: Uuid::new_v4().to_string(),

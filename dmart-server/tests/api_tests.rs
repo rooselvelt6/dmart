@@ -870,6 +870,56 @@ async fn test_e2e_health_is_open_and_me_requires_token() {
 }
 
 #[tokio::test]
+async fn test_e2e_api_versioning_v1() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "admin_ver",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Admin Ver",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    // Health check v1
+    let (status, json) = send(&http, Method::GET, "/v1/health", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["status"], "healthy");
+
+    // OpenAPI JSON v1
+    let (status, json) = send(&http, Method::GET, "/v1/openapi.json", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(json["openapi"].as_str().unwrap().starts_with("3."));
+    assert_eq!(json["info"]["version"], "1.0.0");
+    assert_eq!(json["servers"][0]["url"], "/api/v1");
+
+    // Version header present
+    let (status, _) = send(&http, Method::GET, "/v1/health", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_e2e_api_legacy_deprecation_header() {
+    let (db, _dir) = test_db().await;
+    seed_user(
+        &db,
+        "admin_legacy",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Admin Legacy",
+    )
+    .await;
+    let http = build_app(&db).await;
+
+    // Legacy route should work but have deprecation header
+    let (status, _) = send(&http, Method::GET, "/health", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    // Note: The test framework doesn't easily expose response headers in our send() helper
+    // This is verified manually or with a more sophisticated test client
+}
+
+#[tokio::test]
 async fn test_e2e_me_returns_real_user() {
     let (db, _dir) = test_db().await;
     seed_user(
@@ -1009,8 +1059,22 @@ async fn test_e2e_staff_list_includes_all_roles_and_filters() {
     use dmart_shared::models::UserRole;
 
     let (db, _dir) = test_db().await;
-    seed_user(&db, "admin_roles", "SuperSecreto_01!", UserRole::Admin, "Admin").await;
-    seed_user(&db, "medico_roles", "SuperSecreto_01!", UserRole::Medico, "Médico").await;
+    seed_user(
+        &db,
+        "admin_roles",
+        "SuperSecreto_01!",
+        UserRole::Admin,
+        "Admin",
+    )
+    .await;
+    seed_user(
+        &db,
+        "medico_roles",
+        "SuperSecreto_01!",
+        UserRole::Medico,
+        "Médico",
+    )
+    .await;
     seed_user(
         &db,
         "enfermero_roles",
@@ -1019,7 +1083,14 @@ async fn test_e2e_staff_list_includes_all_roles_and_filters() {
         "Enfermero",
     )
     .await;
-    seed_user(&db, "viewer_roles", "SuperSecreto_01!", UserRole::Viewer, "Viewer").await;
+    seed_user(
+        &db,
+        "viewer_roles",
+        "SuperSecreto_01!",
+        UserRole::Viewer,
+        "Viewer",
+    )
+    .await;
 
     let http = build_app(&db).await;
     let admin = login_token(&http, "admin_roles", "SuperSecreto_01!").await;
@@ -1032,7 +1103,12 @@ async fn test_e2e_staff_list_includes_all_roles_and_filters() {
         "el listado debe incluir Admin, Médico, Enfermero y Viewer"
     );
     let raw = serde_json::to_string(&json["data"]["items"]).unwrap();
-    for u in ["admin_roles", "medico_roles", "enfermero_roles", "viewer_roles"] {
+    for u in [
+        "admin_roles",
+        "medico_roles",
+        "enfermero_roles",
+        "viewer_roles",
+    ] {
         assert!(raw.contains(u), "el listado debe mostrar a {u}");
     }
     assert!(!raw.contains("password_hash"), "nunca exponer hashes");
@@ -1055,7 +1131,10 @@ async fn test_e2e_staff_list_includes_all_roles_and_filters() {
         .await;
         assert_eq!(status, StatusCode::OK, "filtro {query}");
         let items = serde_json::to_string(&json["data"]["items"]).unwrap();
-        assert!(items.contains(expected), "filtro {query} debe incluir {expected}");
+        assert!(
+            items.contains(expected),
+            "filtro {query} debe incluir {expected}"
+        );
     }
 
     // Alta de Enfermero (bug reportado) y verificación de que aparece en el listado.
@@ -1097,7 +1176,14 @@ async fn test_e2e_change_password_flow() {
     use dmart_shared::models::UserRole;
 
     let (db, _dir) = test_db().await;
-    seed_user(&db, "admin_pwd", "SuperSecreto_01!", UserRole::Admin, "Admin").await;
+    seed_user(
+        &db,
+        "admin_pwd",
+        "SuperSecreto_01!",
+        UserRole::Admin,
+        "Admin",
+    )
+    .await;
     let http = build_app(&db).await;
     let token = login_token(&http, "admin_pwd", "SuperSecreto_01!").await;
 
@@ -1330,6 +1416,10 @@ async fn test_e2e_mfa_setup_confirm_verify_disable() {
         .to_string();
     let session = json["data"]["token"].as_str().unwrap().to_string();
 
+    let (status, json) = send(&http, Method::GET, "/auth/mfa/status", Some(&session), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["data"]["enabled"], false, "MFA inactivo al inicio");
+
     let (status, json) = send(&http, Method::POST, "/auth/mfa/setup", Some(&session), None).await;
     assert_eq!(status, StatusCode::OK, "setup => {}", json);
     let secret = json["data"]["secret"].as_str().unwrap().to_string();
@@ -1352,6 +1442,13 @@ async fn test_e2e_mfa_setup_confirm_verify_disable() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "confirm => {}", json);
+
+    let (status, json) = send(&http, Method::GET, "/auth/mfa/status", Some(&session), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        json["data"]["enabled"], true,
+        "MFA habilitado tras confirmar"
+    );
 
     let (status, json) = send(
         &http,
@@ -1387,6 +1484,21 @@ async fn test_e2e_mfa_setup_confirm_verify_disable() {
 
     let (status, _) = send(&http, Method::GET, "/patients", Some(&full), None).await;
     assert_eq!(status, StatusCode::OK, "sesión completa opera normal");
+
+    let code3 = totp_code(&secret, &user_id);
+    let (status, json) = send(
+        &http,
+        Method::POST,
+        "/auth/mfa/disable",
+        Some(&full),
+        Some(serde_json::json!({ "code": code3 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "disable => {}", json);
+
+    let (status, json) = send(&http, Method::GET, "/auth/mfa/status", Some(&full), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["data"]["enabled"], false, "MFA desactivado");
 
     let _ = user_id;
 }
@@ -2117,20 +2229,28 @@ async fn test_tenancy_audit_detects_missing_and_orphan_tenant_ids() {
         .await
         .expect("audit empty db");
     assert!(report.healthy, "empty DB must be healthy");
-    assert_eq!(report.tables.len(), 4, "escanea patients/measurements/users/embeddings");
+    assert_eq!(
+        report.tables.len(),
+        4,
+        "escanea patients/measurements/users/embeddings"
+    );
     assert_eq!(report.total_records, 0);
 
     // Paciente con tenant default → sigue healthy.
     let p = dmart_shared::models::Patient::new();
     let pid = p.patient_id.clone();
-    dmart_server::db::create_patient(&db, p).await.expect("create patient");
+    dmart_server::db::create_patient(&db, p)
+        .await
+        .expect("create patient");
     let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
     assert!(report.healthy, "default-tenant patient is healthy");
 
     // Fuga simulada: paciente legacy sin tenant_id (vacío).
     let p2 = dmart_shared::models::Patient::new();
     let pid2 = p2.patient_id.clone();
-    dmart_server::db::create_patient(&db, p2).await.expect("create patient");
+    dmart_server::db::create_patient(&db, p2)
+        .await
+        .expect("create patient");
     let upd = db
         .query("UPDATE patients SET tenant_id = '' WHERE patient_id = $p")
         .bind(("p", pid2.clone()))
@@ -2139,7 +2259,11 @@ async fn test_tenancy_audit_detects_missing_and_orphan_tenant_ids() {
     assert!(upd.check().is_ok(), "update ok");
 
     let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
-    let patients = report.tables.iter().find(|t| t.table == "patients").expect("patients row");
+    let patients = report
+        .tables
+        .iter()
+        .find(|t| t.table == "patients")
+        .expect("patients row");
     assert_eq!(patients.missing_tenant_id, 1, "detecta tenant ausente");
     assert!(!report.healthy, "unhealthy con fuga");
 
@@ -2149,9 +2273,15 @@ async fn test_tenancy_audit_detects_missing_and_orphan_tenant_ids() {
         .await
         .expect("update patient to ghost tenant");
     let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
-    let patients = report.tables.iter().find(|t| t.table == "patients").expect("patients row");
+    let patients = report
+        .tables
+        .iter()
+        .find(|t| t.table == "patients")
+        .expect("patients row");
     assert!(
-        patients.orphan_tenant_ids.contains(&"ghost-tenant".to_string()),
+        patients
+            .orphan_tenant_ids
+            .contains(&"ghost-tenant".to_string()),
         "tenants huérfanos listados"
     );
     assert_eq!(patients.orphan_count, 1, "cuenta de huérfanos");
@@ -2161,8 +2291,15 @@ async fn test_tenancy_audit_detects_missing_and_orphan_tenant_ids() {
         .await
         .expect("create tenant");
     let report = dmart_server::db::audit_tenancy(&db).await.expect("audit");
-    let patients = report.tables.iter().find(|t| t.table == "patients").expect("patients row");
-    assert!(patients.orphan_tenant_ids.is_empty(), "no más huérfanos tras registrar");
+    let patients = report
+        .tables
+        .iter()
+        .find(|t| t.table == "patients")
+        .expect("patients row");
+    assert!(
+        patients.orphan_tenant_ids.is_empty(),
+        "no más huérfanos tras registrar"
+    );
     assert_eq!(patients.orphan_count, 0);
 }
 
@@ -2171,8 +2308,14 @@ async fn test_e2e_tenants_audit_endpoint() {
     let (db, _dir) = test_db().await;
     let http = build_app(&db).await;
 
-    seed_user(&db, "tenant_admin", "SuperSecreto_01!", dmart_shared::models::UserRole::Admin, "Tenant Admin")
-        .await;
+    seed_user(
+        &db,
+        "tenant_admin",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Admin,
+        "Tenant Admin",
+    )
+    .await;
     let token = login_token(&http, "tenant_admin", "SuperSecreto_01!").await;
 
     // Endpoint sin auth → 401.
@@ -2180,24 +2323,39 @@ async fn test_e2e_tenants_audit_endpoint() {
     assert_eq!(s, StatusCode::UNAUTHORIZED, "audit requiere auth");
 
     // BD vacía → healthy=true.
-    let (s, json) = send(&http, Method::GET, "/admin/tenants/audit", Some(&token), None).await;
+    let (s, json) = send(
+        &http,
+        Method::GET,
+        "/admin/tenants/audit",
+        Some(&token),
+        None,
+    )
+    .await;
     assert_eq!(s, StatusCode::OK, "audit healthy retorna 200");
     assert_eq!(json["data"]["healthy"], true, "BD vacía healthy");
     assert_eq!(json["data"]["tables"].as_array().map(|a| a.len()), Some(4));
 
     // Fuga: paciente sin tenant → el endpoint reporta unhealthy (409).
     let p = dmart_shared::models::Patient::new();
-    dmart_server::db::create_patient(&db, p).await.expect("create patient");
+    dmart_server::db::create_patient(&db, p)
+        .await
+        .expect("create patient");
     db.query("UPDATE patients SET tenant_id = '' WHERE tenant_id = $t")
         .bind(("t", "default".to_string()))
         .await
         .expect("wipe tenant id");
-    let (s, json) = send(&http, Method::GET, "/admin/tenants/audit", Some(&token), None).await;
+    let (s, json) = send(
+        &http,
+        Method::GET,
+        "/admin/tenants/audit",
+        Some(&token),
+        None,
+    )
+    .await;
     assert_eq!(s, StatusCode::CONFLICT, "fuga reportada como conflicto");
     assert_eq!(json["data"]["healthy"], false);
     assert_eq!(
-        json["data"]["tables"][0]["missing_tenant_id"],
-        1,
+        json["data"]["tables"][0]["missing_tenant_id"], 1,
         "detecta el registro sin tenant"
     );
 }

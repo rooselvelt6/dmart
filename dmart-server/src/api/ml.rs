@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::Claims;
 use crate::db::Database;
 
-use dmart_shared::models::ApiResponse;
+use dmart_shared::models::{ApiResponse, ForecastRequest, ForecastResponse, ForecastStatus};
 
 #[derive(Deserialize)]
 pub struct PredictRequest {
@@ -48,6 +48,51 @@ pub struct SimilaritySearchRequest {
 fn default_k() -> usize {
     10
 }
+
+fn default_quantiles() -> Vec<f32> {
+    vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+}
+
+// ── Forecasting (SPEC-045) ────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct ForecastApiRequest {
+    pub series_id: String,
+    pub values: Vec<f32>,
+    pub horizon: usize,
+    #[serde(default = "default_quantiles")]
+    pub quantiles: Vec<f32>,
+    #[serde(default)]
+    pub covariates: Option<Vec<f32>>,
+}
+
+async fn forecast_api(
+    State(_db): State<Database>,
+    Json(req): Json<ForecastApiRequest>,
+) -> impl IntoResponse {
+    let svc = crate::forecasting::service();
+    let req = dmart_shared::models::ForecastRequest {
+        series_id: req.series_id,
+        values: req.values,
+        horizon: req.horizon,
+        quantiles: req.quantiles,
+        covariates: req.covariates,
+    };
+    match svc.forecast(&req) {
+        Ok(r) => ok(r),
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            err(StatusCode::NOT_FOUND, msg)
+        }
+    }
+}
+
+async fn forecast_status_api(State(_db): State<Database>) -> impl IntoResponse {
+    let svc = crate::forecasting::service();
+    ok(svc.status())
+}
+
+// ── Patient Similarity (SPEC-033) ────────────────────────────────────────
 
 #[derive(Serialize)]
 pub struct SimilarityStatusResponse {
@@ -86,7 +131,11 @@ async fn predict_batch_api(
     Json(req): Json<PredictBatchRequest>,
 ) -> impl IntoResponse {
     let server = crate::ml_serving::server();
-    let inputs: Vec<_> = req.inputs.iter().map(crate::ml_serving::MlFeatures::from_value).collect();
+    let inputs: Vec<_> = req
+        .inputs
+        .iter()
+        .map(crate::ml_serving::MlFeatures::from_value)
+        .collect();
     match server.predict_batch(&req.model, &inputs) {
         Ok(r) => ok(r),
         Err(e) => {
@@ -96,9 +145,7 @@ async fn predict_batch_api(
     }
 }
 
-async fn list_models_api(
-    State(_db): State<Database>,
-) -> impl IntoResponse {
+async fn list_models_api(State(_db): State<Database>) -> impl IntoResponse {
     let server = crate::ml_serving::server();
     let models = server.registry.all();
     ok(models)
@@ -126,7 +173,15 @@ async fn similarity_search_api(
     Json(req): Json<SimilaritySearchRequest>,
 ) -> impl IntoResponse {
     let tenant = claims.tenant_id;
-    match crate::similarity::search_similar(db.as_ref(), &req.patient_id, &tenant, req.k, &req.exclude_patient_ids).await {
+    match crate::similarity::search_similar(
+        db.as_ref(),
+        &req.patient_id,
+        &tenant,
+        req.k,
+        &req.exclude_patient_ids,
+    )
+    .await
+    {
         Ok((hits, total, _)) => {
             #[derive(Serialize)]
             struct Response {
@@ -153,14 +208,16 @@ async fn similarity_explain_api(
     State(db): State<Database>,
     Path((p1, p2)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let emb1: Option<crate::similarity::PatientEmbedding> = db.as_ref()
+    let emb1: Option<crate::similarity::PatientEmbedding> = db
+        .as_ref()
         .query("SELECT * FROM patient_embedding WHERE patient_id = $pid LIMIT 1")
         .bind(("pid", p1.clone()))
         .await
         .expect("db")
         .take(0)
         .expect("take");
-    let emb2: Option<crate::similarity::PatientEmbedding> = db.as_ref()
+    let emb2: Option<crate::similarity::PatientEmbedding> = db
+        .as_ref()
         .query("SELECT * FROM patient_embedding WHERE patient_id = $pid LIMIT 1")
         .bind(("pid", p2.clone()))
         .await
@@ -189,10 +246,9 @@ async fn similarity_explain_api(
     }
 }
 
-async fn similarity_status_api(
-    State(db): State<Database>,
-) -> impl IntoResponse {
-    let count: Vec<serde_json::Value> = db.as_ref()
+async fn similarity_status_api(State(db): State<Database>) -> impl IntoResponse {
+    let count: Vec<serde_json::Value> = db
+        .as_ref()
         .query("SELECT count() as c FROM patient_embedding GROUP BY c")
         .await
         .expect("db")
@@ -224,10 +280,13 @@ async fn regenerate_embeddings_api(
         0,
     )
     .await
-        .unwrap_or_default();
+    .unwrap_or_default();
     let mut count = 0usize;
     for p in patients {
-        if crate::similarity::generate_for_patient(db.as_ref(), &p.patient_id).await.is_ok() {
+        if crate::similarity::generate_for_patient(db.as_ref(), &p.patient_id)
+            .await
+            .is_ok()
+        {
             count += 1;
         }
     }
@@ -249,9 +308,18 @@ pub fn routes() -> axum::Router<Database> {
         .route("/ml/predict_batch", post(predict_batch_api))
         .route("/ml/models", get(list_models_api))
         .route("/ml/models/swap", post(swap_model_api))
+        // Forecasting (SPEC-045)
+        .route("/ml/forecast", post(forecast_api))
+        .route("/ml/forecast/status", get(forecast_status_api))
         // Patient Similarity
         .route("/ml/similarity/search", post(similarity_search_api))
-        .route("/ml/similarity/explain/{p1}/{p2}", get(similarity_explain_api))
+        .route(
+            "/ml/similarity/explain/{p1}/{p2}",
+            get(similarity_explain_api),
+        )
         .route("/ml/similarity/status", get(similarity_status_api))
-        .route("/ml/similarity/embeddings/regenerate", post(regenerate_embeddings_api))
+        .route(
+            "/ml/similarity/embeddings/regenerate",
+            post(regenerate_embeddings_api),
+        )
 }

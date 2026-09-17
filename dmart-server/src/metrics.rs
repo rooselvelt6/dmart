@@ -265,7 +265,8 @@ pub fn ml_prediction(model: &str) {
 
 pub fn ml_inference(model: &str, latency_ms: f64) {
     counter!("ml_inference_total", "model" => model.to_string()).increment(1);
-    histogram!("ml_inference_duration_ms", "model" => model.to_string()).record(latency_ms / 1000.0);
+    histogram!("ml_inference_duration_ms", "model" => model.to_string())
+        .record(latency_ms / 1000.0);
 }
 
 pub fn ml_model_loaded(model: &str) {
@@ -274,7 +275,8 @@ pub fn ml_model_loaded(model: &str) {
 
 pub fn ml_batch(model: &str, size: f64, latency_ms: f64) {
     histogram!("ml_batch_size", "model" => model.to_string()).record(size);
-    histogram!("ml_inference_duration_ms", "model" => model.to_string(), "batch" => "true").record(latency_ms / 1000.0);
+    histogram!("ml_inference_duration_ms", "model" => model.to_string(), "batch" => "true")
+        .record(latency_ms / 1000.0);
 }
 
 pub fn ml_embedding_generated(model_version: &str) {

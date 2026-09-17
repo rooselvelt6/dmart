@@ -30,7 +30,9 @@ async fn run_job(State(db): State<Database>) -> impl IntoResponse {
             let msg = crate::security::sanitize_internal_error(&e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<crate::retention::RetentionRunReport>::err(msg)),
+                Json(ApiResponse::<crate::retention::RetentionRunReport>::err(
+                    msg,
+                )),
             )
                 .into_response()
         }

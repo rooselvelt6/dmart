@@ -70,8 +70,7 @@ pub fn PatientsPage() -> impl IntoView {
         });
     };
 
-    let render_list = move || {
-        match patients_resource.get() {
+    let render_list = move || match patients_resource.get() {
         Some(Ok(list)) if list.is_empty() => {
             let msg = match estado_filter.get().as_str() {
                 "egresados" => "No hay pacientes egresados",
@@ -80,8 +79,9 @@ pub fn PatientsPage() -> impl IntoView {
             };
             view! {
                 <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">{msg}</div>
-            }.into_any()
-        },
+            }
+            .into_any()
+        }
         Some(Ok(list)) => {
             let list: Vec<_> = list;
             if list.is_empty() {
@@ -89,7 +89,7 @@ pub fn PatientsPage() -> impl IntoView {
                     <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">"No se encontraron pacientes"</div>
                 }.into_any()
             } else {
-            view! {
+                view! {
             <div class="glass-card overflow-hidden">
                 <div style="overflow-y:auto; max-height:65vh;" on:scroll=on_scroll>
                     {move || {
@@ -157,7 +157,7 @@ pub fn PatientsPage() -> impl IntoView {
             </div>
             }.into_any()
             }
-        },
+        }
         Some(Err(e)) => view! {
             <ErrorState
                 message=format!("No se pudieron cargar los pacientes: {}", e)
@@ -165,9 +165,9 @@ pub fn PatientsPage() -> impl IntoView {
                     retry.update(|v| *v += 1);
                 }))
             />
-        }.into_any(),
+        }
+        .into_any(),
         None => ().into_any(),
-    }
     };
 
     view! {

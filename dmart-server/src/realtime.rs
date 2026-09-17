@@ -14,8 +14,8 @@ pub mod keepalive {
 use axum::{
     extract::ConnectInfo,
     http::StatusCode,
-    response::{IntoResponse, Response},
     response::sse::{Event, KeepAlive, Sse},
+    response::{IntoResponse, Response},
 };
 use dmart_shared::models::ApiResponse;
 use futures_util::stream::unfold;
@@ -93,7 +93,10 @@ impl RealtimeHub {
 
     /// Construye un stream SSE que emite los eventos del hub. `client_ip` se
     /// usa para el registro de conexiones concurrentes por IP.
-    pub fn sse_stream(&self, client_ip: String) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+    pub fn sse_stream(
+        &self,
+        client_ip: String,
+    ) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
         let rx = self.subscribe();
         let ip = client_ip;
 

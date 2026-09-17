@@ -32,6 +32,89 @@ pub fn PerfilPage() -> impl IntoView {
     let (info_msg, set_info_msg) = signal::<Option<String>>(None);
     let (saving, set_saving) = signal(false);
 
+    // MFA (segundo factor)
+    let (mfa_enabled, set_mfa_enabled) = signal::<Option<bool>>(None);
+    let (mfa_setup, set_mfa_setup) = signal::<Option<api::MfaSetupInfo>>(None);
+    let (mfa_code, set_mfa_code) = signal(String::new());
+    let (mfa_error, set_mfa_error) = signal::<Option<String>>(None);
+    let (mfa_info, set_mfa_info) = signal::<Option<String>>(None);
+    let (mfa_busy, set_mfa_busy) = signal(false);
+
+    spawn_local(async move {
+        if let Ok(enabled) = api::mfa_status().await {
+            set_mfa_enabled.set(Some(enabled));
+        }
+    });
+
+    let on_start_setup = move |_| {
+        set_mfa_error.set(None);
+        set_mfa_info.set(None);
+        set_mfa_busy.set(true);
+        spawn_local(async move {
+            match api::mfa_setup().await {
+                Ok(info) => {
+                    set_mfa_setup.set(Some(info));
+                    set_mfa_code.set(String::new());
+                    set_mfa_busy.set(false);
+                }
+                Err(e) => {
+                    set_mfa_busy.set(false);
+                    set_mfa_error.set(Some(e));
+                }
+            }
+        });
+    };
+
+    let on_confirm_mfa = move |_| {
+        let code = mfa_code.get();
+        if code.trim().is_empty() {
+            set_mfa_error.set(Some("Ingresa el código de tu autenticador".to_string()));
+            return;
+        }
+        set_mfa_error.set(None);
+        set_mfa_busy.set(true);
+        spawn_local(async move {
+            match api::mfa_confirm(&code).await {
+                Ok(()) => {
+                    set_mfa_setup.set(None);
+                    set_mfa_enabled.set(Some(true));
+                    set_mfa_busy.set(false);
+                    set_mfa_info.set(Some(
+                        "Verificación en dos pasos activada correctamente.".to_string(),
+                    ));
+                }
+                Err(e) => {
+                    set_mfa_busy.set(false);
+                    set_mfa_error.set(Some(e));
+                }
+            }
+        });
+    };
+
+    let on_disable_mfa = move |_| {
+        let code = mfa_code.get();
+        if code.trim().is_empty() {
+            set_mfa_error.set(Some("Ingresa un código actual para desactivar".to_string()));
+            return;
+        }
+        set_mfa_error.set(None);
+        set_mfa_busy.set(true);
+        spawn_local(async move {
+            match api::mfa_disable(&code).await {
+                Ok(()) => {
+                    set_mfa_enabled.set(Some(false));
+                    set_mfa_code.set(String::new());
+                    set_mfa_busy.set(false);
+                    set_mfa_info.set(Some("Verificación en dos pasos desactivada.".to_string()));
+                }
+                Err(e) => {
+                    set_mfa_busy.set(false);
+                    set_mfa_error.set(Some(e));
+                }
+            }
+        });
+    };
+
     let navigate = use_navigate();
     let set_is_auth = use_context::<WriteSignal<bool>>();
 
@@ -49,15 +132,21 @@ pub fn PerfilPage() -> impl IntoView {
             return;
         }
         if newp.len() < 8 {
-            set_error_msg.set(Some("La nueva contraseña debe tener al menos 8 caracteres".to_string()));
+            set_error_msg.set(Some(
+                "La nueva contraseña debe tener al menos 8 caracteres".to_string(),
+            ));
             return;
         }
         if newp != conf {
-            set_error_msg.set(Some("La confirmación no coincide con la nueva contraseña".to_string()));
+            set_error_msg.set(Some(
+                "La confirmación no coincide con la nueva contraseña".to_string(),
+            ));
             return;
         }
         if newp == cur {
-            set_error_msg.set(Some("La nueva contraseña debe ser distinta a la actual".to_string()));
+            set_error_msg.set(Some(
+                "La nueva contraseña debe ser distinta a la actual".to_string(),
+            ));
             return;
         }
 
@@ -164,6 +253,104 @@ pub fn PerfilPage() -> impl IntoView {
                 <p class="mt-4 text-xs" style="color:var(--uci-muted);">
                     "Al cambiar la contraseña todas tus sesiones se cierran y deberás iniciar sesión de nuevo."
                 </p>
+            </div>
+
+            <div class="rounded-xl p-5 mt-6" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
+                <h2 class="text-base font-bold mb-1" style="color:var(--uci-text);">
+                    <i class="fa-solid fa-shield-halved mr-2" style="color:var(--uci-accent);"></i>"Verificación en dos pasos"
+                </h2>
+                <p class="text-xs mb-4" style="color:var(--uci-muted);">
+                    "Protege tu cuenta con un código temporal (TOTP) generado por una aplicación autenticadora."
+                </p>
+
+                {move || mfa_error.get().map(|e| view! {
+                    <div class="p-3 rounded-lg mb-4 text-sm font-semibold flex items-center gap-2"
+                        style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#DC2626;">
+                        <i class="fa-solid fa-triangle-exclamation"></i>{e}
+                    </div>
+                })}
+                {move || mfa_info.get().map(|e| view! {
+                    <div class="p-3 rounded-lg mb-4 text-sm font-semibold flex items-center gap-2"
+                        style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#059669;">
+                        <i class="fa-solid fa-circle-check"></i>{e}
+                    </div>
+                })}
+
+                // Estado: MFA desactivado (o aún cargando) → flujo de activación
+                <div class=move || if mfa_enabled.get() == Some(true) { "hidden" } else { "" }>
+                    <button
+                        type="button"
+                        class=move || if mfa_setup.get().is_some() { "hidden" } else { "btn-primary w-full py-3 text-sm font-bold" }
+                        disabled=mfa_busy
+                        on:click=on_start_setup
+                    >
+                        {move || if mfa_busy.get() { "Generando..." } else { "Activar verificación en dos pasos" }}
+                    </button>
+
+                    <div class=move || if mfa_setup.get().is_some() { "space-y-4" } else { "hidden" }>
+                        <div class="text-xs font-bold" style="color:var(--uci-muted);">
+                            "1. Agrega esta cuenta en tu autenticadora (Google Authenticator, Authy, FreeOTP)."
+                        </div>
+                        <div class="p-3 rounded-lg font-mono text-sm break-all"
+                            style="background:var(--uci-bg); border:1px solid var(--uci-border); color:var(--uci-text);">
+                            {move || mfa_setup.get().map(|i| i.secret).unwrap_or_default()}
+                        </div>
+                        <p class="text-[10px] break-all" style="color:var(--uci-muted);">
+                            {move || mfa_setup.get().map(|i| i.otpauth_uri).unwrap_or_default()}
+                        </p>
+                        <div class="text-xs font-bold" style="color:var(--uci-muted);">
+                            "Códigos de respaldo (guárdalos en un lugar seguro; se muestran una sola vez):"
+                        </div>
+                        <div class="grid grid-cols-2 gap-1 font-mono text-xs" style="color:var(--uci-text);">
+                            {move || mfa_setup.get().map(|i| i.backup_codes).unwrap_or_default()
+                                .into_iter()
+                                .map(|c| view! { <span class="p-1 rounded" style="background:var(--uci-bg);">{c}</span> })
+                                .collect_view()}
+                        </div>
+                        <div class="text-xs font-bold" style="color:var(--uci-muted);">
+                            "2. Ingresa el código de 6 dígitos para confirmar:"
+                        </div>
+                        <input
+                            class="form-input text-center tracking-[0.4em] font-mono"
+                            type="text"
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
+                            placeholder="000000"
+                            prop:value=move || mfa_code.get()
+                            on:input=move |ev| set_mfa_code.set(event_target_value(&ev))
+                        />
+                        <button type="button" class="btn-primary w-full py-3 text-sm font-bold"
+                            disabled=mfa_busy on:click=on_confirm_mfa>
+                            {move || if mfa_busy.get() { "Verificando..." } else { "Confirmar y activar" }}
+                        </button>
+                    </div>
+                </div>
+
+                // Estado: MFA activado → flujo de desactivación
+                <div class=move || if mfa_enabled.get() == Some(true) { "space-y-4" } else { "hidden" }>
+                    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold"
+                        style="background:rgba(16,185,129,0.12); color:#059669;">
+                        <i class="fa-solid fa-lock"></i>"Activado"
+                    </span>
+                    <p class="text-xs" style="color:var(--uci-muted);">
+                        "Para desactivarlo, ingresa un código válido de tu autenticadora."
+                    </p>
+                    <input
+                        class="form-input text-center tracking-[0.4em] font-mono"
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        placeholder="000000"
+                        prop:value=move || mfa_code.get()
+                        on:input=move |ev| set_mfa_code.set(event_target_value(&ev))
+                    />
+                    <button type="button"
+                        class="w-full py-3 text-sm font-bold rounded-lg"
+                        style="background:rgba(239,68,68,0.12); color:#DC2626; border:1px solid rgba(239,68,68,0.3);"
+                        disabled=mfa_busy on:click=on_disable_mfa>
+                        {move || if mfa_busy.get() { "Desactivando..." } else { "Desactivar verificación en dos pasos" }}
+                    </button>
+                </div>
             </div>
         </div>
     }

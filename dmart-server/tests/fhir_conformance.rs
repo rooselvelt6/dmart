@@ -4,10 +4,7 @@
 
 use dmart_server::db;
 use dmart_server::fhir_bundle::{FhirBundle, bundle_to_vitals, ingest_fhir_bundle};
-use dmart_server::hl7::parser::Vital;
-use dmart_shared::models::Patient;
 use serde_json::json;
-use std::sync::Arc;
 use tempfile::TempDir;
 
 async fn make_test_db() -> (db::Database, TempDir) {

@@ -13,9 +13,7 @@ async fn make_test_db() -> (Arc<db::Database>, TempDir) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.db");
     let db = db::connect(path.to_str().unwrap()).await.unwrap();
-    dmart_server::migrations::run_migrations(&*db)
-        .await
-        .unwrap();
+    dmart_server::migrations::run_migrations(&db).await.unwrap();
     (Arc::new(db), dir)
 }
 
@@ -293,7 +291,7 @@ async fn timeline_fhir_history_bundle() {
                 .is_empty(),
             "fingerprint SPEC-029 presente"
         );
-        assert!(resource["resourceType"].as_str().unwrap().len() > 0);
+        assert!(!resource["resourceType"].as_str().unwrap().is_empty());
     }
 
     // Admission -> Encounter, ScoreCalculated -> Observation

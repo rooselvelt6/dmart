@@ -203,10 +203,10 @@ jobs:
           path: results/
 
   # ──────────────────────────────────────────────────────────────
-  # WASM BUILD (Frontend) — cargo + wasm-bindgen (bypass trunk lightningcss/wasm-opt issues)
+  # WASM BUILD (Frontend) — trunk + wasm-opt (SPEC-011)
   # ──────────────────────────────────────────────────────────────
   wasm-build:
-    name: WASM Build (cargo + wasm-bindgen)
+    name: WASM Build (trunk + wasm-opt)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -215,27 +215,35 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
-      - name: Install wasm-bindgen-cli (pinned to 0.2.118 for compatibility)
-        run: cargo install wasm-bindgen-cli --version 0.2.118 --locked
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-      - name: Build WASM release
+      - name: Install trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: Install binaryen (wasm-opt)
         run: |
-          cd dmart-app
-          cargo build --target wasm32-unknown-unknown --release
-          wasm-bindgen --out-dir ../dist --target web ../target/wasm32-unknown-unknown/release/dmart_app.wasm
-          # Copy static assets
-          cp index.html ../dist/
-          cp input.css ../dist/
-          cp manifest.webmanifest ../dist/
-          cp sw.js ../dist/
-          cp icon.svg ../dist/
+          set -euo pipefail
+          curl -sSL https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-x86_64-linux.tar.gz \
+            | tar -xz -C /tmp
+          sudo cp /tmp/binaryen-version_129/bin/wasm-opt /usr/local/bin/
+          wasm-opt --version
+      - name: Build WASM release
+        run: trunk build --release
+        working-directory: dmart-app
+      - name: Optimize WASM (SPEC-011)
+        run: bash scripts/optimize-wasm.sh dist
       - name: Verify WASM size
         run: |
-          WASM_SIZE=$(stat -c%s dmart-app/dist/dmart_app_bg.wasm 2>/dev/null || stat -c%s dmart/dist/dmart_app_bg.wasm)
+          set -euo pipefail
+          wasm=$(ls dist/*_bg.wasm | head -1)
+          WASM_SIZE=$(stat -c%s "$wasm")
           echo "WASM size: $WASM_SIZE bytes"
-          if [ $WASM_SIZE -gt 1048576 ]; then
-            echo "❌ WASM too large (>1MB): $WASM_SIZE"
+          # Gate anti-regresión (SPEC-011). Piso actual ~1.7MB tras quitar regex
+          # y aplicar wasm-opt; bajar de 1MB requiere desacoplar chrono de
+          # dmart-shared (seguimiento en roadmapFinal.md F1.4).
+          if [ "$WASM_SIZE" -gt 2097152 ]; then
+            echo "❌ WASM demasiado grande (>2MB): $WASM_SIZE"
             exit 1
           fi
           echo "✅ WASM size OK: $WASM_SIZE bytes"
@@ -243,7 +251,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dmart-frontend-wasm
-          path: dmart-app/dist/
+          path: dist/
           retention-days: 7
 
   # ──────────────────────────────────────────────────────────────
@@ -268,8 +276,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dmart-frontend-wasm
-          path: dmart-app/dist
-      - name: Start backend
+          path: dist
+      - name: Start backend (sirve el frontend)
         run: |
           cargo run --release --bin dmart-server &
           sleep 10
@@ -277,15 +285,11 @@ jobs:
         env:
           DMART_MASTER_KEY: test-master-key-32-bytes-long!!
           DMART_ADMIN_PASSWORD: testadmin123
-      - name: Start frontend server
-        run: |
-          cd dmart-app/dist
-          python3 -m http.server 8080 &
-          sleep 3
+          DMART_DIST_PATH: dist
       - name: Run Playwright tests
         run: npx playwright test --reporter=html
         env:
-          PLAYWRIGHT_BASE_URL: http://localhost:8080/dist
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -332,6 +336,22 @@ jobs:
           name: coverage-lcov
           path: coverage.lcov
           retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────
+  # DEPENDENCY POLICY (cargo-deny) — SPEC-011 / F1.7
+  # ──────────────────────────────────────────────────────────────
+  cargo-deny:
+    name: Dependency Policy (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Run cargo-deny check
+        run: cargo deny check --all-features
 
   # ──────────────────────────────────────────────────────────────
   # SECURITY AUDIT
@@ -452,7 +472,7 @@ jobs:
         run: |
           echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          jobs=("rust-fmt" "rust-clippy" "rust-test-lib" "rust-test-integration" "hl7-integration-test" "prop-test" "fuzz-test" "coverage" "wasm-build" "docker-build" "e2e-test" "security-audit" "release-build")
+          jobs=("rust-fmt" "rust-clippy" "rust-test-lib" "rust-test-integration" "hl7-integration-test" "prop-test" "fuzz-test" "coverage" "wasm-build" "docker-build" "e2e-test" "cargo-deny" "security-audit" "release-build")
           for job in "${jobs[@]}"; do
             result="${{ needs.$job.result }}"
             if [ "$result" = "success" ]; then

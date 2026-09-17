@@ -12,9 +12,7 @@ async fn make_test_db() -> (Arc<db::Database>, TempDir) {
     let path = dir.path().join("test.db");
     let db = db::connect(path.to_str().unwrap()).await.unwrap();
     // Run migrations
-    dmart_server::migrations::run_migrations(&*db)
-        .await
-        .unwrap();
+    dmart_server::migrations::run_migrations(&db).await.unwrap();
     (Arc::new(db), dir)
 }
 

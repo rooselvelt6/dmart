@@ -15,7 +15,10 @@ use serde::Serialize;
 use std::io::Cursor;
 
 fn err_to_str(e: Error) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, crate::security::sanitize_internal_error(&e))
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        crate::security::sanitize_internal_error(&e),
+    )
 }
 
 /// Mapea SeverityLevel al CodeSystem FHIR R4 `condition-severity`.
@@ -189,8 +192,11 @@ pub async fn fhir_patient_search(
         entry: entries,
     };
 
-Ok(Json(serde_json::to_value(bundle).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, crate::security::sanitize_internal_error(&e))
+    Ok(Json(serde_json::to_value(bundle).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            crate::security::sanitize_internal_error(&e),
+        )
     })?))
 }
 
@@ -204,8 +210,12 @@ pub async fn fhir_patient_get(
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
 
     Ok(Json(
-        serde_json::to_value(patient_to_fhir(&patient))
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, crate::security::sanitize_internal_error(&e)))?,
+        serde_json::to_value(patient_to_fhir(&patient)).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                crate::security::sanitize_internal_error(&e),
+            )
+        })?,
     ))
 }
 

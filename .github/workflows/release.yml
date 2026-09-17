@@ -1,94 +1,184 @@
 name: Release — Semantic Versioning + Changelog
 
+# Dos formas de liberar:
+#   1) Manual: Actions → Release → Run workflow (elige major/minor/patch).
+#      Calcula la versión, actualiza CHANGELOG.md, crea y empuja el tag vX.Y.Z.
+#   2) Push de un tag `vX.Y.Z` ya existente.
+# El job `release` construye los artefactos y publica la GitHub Release.
+
 on:
   push:
-    branches: [main]
-    # Solo trigger si hay commits convencionales (feat, fix, perf, security)
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version_type:
-        description: 'Tipo de versión (major, minor, patch)'
+        description: 'Tipo de salto de versión'
         required: true
-        default: 'patch'
+        default: 'minor'
         type: choice
         options: [major, minor, patch]
 
 permissions:
   contents: write
-  pull-requests: write
+
+env:
+  RUST_VERSION: "1.98"
+  CARGO_TERM_COLOR: always
 
 jobs:
-  release:
-    name: Create Release
+  # ──────────────────────────────────────────────────────────────
+  # 1. Calcular versión semántica y crear el tag (solo manual)
+  # ──────────────────────────────────────────────────────────────
+  tag:
+    name: Compute version & tag
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install git-cliff
-        run: |
-          curl -L https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin/
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
 
-      - name: Install cargo-release (opcional)
-        run: cargo install cargo-release --locked
-
-      - name: Determine version bump
+      - name: Compute next semantic version
         id: version
         run: |
-          if [ "${{ github.event.inputs.version_type }}" != "" ]; then
-            BUMP="${{ github.event.inputs.version_type }}"
-          else
-            # Auto-detect desde conventional commits
-            BUMP=$(git cliff --dry-run --config cliff.toml | grep -E "^## \[v" | head -1 | sed -E 's/.*\[(v?[0-9]+\.[0-9]+\.[0-9]+)\].*/\1/' || echo "patch")
-            if [ -z "$BUMP" ]; then BUMP="patch"; fi
-          fi
-          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -1 || true)
+          base="${latest#v}"
+          [ -z "$base" ] && base="0.0.0"
+          IFS=. read -r MA MI PA <<< "$base"
+          case "${{ inputs.version_type }}" in
+            major) MA=$((MA + 1)); MI=0; PA=0 ;;
+            minor) MI=$((MI + 1)); PA=0 ;;
+            patch) PA=$((PA + 1)) ;;
+          esac
+          echo "version=$MA.$MI.$PA" >> "$GITHUB_OUTPUT"
+          echo "Siguiente versión: v$MA.$MI.$PA (base ${latest:-ninguno})"
 
-      - name: Generate changelog
-        id: changelog
+      - name: Prepend changelog entry
         run: |
-          git cliff --config cliff.toml --unreleased --tag ${{ steps.version.outputs.bump }} > CHANGELOG.md
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          git cliff --config cliff.toml --unreleased \
+            --tag "v${{ steps.version.outputs.version }}" \
+            --prepend CHANGELOG.md
 
-      - name: Create git tag
+      - name: Commit changelog and push tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          VERSION="${{ steps.version.outputs.bump }}"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+          git add CHANGELOG.md
+          git commit -m "chore(release): v${{ steps.version.outputs.version }}"
+          git tag -a "v${{ steps.version.outputs.version }}" \
+            -m "Release v${{ steps.version.outputs.version }}"
+          git push origin HEAD:main
+          git push origin "v${{ steps.version.outputs.version }}"
 
-      - name: Create GitHub Release
+  # ──────────────────────────────────────────────────────────────
+  # 2. Construir artefactos y publicar la release
+  # ──────────────────────────────────────────────────────────────
+  release:
+    name: Build & publish release
+    needs: [tag]
+    if: always() && (github.event_name == 'push' || needs.tag.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="v${{ needs.tag.outputs.version }}"
+          else
+            tag="${{ github.ref_name }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      # ── Backend ──────────────────────────────────────────────
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build backend (release)
+        run: cargo build --release -p dmart-server
+
+      # ── Frontend (trunk + wasm-opt) ──────────────────────────
+      - name: Install trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+
+      - name: Install binaryen (wasm-opt)
+        run: |
+          set -euo pipefail
+          curl -sSL https://github.com/WebAssembly/binaryen/releases/download/version_129/binaryen-version_129-x86_64-linux.tar.gz \
+            | tar -xz -C /tmp
+          sudo cp /tmp/binaryen-version_129/bin/wasm-opt /usr/local/bin/
+          wasm-opt --version
+
+      - name: Build frontend (trunk release)
+        run: trunk build --release
+        working-directory: dmart-app
+
+      - name: Optimize WASM (SPEC-011)
+        run: bash scripts/optimize-wasm.sh dist
+
+      - name: Verify WASM size gate (< 2 MB)
+        run: |
+          set -euo pipefail
+          wasm=$(ls dist/*_bg.wasm | head -1)
+          size=$(stat -c%s "$wasm")
+          echo "WASM: $wasm ($size bytes)"
+          if [ "$size" -gt 2097152 ]; then
+            echo "❌ WASM excede 2 MB"
+            exit 1
+          fi
+          echo "✅ WASM < 2 MB"
+
+      # ── Release notes + publicación ──────────────────────────
+      - name: Generate release notes
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - run: git cliff --config cliff.toml --latest --strip header --output RELEASE_NOTES.md
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.bump }}
-          name: Release v${{ steps.version.outputs.bump }}
-          body: ${{ steps.changelog.outputs.changelog }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Release ${{ steps.ver.outputs.tag }}
+          body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
           generate_release_notes: false
           files: |
             target/release/dmart-server
-            dmart-app/dist/**
+            dist/**
 
-      - name: Update CHANGELOG.md in repo
-        if: github.event_name == 'push'
+      - name: Summary
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          git commit -m "chore: update CHANGELOG.md for v${{ steps.version.outputs.bump }}" || echo "No changes to commit"
-          git push origin main || echo "Already up to date"
-
-      - name: Notify (placeholder for Slack/Discord/Email)
-        if: always()
-        run: |
-          echo "## Release v${{ steps.version.outputs.bump }} created" >> $GITHUB_STEP_SUMMARY
-          echo "📦 Tag: v${{ steps.version.outputs.bump }}" >> $GITHUB_STEP_SUMMARY
-          echo "📝 Changelog: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Release ${{ steps.ver.outputs.tag }}"
+            echo ""
+            echo "### Artefactos"
+            echo "- `target/release/dmart-server`"
+            echo "- `dist/**` (frontend WASM optimizado)"
+            echo ""
+            echo "### Notas"
+            cat RELEASE_NOTES.md
+          } >> "$GITHUB_STEP_SUMMARY"

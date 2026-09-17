@@ -229,7 +229,7 @@ impl AuditService {
         .await
     }
 
-pub async fn log_logout(&self, user_id: &str, username: &str) -> Result<AuditLog, String> {
+    pub async fn log_logout(&self, user_id: &str, username: &str) -> Result<AuditLog, String> {
         self.log(
             AuditAction::AuthChange,
             "auth/logout",

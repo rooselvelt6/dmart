@@ -14,7 +14,10 @@ use uuid::Uuid;
 type ApiResult<T> = Result<Json<ApiResponse<T>>, (StatusCode, String)>;
 
 fn err_to_str(e: Error) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, crate::security::sanitize_internal_error(&e))
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        crate::security::sanitize_internal_error(&e),
+    )
 }
 
 // ─── Admin Stats ───────────────────────────────────────────────────

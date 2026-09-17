@@ -35,9 +35,7 @@ async fn patient_count(db: &Database, slug: &str) -> u64 {
 }
 
 /// GET /api/admin/tenants — lista todos los tenants (super_admin).
-pub async fn list_tenants_api(
-    State(db): State<Database>,
-) -> impl IntoResponse {
+pub async fn list_tenants_api(State(db): State<Database>) -> impl IntoResponse {
     match tenant::list_tenants(&db).await {
         Ok(list) => {
             let items: Vec<TenantListItem> = {
@@ -51,20 +49,20 @@ pub async fn list_tenants_api(
                         active: t.active,
                         patient_count: patient_count(&db, &slug).await,
                     });
-}
-            v
-        };
-        (StatusCode::OK, Json(ApiResponse::ok(items))).into_response()
+                }
+                v
+            };
+            (StatusCode::OK, Json(ApiResponse::ok(items))).into_response()
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Vec<TenantListItem>>::err(msg)),
+            )
+                .into_response()
+        }
     }
-    Err(e) => {
-        let msg = crate::security::sanitize_internal_error(&e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<Vec<TenantListItem>>::err(msg)),
-        )
-            .into_response()
-    }
-}
 }
 
 /// POST /api/admin/tenants — crea un tenant (super_admin).
@@ -73,7 +71,12 @@ pub async fn create_tenant_api(
     Json(req): Json<CreateTenantRequest>,
 ) -> impl IntoResponse {
     let slug = req.slug.trim().to_lowercase();
-    if slug.len() < 3 || slug.len() > 50 || !slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+    if slug.len() < 3
+        || slug.len() > 50
+        || !slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::<tenant::Tenant>::err(
@@ -96,7 +99,9 @@ pub async fn create_tenant_api(
         Ok(t) => (StatusCode::CREATED, Json(ApiResponse::ok(t))).into_response(),
         Err(e) => (
             StatusCode::CONFLICT,
-            Json(ApiResponse::<tenant::Tenant>::err(format!("No se pudo crear el tenant: {e}"))),
+            Json(ApiResponse::<tenant::Tenant>::err(format!(
+                "No se pudo crear el tenant: {e}"
+            ))),
         )
             .into_response(),
     }
@@ -109,10 +114,17 @@ pub async fn impersonate_tenant_api(
     Path(slug): Path<String>,
     claims: Claims,
 ) -> impl IntoResponse {
-    if slug == "default" || crate::tenant::get_tenant(&db, &slug).await.map(|t| t.is_none()).unwrap_or(true) {
+    if slug == "default"
+        || crate::tenant::get_tenant(&db, &slug)
+            .await
+            .map(|t| t.is_none())
+            .unwrap_or(true)
+    {
         return (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<serde_json::Value>::err("Tenant no encontrado".to_string())),
+            Json(ApiResponse::<serde_json::Value>::err(
+                "Tenant no encontrado".to_string(),
+            )),
         )
             .into_response();
     }
@@ -129,18 +141,20 @@ pub async fn impersonate_tenant_api(
     }
 
     let expires_at = chrono::Utc::now().timestamp() + 60 * 30; // 30 min
-    (StatusCode::OK, Json(ApiResponse::ok(serde_json::json!({
-        "tenant_id": slug,
-        "expires_at": expires_at,
-    })))).into_response()
+    (
+        StatusCode::OK,
+        Json(ApiResponse::ok(serde_json::json!({
+            "tenant_id": slug,
+            "expires_at": expires_at,
+        }))),
+    )
+        .into_response()
 }
 
 /// GET /api/admin/tenants/audit — auditoría de aislamiento de datos.
 /// Escanea pacientes, mediciones, usuarios y embeddings en busca de registros
 /// sin `tenant_id` o con `tenant_id` no registrado (huérfanos).
-pub async fn audit_tenancy_api(
-    State(db): State<Database>,
-) -> impl IntoResponse {
+pub async fn audit_tenancy_api(State(db): State<Database>) -> impl IntoResponse {
     match crate::db::audit_tenancy(&db).await {
         Ok(report) => (
             if report.healthy {
@@ -164,8 +178,6 @@ pub async fn audit_tenancy_api(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn slug_validation() {
         assert!(slug_is_valid("hosp-a"));
@@ -177,7 +189,9 @@ mod tests {
 
     fn slug_is_valid(slug: &str) -> bool {
         let len_ok = (3..=50).contains(&slug.len());
-        let chars_ok = slug.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        let chars_ok = slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
         len_ok && chars_ok
     }
 }

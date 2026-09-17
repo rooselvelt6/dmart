@@ -5,7 +5,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use dmart_shared::models::{ApiResponse, MfaSettings};
+use dmart_shared::models::{ApiResponse, MfaSettings, MfaStatus};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
@@ -217,6 +217,14 @@ impl MfaService {
         Ok(false)
     }
 
+    /// Indica si el usuario tiene MFA habilitado (sin exponer secretos).
+    pub async fn status(&self, user_id: &str) -> Result<bool, String> {
+        crate::db::get_mfa_settings(&self.db, user_id)
+            .await
+            .map(|s| s.map(|s| s.enabled).unwrap_or(false))
+            .map_err(|e| e.to_string())
+    }
+
     /// Desactiva MFA tras verificar el código actual.
     pub async fn disable(&self, user_id: &str, code: &str) -> Result<(), String> {
         let ok = self.verify(user_id, Some(code), None).await?;
@@ -227,6 +235,18 @@ impl MfaService {
             .await
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+}
+
+/// Handler: GET /api/auth/mfa/status
+pub async fn status(
+    claims: Claims,
+    State(db): State<crate::db::Database>,
+) -> Json<ApiResponse<MfaStatus>> {
+    let service = MfaService::new((*db).clone());
+    match service.status(&claims.sub).await {
+        Ok(enabled) => Json(ApiResponse::ok(MfaStatus { enabled })),
+        Err(e) => Json(ApiResponse::err(e)),
     }
 }
 

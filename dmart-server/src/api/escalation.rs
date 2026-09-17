@@ -82,8 +82,8 @@ pub async fn set_policy(State(db): State<Database>, body: Json<Value>) -> Respon
                 Json(ApiResponse::<EscalationPolicy>::err(msg)),
             )
                 .into_response()
+        }
     }
-}
 }
 
 pub async fn active_escalations(State(db): State<Database>) -> Response {

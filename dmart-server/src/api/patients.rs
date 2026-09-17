@@ -173,13 +173,13 @@ pub async fn create_patient(
             (StatusCode::CREATED, Json(ApiResponse::ok(p))).into_response()
         }
         Err(e) => {
-                let msg = crate::security::sanitize_internal_error(&e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiResponse::<Patient>::err(msg)),
-                )
-                    .into_response()
-}
+            let msg = crate::security::sanitize_internal_error(&e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Patient>::err(msg)),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -406,7 +406,9 @@ pub async fn patient_timeline(
             let msg = crate::security::sanitize_internal_error(&e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(dmart_shared::models::ApiResponse::<TimelineResponse>::err(msg)),
+                Json(dmart_shared::models::ApiResponse::<TimelineResponse>::err(
+                    msg,
+                )),
             )
                 .into_response()
         }

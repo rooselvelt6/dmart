@@ -125,9 +125,21 @@ impl ClinicalFeatures {
     /// Devuelve los nombres en orden canónico (para `features_used`).
     pub fn names() -> [&'static str; 16] {
         [
-            "age", "sex", "heart_rate_mean", "systolic_bp_mean", "respiratory_rate_mean",
-            "temperature_mean", "o2_sat_mean", "o2_sat_min", "wbc_mean", "creatinine_mean",
-            "news2_latest", "sofa_latest", "gcs_latest", "apache_latest", "los_days",
+            "age",
+            "sex",
+            "heart_rate_mean",
+            "systolic_bp_mean",
+            "respiratory_rate_mean",
+            "temperature_mean",
+            "o2_sat_mean",
+            "o2_sat_min",
+            "wbc_mean",
+            "creatinine_mean",
+            "news2_latest",
+            "sofa_latest",
+            "gcs_latest",
+            "apache_latest",
+            "los_days",
             "vital_count",
         ]
     }
@@ -206,7 +218,10 @@ impl PatientEmbedding {
             tenant_id: tenant_id.to_string(),
             embedding,
             model_version: MODEL_VERSION.to_string(),
-            features_used: ClinicalFeatures::names().iter().map(|s| s.to_string()).collect(),
+            features_used: ClinicalFeatures::names()
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             generated_at: now.clone(),
             updated_at: now,
         }
@@ -248,7 +263,8 @@ pub async fn upsert_embedding(
 pub async fn generate_for_patient(db: &Surreal<Db>, patient_id: &str) -> Result<PatientEmbedding> {
     let patient: Option<Patient> = db.select(("patients", patient_id)).await?;
     let p = patient.ok_or_else(|| anyhow::anyhow!("patient not found: {patient_id}"))?;
-    let measurements: Vec<Measurement> = crate::db::get_measurements_for_patient(db, patient_id).await?;
+    let measurements: Vec<Measurement> =
+        crate::db::get_measurements_for_patient(db, patient_id).await?;
     let features = ClinicalFeatures::extract(&p, &measurements);
     upsert_embedding(db, patient_id, &p.tenant_id, embed(&features)).await
 }
@@ -310,7 +326,11 @@ pub async fn search_similar(
 
     crate::metrics::ml_similarity_search(k);
     let _ = excluded;
-    Ok((hits, total, scored.iter().map(|(_, e)| e.clone()).take(k).collect()))
+    Ok((
+        hits,
+        total,
+        scored.iter().map(|(_, e)| e.clone()).take(k).collect(),
+    ))
 }
 
 /// Top-5 features con mayor contribución absoluta a la similitud.
@@ -356,54 +376,58 @@ mod tests {
     fn sample_measurements(n: usize) -> Vec<Measurement> {
         let mut out = Vec::new();
         for i in 0..n {
-            let mut m = Measurement::new("p", dmart_shared::models::ApacheIIData {
-                temperatura: 38.0,
-                presion_arterial_media: 68.0,
-                presion_sistolica: 96.0,
-                frecuencia_cardiaca: 112.0 + (i as f32 * 2.0),
-                frecuencia_respiratoria: 26.0,
-                fio2: 0.5,
-                pao2: Some(70.0),
-                a_ado2: None,
-                spo2: 89.0,
-                ph_arterial: 7.38,
-                sodio_serico: 137.0,
-                potasio_serico: 3.9,
-                creatinina: 1.4,
-                falla_renal_aguda: false,
-                bilirrubina: 1.1,
-                hematocrito: 33.0,
-                leucocitos: 13.0,
-                plaquetas: 180.0,
-                gcs_ojos: 3,
-                gcs_verbal: 4,
-                gcs_motor: 5,
-                gcs_total: 12,
-                edad: 67,
-                insuficiencia_hepatica: false,
-                cardiovascular_severa: true,
-                insuficiencia_respiratoria: false,
-                insuficiencia_renal: false,
-                inmunocomprometido: false,
-                cirugia_no_operado: false,
-                ventilacion_mecanica: true,
-                vasopresores: true,
-                dosis_vasopresor: 0.2,
-                diuresis_diaria: 1200,
-                alerta: false,
-                o2_suplementario: true,
-                nivel_conciencia: "Somnoliento".to_string(),
-                bicarbonate: 22.0,
-                tipo_admision: Some("unscheduled_surgical".to_string()),
-                fuente_admision: Some("emergency_room".to_string()),
-                dias_pre_uci: 1,
-                infeccion_admision: Some("respiratory".to_string()),
-                sistema_anatomico: Some("respiratory".to_string()),
-            }, dmart_shared::models::GcsData {
-                apertura_ocular: 3,
-                respuesta_verbal: 4,
-                respuesta_motora: 5,
-            });
+            let mut m = Measurement::new(
+                "p",
+                dmart_shared::models::ApacheIIData {
+                    temperatura: 38.0,
+                    presion_arterial_media: 68.0,
+                    presion_sistolica: 96.0,
+                    frecuencia_cardiaca: 112.0 + (i as f32 * 2.0),
+                    frecuencia_respiratoria: 26.0,
+                    fio2: 0.5,
+                    pao2: Some(70.0),
+                    a_ado2: None,
+                    spo2: 89.0,
+                    ph_arterial: 7.38,
+                    sodio_serico: 137.0,
+                    potasio_serico: 3.9,
+                    creatinina: 1.4,
+                    falla_renal_aguda: false,
+                    bilirrubina: 1.1,
+                    hematocrito: 33.0,
+                    leucocitos: 13.0,
+                    plaquetas: 180.0,
+                    gcs_ojos: 3,
+                    gcs_verbal: 4,
+                    gcs_motor: 5,
+                    gcs_total: 12,
+                    edad: 67,
+                    insuficiencia_hepatica: false,
+                    cardiovascular_severa: true,
+                    insuficiencia_respiratoria: false,
+                    insuficiencia_renal: false,
+                    inmunocomprometido: false,
+                    cirugia_no_operado: false,
+                    ventilacion_mecanica: true,
+                    vasopresores: true,
+                    dosis_vasopresor: 0.2,
+                    diuresis_diaria: 1200,
+                    alerta: false,
+                    o2_suplementario: true,
+                    nivel_conciencia: "Somnoliento".to_string(),
+                    bicarbonate: 22.0,
+                    tipo_admision: Some("unscheduled_surgical".to_string()),
+                    fuente_admision: Some("emergency_room".to_string()),
+                    dias_pre_uci: 1,
+                    infeccion_admision: Some("respiratory".to_string()),
+                    sistema_anatomico: Some("respiratory".to_string()),
+                },
+                dmart_shared::models::GcsData {
+                    apertura_ocular: 3,
+                    respuesta_verbal: 4,
+                    respuesta_motora: 5,
+                },
+            );
             // Apuntar al paciente de prueba
             m.patient_id = "p".to_string();
             out.push(m);
@@ -422,7 +446,10 @@ mod tests {
 
     #[test]
     fn cosine_perfect_similarity() {
-        let a = embed(&ClinicalFeatures::extract(&sample_patient(), &sample_measurements(3)));
+        let a = embed(&ClinicalFeatures::extract(
+            &sample_patient(),
+            &sample_measurements(3),
+        ));
         let b = a.clone();
         let s = cosine(&a, &b);
         assert!((s - 1.0).abs() < 1e-3, "same vector → 1.0, got {s}");

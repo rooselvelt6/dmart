@@ -6,14 +6,7 @@
 //! históricos sin fingerprint (previos a la migración 029) se marcan como
 //! "sin fingerprint" (`reproducible=false`, `algorithm_version="<legacy>"`).
 
-use axum::{
-    Json,
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use dmart_shared::models::{ApiResponse, Measurement};
 use dmart_shared::scales::score_fingerprint;
 use serde::Serialize;
@@ -49,12 +42,12 @@ async fn load_measurements(db: &Surreal<Db>) -> Result<Vec<Measurement>, String>
 }
 
 fn verify_measurement(m: &Measurement) -> ScoreAuditEntry {
-    let algorithm_version = if m.algorithm_version.is_empty() || m.algorithm_version == LEGACY_VERSION
-    {
-        LEGACY_VERSION.to_string()
-    } else {
-        m.algorithm_version.clone()
-    };
+    let algorithm_version =
+        if m.algorithm_version.is_empty() || m.algorithm_version == LEGACY_VERSION {
+            LEGACY_VERSION.to_string()
+        } else {
+            m.algorithm_version.clone()
+        };
 
     let has_snapshot = !m.fingerprint.is_empty();
     let fingerprint_recalculado = if has_snapshot {
@@ -162,13 +155,11 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0]["measurement_id"], saved.measurement_id);
         assert_eq!(
-            entries[0]["fingerprint_guardado"],
-            saved.fingerprint,
+            entries[0]["fingerprint_guardado"], saved.fingerprint,
             "fingerprint must round-trip"
         );
         assert_eq!(
-            entries[0]["fingerprint_recalculado"],
-            saved.fingerprint,
+            entries[0]["fingerprint_recalculado"], saved.fingerprint,
             "recomputed fingerprint must match the stored one"
         );
         assert_eq!(entries[0]["reproducible"], true);

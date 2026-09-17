@@ -13,6 +13,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use dashmap::DashMap;
+use reqwest::Client; // Fuerza enlace de reqwest para forecasting
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
@@ -104,10 +105,7 @@ impl MlRegistry {
     }
 
     pub fn all(&self) -> Vec<MlModel> {
-        self.models
-            .iter()
-            .map(|m| m.value().clone())
-            .collect()
+        self.models.iter().map(|m| m.value().clone()).collect()
     }
 }
 
@@ -177,11 +175,8 @@ impl Predictor for StatPredictor {
         let gcs = ((15.0 - f.get("gcs_total")) / 12.0).clamp(0.0, 1.0);
         let apache = (f.get("apache_score") / 40.0).clamp(0.0, 1.0);
 
-        let logit = 0.25 * heart_rate
-            + 0.20 * respiratory
-            + 0.20 * spo2
-            + 0.15 * gcs
-            + 0.20 * apache;
+        let logit =
+            0.25 * heart_rate + 0.20 * respiratory + 0.20 * spo2 + 0.15 * gcs + 0.20 * apache;
         let prediction = (logit * 2.0 - 0.5).clamp(0.0, 1.0);
         Ok(prediction)
     }
@@ -226,7 +221,10 @@ impl MlServer {
         // Explicabilidad: features con mayor desviación del baseline.
         let features = [
             ("heart_rate", (features.get("heart_rate") - 72.0).abs()),
-            ("respiratory_rate", (features.get("respiratory_rate") - 16.0).abs()),
+            (
+                "respiratory_rate",
+                (features.get("respiratory_rate") - 16.0).abs(),
+            ),
             ("spo2", (97.0 - features.get("spo2")).max(0.0)),
             ("gcs_total", (15.0 - features.get("gcs_total")).max(0.0)),
             ("apache_score", features.get("apache_score")),
@@ -257,17 +255,17 @@ impl MlServer {
         })
     }
 
-    pub fn predict_batch(
-        &self,
-        model: &str,
-        inputs: &[MlFeatures],
-    ) -> Result<Vec<PredictResult>> {
+    pub fn predict_batch(&self, model: &str, inputs: &[MlFeatures]) -> Result<Vec<PredictResult>> {
         let start = Instant::now();
         let results = inputs
             .iter()
             .map(|f| self.predict(model, f))
             .collect::<Result<Vec<_>>>()?;
-        crate::metrics::ml_batch(model, inputs.len() as f64, start.elapsed().as_secs_f64() * 1000.0);
+        crate::metrics::ml_batch(
+            model,
+            inputs.len() as f64,
+            start.elapsed().as_secs_f64() * 1000.0,
+        );
         Ok(results)
     }
 

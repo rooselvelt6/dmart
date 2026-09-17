@@ -144,7 +144,11 @@ impl ScoreAgg {
     }
 
     fn avg(&self) -> f64 {
-        if self.n == 0 { 0.0 } else { self.sum / self.n as f64 }
+        if self.n == 0 {
+            0.0
+        } else {
+            self.sum / self.n as f64
+        }
     }
 
     fn minv(&self) -> f64 {
@@ -208,8 +212,15 @@ fn bucket_key(patient_id: &str, bucket_ts: &str) -> String {
     format!("{patient_id}#{bucket_ts}")
 }
 
-fn accumulate(map: &mut HashMap<BucketKey, BucketAgg>, patient_id: &str, bucket: DateTime<Utc>, row: &RawRow) {
-    let entry = map.entry((patient_id.to_string(), bucket.to_rfc3339())).or_default();
+fn accumulate(
+    map: &mut HashMap<BucketKey, BucketAgg>,
+    patient_id: &str,
+    bucket: DateTime<Utc>,
+    row: &RawRow,
+) {
+    let entry = map
+        .entry((patient_id.to_string(), bucket.to_rfc3339()))
+        .or_default();
     entry.count += 1;
     if let Some(v) = row.apache_score {
         entry.apache.add(f64::from(v));
@@ -332,7 +343,9 @@ async fn upsert_bucket(
         .bind(("data", data))
         .await?;
     if let Some((_, err)) = res.take_errors().into_iter().next() {
-        return Err(anyhow!("upsert bucket {table}/{patient_id}/{bucket_ts}: {err}"));
+        return Err(anyhow!(
+            "upsert bucket {table}/{patient_id}/{bucket_ts}: {err}"
+        ));
     }
     Ok(())
 }
@@ -472,7 +485,9 @@ pub async fn run_downsample_with(
     // Si el disco está crítico, lo registramos: el hourly ya se agrega antes
     // del purge raw, que es la prioridad exigida por la spec.
     if disk_critical(&db_path()) {
-        tracing::warn!("disco crítico (<10% free): retención prioriza agregado horario antes del purge raw");
+        tracing::warn!(
+            "disco crítico (<10% free): retención prioriza agregado horario antes del purge raw"
+        );
     }
 
     let mut report = RetentionRunReport::new();
@@ -497,8 +512,10 @@ pub async fn run_downsample_with(
 /// Asegura la existencia de las tablas de agregados (mismo SQL idempotente que
 /// la migración `030_measurements_downsample.surql`).
 async fn ensure_tables(db: &Surreal<Db>) -> Result<()> {
-    db.query(include_str!("../migrations/030_measurements_downsample.surql"))
-        .await?;
+    db.query(include_str!(
+        "../migrations/030_measurements_downsample.surql"
+    ))
+    .await?;
     Ok(())
 }
 
@@ -610,11 +627,7 @@ mod tests {
         news2: u32,
         sofa: u32,
     ) -> Measurement {
-        let mut m = Measurement::new(
-            patient_id,
-            ApacheIIData::default(),
-            GcsData::default(),
-        );
+        let mut m = Measurement::new(patient_id, ApacheIIData::default(), GcsData::default());
         m.timestamp = timestamp.to_string();
         m.apache_score = apache;
         m.gcs_score = gcs as u8;
@@ -659,10 +672,46 @@ mod tests {
             .expect("nanosegundo");
 
         // Bucket horario A: dos lecturas (10:10 y 10:50).
-        insert(db, measurement("p1", &rfc(day90 + ChronoDuration::minutes(10)), 25, 10, 60, 5, 4)).await;
-        insert(db, measurement("p1", &rfc(day90 + ChronoDuration::minutes(50)), 35, 12, 50, 6, 2)).await;
+        insert(
+            db,
+            measurement(
+                "p1",
+                &rfc(day90 + ChronoDuration::minutes(10)),
+                25,
+                10,
+                60,
+                5,
+                4,
+            ),
+        )
+        .await;
+        insert(
+            db,
+            measurement(
+                "p1",
+                &rfc(day90 + ChronoDuration::minutes(50)),
+                35,
+                12,
+                50,
+                6,
+                2,
+            ),
+        )
+        .await;
         // Bucket horario B: una lectura (11:05).
-        insert(db, measurement("p1", &rfc(day90 + ChronoDuration::hours(1) + ChronoDuration::minutes(5)), 40, 8, 70, 3, 7)).await;
+        insert(
+            db,
+            measurement(
+                "p1",
+                &rfc(day90 + ChronoDuration::hours(1) + ChronoDuration::minutes(5)),
+                40,
+                8,
+                70,
+                3,
+                7,
+            ),
+        )
+        .await;
         // Bucket ancient (200 d): se agrega y el hourly se purga.
         let ancient = (now - ChronoDuration::days(200))
             .with_hour(15)
@@ -676,7 +725,19 @@ mod tests {
         insert(db, measurement("p1", &rfc(ancient), 55, 7, 80, 4, 9)).await;
         // Recientes: bucket horario abierto → no se agregan y no se purgan.
         insert(db, measurement("p1", &rfc(now), 10, 15, 30, 0, 0)).await;
-        insert(db, measurement("p1", &rfc(now + ChronoDuration::minutes(1)), 12, 13, 32, 1, 1)).await;
+        insert(
+            db,
+            measurement(
+                "p1",
+                &rfc(now + ChronoDuration::minutes(1)),
+                12,
+                13,
+                32,
+                1,
+                1,
+            ),
+        )
+        .await;
 
         let bucket_a_hour = truncate_hour(day90 + ChronoDuration::minutes(10)).to_rfc3339();
         let bucket_day = truncate_day(day90).to_rfc3339();
@@ -696,10 +757,18 @@ mod tests {
         assert_eq!(report.buckets, 5);
         // Raw purgado: los 4 antiguos (90d×3 + 200d×1); recientes quedan.
         assert_eq!(report.raw_deleted, 4);
-        assert_eq!(count_table(&db, "measurements").await.unwrap(), 2, "raw recientes conservados");
+        assert_eq!(
+            count_table(&db, "measurements").await.unwrap(),
+            2,
+            "raw recientes conservados"
+        );
         // El hourly antiguo (200d > 6 meses) se purga; el de 90d se conserva.
         assert_eq!(report.hourly_deleted, 1);
-        assert_eq!(count_table(&db, TABLE_HOURLY).await.unwrap(), 2, "hourly 90d conservado");
+        assert_eq!(
+            count_table(&db, TABLE_HOURLY).await.unwrap(),
+            2,
+            "hourly 90d conservado"
+        );
         // Diarios se conservan siempre (daily_forever).
         assert_eq!(count_table(&db, TABLE_DAILY).await.unwrap(), 2);
 
@@ -724,7 +793,10 @@ mod tests {
         approx(row["sofa_avg"].as_f64(), 3.0);
         // PHI no viaja a los agregados.
         assert!(row.get("notas").is_none(), "notas no debe persistirse");
-        assert!(row.get("apache_data").is_none(), "apache_data no debe persistirse");
+        assert!(
+            row.get("apache_data").is_none(),
+            "apache_data no debe persistirse"
+        );
 
         // ── Agregados correctos en el bucket diario (count=3) ──
         let rows: Vec<serde_json::Value> = db
@@ -745,7 +817,10 @@ mod tests {
 
         // ── Idempotencia: 2ª corrida no duplica, no borra más ──
         let report2 = run_downsample_with(&db, &cfg()).await.expect("run 2");
-        assert_eq!(report2.hourly_upserted, 0, "no quedan buckets cerrados por agregar");
+        assert_eq!(
+            report2.hourly_upserted, 0,
+            "no quedan buckets cerrados por agregar"
+        );
         assert_eq!(report2.daily_upserted, 0);
         assert_eq!(report2.raw_deleted, 0);
         assert_eq!(report2.hourly_deleted, 0);
@@ -761,7 +836,11 @@ mod tests {
             .unwrap()
             .take(0)
             .unwrap();
-        assert_eq!(still.len(), 1, "bucket horario conservado aunque el raw fue purgado");
+        assert_eq!(
+            still.len(),
+            1,
+            "bucket horario conservado aunque el raw fue purgado"
+        );
     }
 
     #[tokio::test]
@@ -787,7 +866,19 @@ mod tests {
             .expect("nanosegundo");
         let bucket_ts = truncate_hour(t).to_rfc3339();
 
-        insert(&db, measurement("p2", &rfc(t + ChronoDuration::minutes(10)), 25, 10, 60, 5, 4)).await;
+        insert(
+            &db,
+            measurement(
+                "p2",
+                &rfc(t + ChronoDuration::minutes(10)),
+                25,
+                10,
+                60,
+                5,
+                4,
+            ),
+        )
+        .await;
         let r1 = run_downsample_with(&db, &raw_keep).await.expect("run 1");
         assert_eq!(r1.hourly_upserted, 1);
         let rows: Vec<serde_json::Value> = db
@@ -803,9 +894,24 @@ mod tests {
         assert_eq!(rows[0]["count"].as_u64(), Some(1));
 
         // Nueva lectura en el MISMO bucket ya procesado → se recalcula, no duplica.
-        insert(&db, measurement("p2", &rfc(t + ChronoDuration::minutes(40)), 45, 14, 70, 7, 6)).await;
+        insert(
+            &db,
+            measurement(
+                "p2",
+                &rfc(t + ChronoDuration::minutes(40)),
+                45,
+                14,
+                70,
+                7,
+                6,
+            ),
+        )
+        .await;
         let r2 = run_downsample_with(&db, &raw_keep).await.expect("run 2");
-        assert_eq!(r2.hourly_upserted, 1, "solo el bucket actualizado se reprocesa");
+        assert_eq!(
+            r2.hourly_upserted, 1,
+            "solo el bucket actualizado se reprocesa"
+        );
 
         let rows: Vec<serde_json::Value> = db
             .query("SELECT patient_id, timestamp, count, apache_avg, apache_min, apache_max FROM measurements_hourly WHERE patient_id = $p AND timestamp = $ts")

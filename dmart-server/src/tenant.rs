@@ -70,7 +70,11 @@ pub async fn tenant_exists(db: &Surreal<Db>, slug: &str) -> Result<bool> {
 }
 
 /// Desactiva un tenant (todos sus usuarios quedan out; datos preservados).
-pub async fn set_tenant_active(db: &Surreal<Db>, slug: &str, active: bool) -> Result<Option<Tenant>> {
+pub async fn set_tenant_active(
+    db: &Surreal<Db>,
+    slug: &str,
+    active: bool,
+) -> Result<Option<Tenant>> {
     let updated: Option<Tenant> = db
         .update(("tenant", slug.to_string()))
         .merge(serde_json::json!({ "active": active }))
@@ -102,7 +106,9 @@ mod tests {
             .await
             .expect("connect");
         db.use_ns("dmart").use_db("icu").await.expect("ns");
-        crate::migrations::run_migrations(&db).await.expect("migrate");
+        crate::migrations::run_migrations(&db)
+            .await
+            .expect("migrate");
         (db, dir)
     }
 
@@ -120,7 +126,10 @@ mod tests {
             .expect_err("duplicate slug must fail");
         assert!(!dup.to_string().is_empty());
 
-        let found = get_tenant(&db, "hosp-a").await.expect("get").expect("exists");
+        let found = get_tenant(&db, "hosp-a")
+            .await
+            .expect("get")
+            .expect("exists");
         assert_eq!(found.name, "Hospital A");
 
         let list = list_tenants(&db).await.expect("list");

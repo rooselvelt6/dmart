@@ -1,17 +1,16 @@
 use axum::{
-    Router,
+    Json, Router,
     extract::DefaultBodyLimit,
     http::{HeaderValue, Method, StatusCode, header},
     middleware as axum_mw,
-    response::{Html, IntoResponse},
-    routing::get,
+    response::IntoResponse,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::{
     cors::{AllowOrigin, CorsLayer},
-    services::ServeDir,
+    services::{ServeDir, ServeFile},
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
 
@@ -31,17 +30,12 @@ use dmart_server::security;
 use dmart_server::security::create_security_state;
 use dmart_server::server_ingest;
 
-async fn spa_handler() -> impl IntoResponse {
-    let dist_path = std::env::var("DMART_DIST_PATH").unwrap_or_else(|_| "./dist".to_string());
-    let index_path = format!("{}/index.html", dist_path);
-
-    match std::fs::read_to_string(&index_path) {
-        Ok(content) => (StatusCode::OK, Html(content)),
-        Err(_) => (
-            StatusCode::NOT_FOUND,
-            Html("<h1>404 - Not Found</h1><p>Index not found</p>".to_string()),
-        ),
-    }
+/// 404 JSON para rutas API/observabilidad inexistentes (no deben caer al SPA).
+async fn api_not_found() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({ "success": false, "error": "not found" })),
+    )
 }
 
 #[tokio::main]
@@ -159,11 +153,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Allowlist estricta de headers: el frontend (Leptos) solo envía
     // `Authorization` y `Content-Type`; no hace falta `Any`.
-    let allowed_headers = [
-        header::AUTHORIZATION,
-        header::CONTENT_TYPE,
-        header::ACCEPT,
-    ];
+    let allowed_headers = [header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT];
 
     let default_origins = [
         HeaderValue::from_static("http://localhost:3000"),
@@ -206,29 +196,17 @@ async fn main() -> anyhow::Result<()> {
     let obs_router = observability_router(database.clone(), prometheus_handle);
 
     // ── Static files ────────────────────────────────────────────────
-
+    // SPA fallback: si el fichero pedido no existe en `dist/`, se sirve
+    // `index.html` para que el router de Leptos resuelva la ruta. Esto evita
+    // mantener a mano la lista de rutas del frontend (bug de `/perfil`).
     let dist_path = std::env::var("DMART_DIST_PATH").unwrap_or_else(|_| "./dist".to_string());
+    let index_path = format!("{}/index.html", dist_path);
+    let static_files = ServeDir::new(&dist_path).fallback(ServeFile::new(&index_path));
 
     let app = Router::new()
-        .nest("/api", api_router)
-        .nest("/obs", obs_router)
-        .fallback_service(ServeDir::new(&dist_path))
-        .route("/", get(spa_handler))
-        .route("/login", get(spa_handler))
-        .route("/patients", get(spa_handler))
-        .route("/patients/new", get(spa_handler))
-        .route("/patients/{id}", get(spa_handler))
-        .route("/patients/{id}/edit", get(spa_handler))
-        .route("/patients/{id}/measure", get(spa_handler))
-        .route("/patients/{id}/scales/apache", get(spa_handler))
-        .route("/patients/{id}/scales/gcs", get(spa_handler))
-        .route("/patients/{id}/scales/news2", get(spa_handler))
-        .route("/patients/{id}/scales/sofa", get(spa_handler))
-        .route("/patients/{id}/scales/saps3", get(spa_handler))
-        .route("/scales", get(spa_handler))
-        .route("/stats", get(spa_handler))
-        .route("/admin", get(spa_handler))
-        .route("/admin/{*path}", get(spa_handler))
+        .nest("/api", api_router.fallback(api_not_found))
+        .nest("/obs", obs_router.fallback(api_not_found))
+        .fallback_service(static_files)
         .layer(DefaultBodyLimit::max(1024 * 1024)) // 1MB request body limit
         .layer(cors)
         .layer(axum_mw::from_fn(security::security_headers_middleware))

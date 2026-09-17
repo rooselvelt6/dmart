@@ -115,6 +115,104 @@ pub async fn change_password(current: &str, new: &str) -> ApiResult<()> {
         .json()
         .await
         .map_err(|e| e.to_string())?;
+    ensure_success(resp)
+}
+
+/// Verifica el flag `success` en respuestas sin payload (`()` serializa como
+/// `null` y no puede distinguirse de `None`).
+fn ensure_success<T>(resp: ApiResponse<T>) -> ApiResult<()> {
+    if resp.success {
+        Ok(())
+    } else {
+        Err(resp.error.unwrap_or_default())
+    }
+}
+
+// ─── MFA (segundo factor) ───────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MfaSetupInfo {
+    pub secret: String,
+    pub otpauth_uri: String,
+    pub backup_codes: Vec<String>,
+}
+
+/// Indica si el usuario autenticado tiene MFA habilitado.
+pub async fn mfa_status() -> ApiResult<bool> {
+    let resp: ApiResponse<MfaStatus> = authed_get(&format!("{}/auth/mfa/status", API_BASE))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data
+        .map(|s| s.enabled)
+        .ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+/// Inicia la activación de MFA: devuelve el secreto, la URI `otpauth` y los
+/// códigos de respaldo (aún no queda habilitado hasta confirmar con un código).
+pub async fn mfa_setup() -> ApiResult<MfaSetupInfo> {
+    let resp: ApiResponse<MfaSetupInfo> = authed_post(&format!("{}/auth/mfa/setup", API_BASE))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+/// Confirma la activación de MFA con el primer código TOTP.
+pub async fn mfa_confirm(code: &str) -> ApiResult<()> {
+    let body = serde_json::json!({ "code": code });
+    let resp: ApiResponse<()> = authed_post(&format!("{}/auth/mfa/confirm", API_BASE))
+        .json(&body)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_success(resp)
+}
+
+/// Desactiva MFA verificando el código actual.
+pub async fn mfa_disable(code: &str) -> ApiResult<()> {
+    let body = serde_json::json!({ "code": code });
+    let resp: ApiResponse<()> = authed_post(&format!("{}/auth/mfa/disable", API_BASE))
+        .json(&body)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_success(resp)
+}
+
+/// Completa el login MFA enviando el token de reto obtenido en `login` junto
+/// con el código TOTP o un código de respaldo. Devuelve la sesión completa.
+pub async fn mfa_verify(
+    challenge_token: &str,
+    code: &str,
+    backup_code: Option<&str>,
+) -> ApiResult<LoginResponse> {
+    let body = serde_json::json!({ "code": code, "backup_code": backup_code });
+    let resp: ApiResponse<LoginResponse> = Request::post(&format!("{}/auth/mfa/verify", API_BASE))
+        .header("Authorization", &format!("Bearer {}", challenge_token))
+        .credentials(RequestCredentials::Include)
+        .json(&body)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 

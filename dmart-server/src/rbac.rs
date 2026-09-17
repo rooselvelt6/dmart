@@ -33,7 +33,11 @@ impl From<Role> for UserRole {
 
 impl Role {
     pub fn permissions(&self) -> Vec<String> {
-        UserRole::from(*self).permissions().into_iter().map(String::from).collect()
+        UserRole::from(*self)
+            .permissions()
+            .into_iter()
+            .map(String::from)
+            .collect()
     }
 
     pub fn can(&self, permission: &str) -> bool {

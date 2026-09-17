@@ -3,6 +3,7 @@ name = "dmart-server-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 libfuzzer-sys = "0.4"

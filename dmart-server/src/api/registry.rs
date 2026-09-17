@@ -77,7 +77,9 @@ pub async fn register_device(State(db): State<Database>, body: Json<Value>) -> R
             let msg = crate::security::sanitize_internal_error(&e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(msg)),
+                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(
+                    msg,
+                )),
             )
                 .into_response()
         }
@@ -98,7 +100,9 @@ pub async fn get_device(State(db): State<Database>, id: Path<String>) -> Respons
             let msg = crate::security::sanitize_internal_error(&e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(msg)),
+                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(
+                    msg,
+                )),
             )
                 .into_response()
         }
@@ -119,7 +123,9 @@ pub async fn heartbeat_device(State(db): State<Database>, id: Path<String>) -> R
             let msg = crate::security::sanitize_internal_error(&e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(msg)),
+                Json(ApiResponse::<crate::device_registry::ClinicalDevice>::err(
+                    msg,
+                )),
             )
                 .into_response()
         }

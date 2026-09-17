@@ -117,13 +117,26 @@ pub fn RegisterPage() -> impl IntoView {
     };
 
     let validate_cedula = move |v: &str| {
-        let re = regex::Regex::new(r"^[VEJvej]-[0-9]{5,8}$").unwrap();
-        re.is_match(v)
+        // Cédula venezolana: V/E/J- seguido de 5 a 8 dígitos.
+        let mut chars = v.chars();
+        match chars.next() {
+            Some(c) if matches!(c, 'V' | 'E' | 'J' | 'v' | 'e' | 'j') => {}
+            _ => return false,
+        }
+        match chars.next() {
+            Some('-') => {}
+            _ => return false,
+        }
+        let digits: String = chars.collect();
+        (5..=8).contains(&digits.len()) && digits.chars().all(|c| c.is_ascii_digit())
     };
 
     let validate_hc = move |v: &str| {
-        let re = regex::Regex::new(r"^HC-[0-9]{3,6}$").unwrap();
-        re.is_match(v)
+        // Historia clínica: HC- seguido de 3 a 6 dígitos.
+        match v.strip_prefix("HC-") {
+            Some(n) => (3..=6).contains(&n.len()) && n.chars().all(|c| c.is_ascii_digit()),
+            None => false,
+        }
     };
 
     let cedula_valid = Memo::new(move |_| validate_cedula(&patient.get().cedula));

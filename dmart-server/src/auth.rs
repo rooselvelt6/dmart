@@ -8,7 +8,6 @@ use axum::{
     http::{StatusCode, request::Parts},
 };
 use base64::Engine;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use rand::RngCore;
@@ -20,6 +19,7 @@ use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use tracing;
 use uuid::Uuid;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use dmart_shared::models::*;
 
@@ -732,9 +732,7 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
         argon2_params(),
     );
     match PasswordHash::new(hash) {
-        Ok(parsed) => argon2
-            .verify_password(password.as_bytes(), &parsed)
-            .is_ok(),
+        Ok(parsed) => argon2.verify_password(password.as_bytes(), &parsed).is_ok(),
         Err(_) => false,
     }
 }

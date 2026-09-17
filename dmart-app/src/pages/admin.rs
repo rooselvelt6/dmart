@@ -780,11 +780,15 @@ fn StaffPanel() -> impl IntoView {
             return;
         }
         if user_id.is_none() && password.len() < 8 {
-            error_msg.set(Some("La contraseña debe tener al menos 8 caracteres".to_string()));
+            error_msg.set(Some(
+                "La contraseña debe tener al menos 8 caracteres".to_string(),
+            ));
             return;
         }
         if user_id.is_some() && !password.is_empty() && password.len() < 8 {
-            error_msg.set(Some("La contraseña debe tener al menos 8 caracteres".to_string()));
+            error_msg.set(Some(
+                "La contraseña debe tener al menos 8 caracteres".to_string(),
+            ));
             return;
         }
 

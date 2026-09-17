@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:8081/dist',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8081/dist',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -18,11 +18,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'python3 -m http.server 8081',
-    cwd: '/home/tdy/Escritorio/dmart',
-    url: 'http://localhost:8081/dist',
-    reuseExistingServer: !process.env.CI,
-    timeout: 60000,
-  },
+  // Servidor estático local solo si no se apunta a uno externo (p. ej. CI usa
+  // el propio backend sirviendo `dist/` en :3000 vía PLAYWRIGHT_BASE_URL).
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'python3 -m http.server 8081',
+        url: 'http://localhost:8081/dist',
+        reuseExistingServer: !process.env.CI,
+        timeout: 60000,
+      },
 });

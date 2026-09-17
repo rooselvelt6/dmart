@@ -25,6 +25,7 @@ pub fn router() -> Router<Database> {
         .route("/revoke-all", post(revoke_all))
         .route("/change-password", post(change_password))
         .route("/mfa/setup", post(crate::mfa::setup))
+        .route("/mfa/status", get(crate::mfa::status))
         .route("/mfa/confirm", post(crate::mfa::confirm))
         .route("/mfa/verify", post(crate::mfa::verify))
         .route("/mfa/disable", post(crate::mfa::disable))
@@ -66,7 +67,11 @@ async fn login(
             crate::metrics::auth_login("success");
             if let Some(audit) = crate::audit::audit() {
                 let _ = audit
-                    .log_login_success(&response.user.user_id, &response.user.username, Some(&client_ip))
+                    .log_login_success(
+                        &response.user.user_id,
+                        &response.user.username,
+                        Some(&client_ip),
+                    )
                     .await;
             }
             let mut resp =

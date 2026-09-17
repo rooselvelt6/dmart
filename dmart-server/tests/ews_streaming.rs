@@ -52,7 +52,7 @@ fn vitals_for(patient: &str, hr: f32) -> VitalsMessage {
 #[tokio::test]
 async fn ews_engine_processes_vitals_emits_scores() {
     let config = EwsConfig::default();
-    let (mut engine, tx, rx) = EwsEngine::new(config.clone());
+    let (engine, tx, rx) = EwsEngine::new(config.clone());
     let handle = tokio::spawn(async move { engine.run(rx).await });
 
     let mut submitted = 0;
