@@ -13,6 +13,11 @@ pub fn save_session(resp: &LoginResponse) {
     LocalStorage::set(USER_KEY, &resp.user).ok();
 }
 
+/// Guarda solo la identidad (p. ej. al recuperarla vía `GET /auth/me`).
+pub fn save_user(user: &UserInfo) {
+    LocalStorage::set(USER_KEY, user).ok();
+}
+
 /// Usuario autenticado (si hay sesión guardada).
 pub fn current_user() -> Option<UserInfo> {
     LocalStorage::get::<UserInfo>(USER_KEY).ok()

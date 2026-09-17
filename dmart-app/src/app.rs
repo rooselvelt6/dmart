@@ -12,7 +12,8 @@ use leptos_router::hooks::*;
 use leptos_router::path;
 
 use crate::stores::{
-    clear_session, fetch_patients_cached, has_token, is_admin, load_patients_cached, user_has,
+    clear_session, current_user, fetch_patients_cached, has_token, is_admin, load_patients_cached,
+    save_user, user_has,
 };
 use crate::stores::start_session_refresh;
 
@@ -24,6 +25,21 @@ pub fn App() -> impl IntoView {
     let _ = crate::stores::create_theme_store();
     if has_token() {
         start_session_refresh();
+        // Las sesiones creadas antes del gating solo guardaban el token: si no
+        // hay identidad, se recupera con `/auth/me` (y valida que el token
+        // siga vigente). La recarga hace que el gating por rol se reevalúe.
+        spawn_local(async move {
+            if current_user().is_none() {
+                match crate::api::me().await {
+                    Ok(u) => save_user(&u),
+                    Err(_) => {
+                        clear_session();
+                        set_is_auth.set(false);
+                    }
+                }
+                window().location().reload().unwrap_or_default();
+            }
+        });
     }
 
     // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).
