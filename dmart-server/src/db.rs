@@ -995,38 +995,67 @@ pub async fn list_users(db: &Surreal<Db>) -> Result<Vec<User>> {
     Ok(users)
 }
 
-pub async fn list_staff(db: &Surreal<Db>) -> Result<Vec<User>> {
-    let staff: Vec<User> = db
-        .query(
-            "SELECT * FROM users WHERE rol = $medico OR rol = $enfermero ORDER BY created_at DESC",
-        )
-        .bind(("medico", "Medico"))
-        .bind(("enfermero", "Enfermero"))
-        .await?
-        .take(0)?;
+/// Lista el personal registrado. `rol` es el nombre canónico (`Admin`, `Medico`,
+/// `Enfermero`, `Viewer`) o `None` para incluir todos los roles.
+pub async fn list_staff(db: &Surreal<Db>, rol: Option<&str>) -> Result<Vec<User>> {
+    let staff: Vec<User> = match rol {
+        Some(rol) => {
+            db.query("SELECT * FROM users WHERE rol = $rol ORDER BY created_at DESC")
+                .bind(("rol", rol.to_string()))
+                .await?
+                .take(0)?
+        }
+        None => {
+            db.query("SELECT * FROM users ORDER BY created_at DESC")
+                .await?
+                .take(0)?
+        }
+    };
     Ok(staff)
 }
 
-pub async fn list_staff_paginated(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<User>> {
+pub async fn list_staff_paginated(
+    db: &Surreal<Db>,
+    limit: u32,
+    offset: u32,
+    rol: Option<&str>,
+) -> Result<Vec<User>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
-    let staff: Vec<User> = db
-        .query("SELECT * FROM users WHERE rol = $medico OR rol = $enfermero ORDER BY created_at DESC LIMIT $limit START $offset")
-        .bind(("medico", "Medico"))
-        .bind(("enfermero", "Enfermero"))
-        .bind(("limit", limit as i64))
-        .bind(("offset", offset as i64))
-        .await?
-        .take(0)?;
+    let staff: Vec<User> = match rol {
+        Some(rol) => {
+            db.query("SELECT * FROM users WHERE rol = $rol ORDER BY created_at DESC LIMIT $limit START $offset")
+                .bind(("rol", rol.to_string()))
+                .bind(("limit", limit as i64))
+                .bind(("offset", offset as i64))
+                .await?
+                .take(0)?
+        }
+        None => {
+            db.query("SELECT * FROM users ORDER BY created_at DESC LIMIT $limit START $offset")
+                .bind(("limit", limit as i64))
+                .bind(("offset", offset as i64))
+                .await?
+                .take(0)?
+        }
+    };
     Ok(staff)
 }
 
-pub async fn count_staff(db: &Surreal<Db>) -> Result<u64> {
-    let count: Vec<serde_json::Value> = db
-        .query("SELECT count() as count FROM users WHERE rol = $medico OR rol = $enfermero GROUP BY count")
-        .bind(("medico", "Medico"))
-        .bind(("enfermero", "Enfermero"))
-        .await?
-        .take(0)?;
+/// Cuenta el personal. `rol` es el nombre canónico o `None` para todos los roles.
+pub async fn count_staff(db: &Surreal<Db>, rol: Option<&str>) -> Result<u64> {
+    let count: Vec<serde_json::Value> = match rol {
+        Some(rol) => {
+            db.query("SELECT count() as count FROM users WHERE rol = $rol GROUP BY count")
+                .bind(("rol", rol.to_string()))
+                .await?
+                .take(0)?
+        }
+        None => {
+            db.query("SELECT count() as count FROM users GROUP BY count")
+                .await?
+                .take(0)?
+        }
+    };
     Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 

@@ -323,16 +323,46 @@ pub struct UpdateStaffRequest {
     pub activo: Option<bool>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct StaffQuery {
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+    /// Filtra por rol (`Admin`, `Medico`, `Enfermero`, `Viewer`).
+    /// Vacío o `todos` devuelve todos los roles.
+    pub rol: Option<String>,
+}
+
+impl StaffQuery {
+    fn limit(&self) -> u32 {
+        self.limit
+            .unwrap_or(50)
+            .min(dmart_shared::models::MAX_PAGE_LIMIT)
+    }
+    fn offset(&self) -> u32 {
+        self.offset.unwrap_or(0)
+    }
+    /// Rol canónico para el filtro, o `None` si no se filtra.
+    fn rol_filter(&self) -> Option<String> {
+        match self.rol.as_deref().map(str::trim) {
+            None | Some("") | Some("todos") | Some("all") => None,
+            Some(r) => Some(parse_role(r).to_string()),
+        }
+    }
+}
+
 pub async fn list_staff_api(
     State(db): State<Database>,
-    Query(params): Query<PaginationParams>,
+    Query(params): Query<StaffQuery>,
 ) -> ApiResult<PaginatedResponse<StaffInfo>> {
     let limit = params.limit();
     let offset = params.offset();
-    let staff = crate::db::list_staff_paginated(&db, limit, offset)
+    let rol = params.rol_filter();
+    let staff = crate::db::list_staff_paginated(&db, limit, offset, rol.as_deref())
         .await
         .map_err(err_to_str)?;
-    let total = crate::db::count_staff(&db).await.map_err(err_to_str)?;
+    let total = crate::db::count_staff(&db, rol.as_deref())
+        .await
+        .map_err(err_to_str)?;
     let items: Vec<StaffInfo> = staff.iter().map(StaffInfo::from).collect();
     Ok(Json(ApiResponse::ok(PaginatedResponse {
         items,

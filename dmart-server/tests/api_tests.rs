@@ -1005,6 +1005,162 @@ async fn test_e2e_staff_requires_admin_and_hides_password() {
 }
 
 #[tokio::test]
+async fn test_e2e_staff_list_includes_all_roles_and_filters() {
+    use dmart_shared::models::UserRole;
+
+    let (db, _dir) = test_db().await;
+    seed_user(&db, "admin_roles", "SuperSecreto_01!", UserRole::Admin, "Admin").await;
+    seed_user(&db, "medico_roles", "SuperSecreto_01!", UserRole::Medico, "Médico").await;
+    seed_user(
+        &db,
+        "enfermero_roles",
+        "SuperSecreto_01!",
+        UserRole::Enfermero,
+        "Enfermero",
+    )
+    .await;
+    seed_user(&db, "viewer_roles", "SuperSecreto_01!", UserRole::Viewer, "Viewer").await;
+
+    let http = build_app(&db).await;
+    let admin = login_token(&http, "admin_roles", "SuperSecreto_01!").await;
+
+    // Sin filtro: todos los roles visibles (antes Admin/Viewer se ocultaban).
+    let (status, json) = send(&http, Method::GET, "/admin/staff", Some(&admin), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        json["data"]["total"], 4,
+        "el listado debe incluir Admin, Médico, Enfermero y Viewer"
+    );
+    let raw = serde_json::to_string(&json["data"]["items"]).unwrap();
+    for u in ["admin_roles", "medico_roles", "enfermero_roles", "viewer_roles"] {
+        assert!(raw.contains(u), "el listado debe mostrar a {u}");
+    }
+    assert!(!raw.contains("password_hash"), "nunca exponer hashes");
+
+    // Filtros por rol (case-insensitive).
+    for (query, expected) in [
+        ("?rol=Admin", "admin_roles"),
+        ("?rol=medico", "medico_roles"),
+        ("?rol=Enfermero", "enfermero_roles"),
+        ("?rol=viewer", "viewer_roles"),
+        ("?rol=todos", "enfermero_roles"),
+    ] {
+        let (status, json) = send(
+            &http,
+            Method::GET,
+            &format!("/admin/staff{query}"),
+            Some(&admin),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "filtro {query}");
+        let items = serde_json::to_string(&json["data"]["items"]).unwrap();
+        assert!(items.contains(expected), "filtro {query} debe incluir {expected}");
+    }
+
+    // Alta de Enfermero (bug reportado) y verificación de que aparece en el listado.
+    let (status, created) = send(
+        &http,
+        Method::POST,
+        "/admin/staff",
+        Some(&admin),
+        Some(serde_json::json!({
+            "username": "nuevo_enfermero",
+            "nombre": "Nueva Enfermera",
+            "rol": "Enfermero",
+            "password": "SuperSecreto_01!"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "alta de Enfermero debe funcionar");
+    assert_eq!(created["data"]["username"], "nuevo_enfermero");
+
+    let (status, json) = send(
+        &http,
+        Method::GET,
+        "/admin/staff?rol=Enfermero",
+        Some(&admin),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["data"]["total"], 2, "deben verse 2 enfermeros");
+    assert!(
+        serde_json::to_string(&json["data"]["items"])
+            .unwrap()
+            .contains("nuevo_enfermero")
+    );
+}
+
+#[tokio::test]
+async fn test_e2e_change_password_flow() {
+    use dmart_shared::models::UserRole;
+
+    let (db, _dir) = test_db().await;
+    seed_user(&db, "admin_pwd", "SuperSecreto_01!", UserRole::Admin, "Admin").await;
+    let http = build_app(&db).await;
+    let token = login_token(&http, "admin_pwd", "SuperSecreto_01!").await;
+
+    // Contraseña actual incorrecta => 401.
+    let (status, _) = send(
+        &http,
+        Method::POST,
+        "/auth/change-password",
+        Some(&token),
+        Some(serde_json::json!({
+            "current_password": "equivocada",
+            "new_password": "NuevaClave_02!"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // Nueva contraseña demasiado corta => 400.
+    let (status, _) = send(
+        &http,
+        Method::POST,
+        "/auth/change-password",
+        Some(&token),
+        Some(serde_json::json!({
+            "current_password": "SuperSecreto_01!",
+            "new_password": "corta"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Cambio correcto => 200.
+    let (status, _) = send(
+        &http,
+        Method::POST,
+        "/auth/change-password",
+        Some(&token),
+        Some(serde_json::json!({
+            "current_password": "SuperSecreto_01!",
+            "new_password": "NuevaClave_02!"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // El token anterior queda revocado.
+    let (status, _) = send(&http, Method::GET, "/auth/me", Some(&token), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "sesión debe cerrarse");
+
+    // La contraseña vieja ya no sirve; la nueva sí.
+    let (status, _) = send(
+        &http,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(login_body("admin_pwd", "SuperSecreto_01!")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let _ = login_token(&http, "admin_pwd", "NuevaClave_02!").await;
+}
+
+#[tokio::test]
 async fn test_e2e_rbac_viewer_cannot_create_patient() {
     let (db, _dir) = test_db().await;
     seed_user(

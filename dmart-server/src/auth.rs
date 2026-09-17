@@ -724,6 +724,21 @@ pub fn hash_password(password: &str) -> Result<String, String> {
         .map_err(|e| format!("Hash error: {}", e))
 }
 
+/// Verifica una contraseña en texto plano contra un hash Argon2id.
+pub fn verify_password(password: &str, hash: &str) -> bool {
+    let argon2 = Argon2::new(
+        argon2::Algorithm::Argon2id,
+        argon2::Version::V0x13,
+        argon2_params(),
+    );
+    match PasswordHash::new(hash) {
+        Ok(parsed) => argon2
+            .verify_password(password.as_bytes(), &parsed)
+            .is_ok(),
+        Err(_) => false,
+    }
+}
+
 /// Parses a role string (case-insensitive) into a `UserRole`.
 pub fn parse_role(s: &str) -> UserRole {
     match s.to_lowercase().as_str() {
