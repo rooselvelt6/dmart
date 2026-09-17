@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dMart UCI — Informe Técnico Final</title>
+<style>
+/* ============================================================
+   dMart UCI — Informe Técnico Final · Hoja de estilos v5
+   Diseño editorial profesional / futurista, justificación total.
+   ============================================================ */
+:root{
+  --ink:#0f172a; --muted:#64748b; --line:#dbe3ee; --soft:#f6f9fc;
+  --navy:#0b1f3a; --slate:#1e293b; --teal:#0f766e; --teal-l:#14b8a6;
+  --cyan:#22d3ee; --berry:#1d4ed8; --gold:#b45309; --green:#166534;
+  --red:#b91c1c; --white:#ffffff;
+  --serif:Georgia,"Times New Roman","Droid Serif",serif;
+  --sans:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",Consolas,"DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+html{-webkit-hyphens:auto;-moz-hyphens:auto;hyphens:auto;}
+body{
+  font-family:var(--serif); font-size:10.6pt; line-height:1.62;
+  color:var(--ink); background:#ffffff;
+  text-align:justify; text-justify:inter-word;
+}
+@page{ size:letter; margin:18mm 17mm 20mm 17mm; }
+@page :first{ margin:0; }
+
+/* -------------------------------------------------- Justificación universal */
+p, li, blockquote, .callout{
+  text-align:justify; text-justify:inter-word;
+}
+td, th, .tn{ text-align:left; }
+.ref p{ overflow-wrap:break-word; word-break:break-word; }
+p{ margin:.42em 0; orphans:3; widows:3; }
+
+/* -------------------------------------------------- Tipografía de títulos */
+h1,h2,h3,h4{
+  font-family:var(--sans); margin:0 0 .38em; line-height:1.22;
+  font-weight:700; color:var(--navy); page-break-after:avoid; text-align:left;
+  text-align-last:left; orphan-balance:first;
+}
+h1{
+  font-size:13.5pt;
+  background:linear-gradient(90deg,#0b1f3a 0%,#0f766e 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  letter-spacing:.02em;
+}
+h2{
+  font-size:15pt; color:var(--navy); letter-spacing:.01em;
+  border-bottom:2px solid var(--teal-l); padding-bottom:5px; margin-top:1.15em;
+}
+h3{ font-size:12pt; color:var(--teal); margin-top:1em; letter-spacing:.01em; }
+h4{ font-size:10.8pt; color:var(--slate); margin-top:.8em; }
+h1 em,h2 em,h3 em{ font-style:normal; color:inherit; }
+
+/* -------------------------------------------------- Enlaces y código */
+a{ color:var(--berry); text-decoration:none; }
+code{
+  font-family:var(--mono); font-size:9pt; background:var(--soft);
+  border:1px solid var(--line); border-radius:4px; padding:0 3px; color:#9a3412;
+  overflow-wrap:break-word;
+}
+pre.code-block{ page-break-inside:avoid; orphans:3; }
+pre.code-block code{ background:transparent; border:none; padding:0; color:inherit; }
+
+/* -------------------------------------------------- Tablas */
+table{
+  width:100%; border-collapse:collapse; margin:.55em 0 .9em;
+  font-size:9.2pt; page-break-inside:avoid; page-break-before:auto;
+}
+thead{ display:table-header-group; }
+th,td{ border:1px solid var(--line); padding:6px 9px; vertical-align:top; }
+th{
+  font-family:var(--sans); font-size:8.9pt; font-weight:700; color:var(--white);
+  background:linear-gradient(90deg,var(--navy),var(--slate));
+  text-align:left; text-align-last:left;
+}
+tbody tr:nth-child(even){ background:#f5f9fc; }
+tbody tr:nth-child(odd){ background:#ffffff; }
+tr{ page-break-inside:avoid; }
+td code{ background:#eef3f9; border-color:#d7e2ef; }
+caption, .caption{ font-family:var(--sans); font-size:8.8pt; color:var(--muted);
+  margin:.25em 0 .5em; text-align:left; text-align-last:left; }
+
+/* -------------------------------------------------- Cajas de aviso */
+.callout{ border-radius:0 9px 9px 0; padding:9px 13px; margin:.65em 0; font-size:9.8pt; page-break-inside:avoid; }
+.callout.note{ border-left:4px solid var(--teal); background:#effaf8; }
+.callout.warn{ border-left:4px solid var(--gold); background:#fffaf0; }
+.callout.ok  { border-left:4px solid var(--green); background:#f0fdf4; }
+.callout.crit{ border-left:4px solid var(--red); background:#fdf2f2; }
+.callout strong{ color:var(--ink); }
+
+/* -------------------------------------------------- Etiquetas / tags */
+.tag{
+  display:inline-block; font-family:var(--sans); font-size:7.9pt; font-weight:600;
+  padding:1px 9px; border-radius:999px; background:#e0ecff; color:#1e40af;
+  margin:1px 3px 1px 0; page-break-inside:avoid;
+}
+.tag.ok{ background:#d9fbe8; color:#0f5e3a; }
+.tag.doc{ background:#fdeed2; color:#8a5a10; }
+.tag.na{ background:#e5e9f0; color:#475569; }
+.tag.cr{ background:#fdd9d9; color:#9c1f1f; }
+
+/* -------------------------------------------------- KPI (fichas) */
+.kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin:6px 0 4px; page-break-inside:avoid; }
+.kpi{
+  background:linear-gradient(135deg,#ffffff,#f0f6fb);
+  border:1px solid var(--line); border-top:3px solid var(--teal);
+  border-radius:9px; padding:7px 9px; box-shadow:0 2px 6px rgba(15,23,42,.05);
+}
+.kpi b{ display:block; font-family:var(--sans); font-size:13pt; color:var(--teal); line-height:1.05; text-align:left; }
+.kpi span{ font-family:var(--sans); font-size:7.8pt; color:var(--muted); text-align:left; display:block; }
+
+/* -------------------------------------------------- Figuras e imágenes */
+figure{ margin:.7em 0; page-break-inside:avoid; }
+figure img{ width:100%; height:auto; border:1px solid var(--line); border-radius:9px; background:#fff; }
+figcaption{
+  font-family:var(--sans); font-size:8.8pt; color:var(--muted);
+  margin-top:.35em; text-align:center; text-align-last:center; line-height:1.4;
+}
+.fig-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+/* -------------------------------------------------- Estructura de código repositorio */
+.repo{ page-break-inside:avoid; }
+.repo pre{
+  font-family:var(--mono); font-size:8.3pt; line-height:1.5; color:#dce6f2;
+  background:linear-gradient(150deg,#0b1f3a,#123047); border-radius:11px;
+  padding:6mm 7mm; white-space:pre; overflow:hidden; margin:.5em 0;
+}
+.repo .g{ color:#5eead4; }
+.repo .c{ color:#93c5fd; }
+
+/* -------------------------------------------------- Fórmulas */
+.formula{
+  font-family:var(--serif); font-style:italic; font-size:10.8pt; text-align:center;
+  background:var(--soft); border:1px solid var(--line); border-radius:8px;
+  padding:8px 12px; margin:.65em 0; page-break-inside:avoid;
+}
+
+/* -------------------------------------------------- Portada futurista */
+.cover{
+  position:relative; min-height:278mm; color:var(--white);
+  display:flex; flex-direction:column; justify-content:space-between;
+  padding:20mm 19mm; page-break-after:always; overflow:hidden;
+  background:
+    radial-gradient(1200px 500px at 85% -5%, rgba(34,211,238,.22), transparent 60%),
+    radial-gradient(900px 500px at -5% 110%, rgba(20,184,166,.25), transparent 55%),
+    linear-gradient(155deg,#050e1f 0%,#0b1f3a 45%,#123347 78%,#0f766e 130%);
+}
+.cover::before{ /* rejilla futurista */
+  content:""; position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(148,163,184,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148,163,184,.06) 1px, transparent 1px);
+  background-size:9mm 9mm; pointer-events:none;
+}
+.cover::after{ /* brillo holográfico */
+  content:""; position:absolute; inset:-50% -20% auto; height:80%;
+  background:linear-gradient(115deg, transparent 40%, rgba(255,255,255,.06) 50%, transparent 60%);
+  transform:rotate(-8deg); pointer-events:none;
+}
+.cover > *{ position:relative; z-index:2; }
+.cover .brand{
+  font-family:var(--sans); font-size:10pt; letter-spacing:.42em; text-transform:uppercase;
+  color:#7ee8da; border-bottom:1px solid rgba(255,255,255,.18); padding-bottom:4mm;
+}
+.cover h1{
+  font-size:26pt; font-weight:800; line-height:1.14; color:var(--white); letter-spacing:-.3px;
+  background:none; -webkit-text-fill-color:currentColor; margin:9mm 0 5mm; text-align:left;
+}
+.cover h1 .hl{ color:#7ee8da; }
+.cover .sub{ font-size:12pt; color:#c7d6ea; max-width:165mm; line-height:1.5; text-align:left; text-align-last:left; }
+.cover .authors{ font-family:var(--sans); font-size:10pt; color:#e7eef7; margin-top:6mm; line-height:1.6; text-align:left; }
+.cover .authors sup{ color:#7ee8da; }
+.cover .kpis{ grid-template-columns:repeat(5,1fr); gap:4mm; margin:8mm 0 6mm; }
+.cover .kpi{
+  background:rgba(255,255,255,.075); border:1px solid rgba(255,255,255,.16);
+  border-radius:12px; padding:5mm 2mm; text-align:center; border-top:none;
+  box-shadow:0 8px 28px rgba(0,0,0,.25);
+}
+.cover .kpi b{ font-size:15pt; color:var(--white); text-align:center; }
+.cover .kpi span{ font-size:7.3pt; color:#a9c1dd; text-transform:uppercase; letter-spacing:.05em; text-align:center; }
+.cover .meta{ font-family:var(--sans); font-size:9.6pt; color:#d8e4f3; line-height:1.7; text-align:left; }
+.cover .stack{
+  font-family:var(--mono); font-size:8.4pt; color:#8fb3d6; line-height:1.7;
+  border-top:1px solid rgba(255,255,255,.16); padding-top:4mm; margin-top:4mm; text-align:left;
+}
+.cover code{ background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.28); color:#fff; }
+
+/* -------------------------------------------------- Utilerías */
+.page-break{ page-break-before:always; }
+.keep{ page-break-inside:avoid; }
+.toc-page{ }
+.toc ol{ list-style:none; margin:0; padding:0; counter-reset:toc; }
+.toc li{ font-family:var(--sans); font-size:10.2pt; margin:.28em 0; text-align:left; text-align-last:left; }
+.toc a{ color:var(--navy); }
+.toc .l4{ padding-left:3.2em; font-size:9.3pt; color:var(--muted); }
+.toc .l3{ padding-left:1.6em; }
+.toc .page{ float:right; color:var(--teal); font-weight:700; }
+.footer-note{
+  margin-top:14mm; padding-top:4mm; border-top:1px solid var(--line);
+  text-align:center; text-align-last:center; color:var(--muted); font-family:var(--sans); font-size:8.8pt;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ PORTADA -->
+<section class="cover">
+  <div class="brand">dMart UCI &nbsp;·&nbsp; Informe Técnico Final</div>
+  <div>
+    <h1>Solución Informática en Rust para la Sistematización del Índice Predictivo de Mortalidad <span class="hl">APACHE II</span> en Unidades de Cuidados Intensivos</h1>
+    <p class="sub">Diseño, robustez, seguridad, análisis de sensibilidad y validación técnica de una plataforma
+    integral para UCI: 152 tests verificados, 35 especificaciones SDD, MFA + RBAC + cifrado ChaCha20-Poly1305,
+    compliance HIPAA/ISO&nbsp;27001 y arranque en menos de 140&nbsp;ms.</p>
+    <p class="authors">
+      <strong>Centeno-Romero, Manuel Vicente</strong><sup>1</sup> &nbsp;y&nbsp; <strong>Angulo Peña, Rooselvelt Aligheery</strong><sup>2</sup><br>
+      <sup>1</sup>Universidad de Oriente — Núcleo de Sucre, Escuela de Ciencias, Departamento de Matemáticas<br>
+      <sup>2</sup>Universidad de Oriente — Núcleo de Sucre, Escuela de Ciencias, Departamento de Informática
+    </p>
+  </div>
+  <div>
+    <div class="kpis">
+      <div class="kpi"><b>152</b><span>Tests verificados</span></div>
+      <div class="kpi"><b>&lt;140 ms</b><span>Arranque</span></div>
+      <div class="kpi"><b>69</b><span>Rutas API</span></div>
+      <div class="kpi"><b>35</b><span>SPECs SDD</span></div>
+      <div class="kpi"><b>18,2 MiB</b><span>Binario release</span></div>
+    </div>
+    <div class="meta">
+      Informe <strong>v5.0.0</strong> · 17 de septiembre de 2026<br>
+      Estado: rama <code>main</code> @ <code>1d6356f</code> + mejoras de interfaz en el árbol de trabajo.
+    </div>
+    <div class="stack">Rust 1.98 · edition 2024 · Axum 0.8 · SurrealDB/SurrealKV embebido · Leptos 0.8 → WebAssembly ·
+    HL7 v2.4 + MLLP/MQTT · FHIR R4 · Prometheus · Argon2id · JWT · ChaCha20-Poly1305</div>
+  </div>
+</section>
+
+<!-- ============================================================ RESUMEN -->
+<section class="page-break">
+<h2>Resumen</h2>
+<p>En el ámbito crítico de la medicina intensiva, donde cada decisión puede ser determinante para la vida de los
+pacientes, la precisión del índice de gravedad <strong>APACHE&nbsp;II</strong> (Acute Physiology and Chronic Health
+Evaluation&nbsp;II) emerge como un pilar fundamental para la estratificación del riesgo y la distribución eficiente
+de recursos en las Unidades de Cuidados Intensivos (UCI). Este índice, complementado por la Escala de Coma de
+Glasgow (GCS), el <em>National Early Warning Score 2</em> (NEWS2), el <em>Sequential Organ Failure Assessment</em>
+(SOFA) y el <em>Simplified Acute Physiology Score III</em> (SAPS&nbsp;III), constituye el marco de referencia
+estándar para evaluar la gravedad de pacientes críticamente enfermos (Knaus et al., 1985; Teasdale &amp; Jennett,
+1974).</p>
+<p>El presente informe técnico describe el diseño, la implementación, la validación y la operación de
+<strong>dMart&nbsp;UCI</strong>, una plataforma integral de gestión para UCI construida íntegramente en el lenguaje
+de programación <strong>Rust</strong> (edition 2024, toolchain 1.98) y compilada a <strong>WebAssembly</strong>
+mediante el framework reactivo <strong>Leptos&nbsp;0.8</strong>. El sistema se despliega como un único binario de
+producción (18,2&nbsp;MiB) que integra una API REST de alto rendimiento sobre <strong>Axum&nbsp;0.8</strong>, una
+base de datos embebida transaccional (<strong>SurrealDB</strong> sobre SurrealKV), un motor de parseo HL7 v2.4 con
+transporte MLLP/MQTT, interoperabilidad nativa <strong>FHIR R4</strong>, un pipeline de <em>Server-Sent
+Events</em> (SSE) para monitoreo en tiempo real y un frontend PWA <em>offline-first</em> con Service Worker.</p>
+<p>El desarrollo se gestionó mediante la metodología <strong>Spec-Driven Development (SDD)</strong>, con 35
+especificaciones (SPEC-001 a SPEC-035) distribuidas en 10 fases acumulativas (0–9), criterios de aceptación en
+formato Gherkin y gates de calidad automatizados (<code>cargo fmt</code>, <code>cargo clippy -D warnings</code>,
+<code>cargo audit</code>, <code>promtool test rules</code>, cobertura ≥&nbsp;60&nbsp;%). La verificación del sistema
+se realizó mediante <strong>152&nbsp;tests del backend</strong> (85 unitarios de librería, 35 E2E de API y 32 de
+integración HL7/MLLP), pruebas de conformidad clínica con 13 vectores de referencia (7 APACHE&nbsp;II y 6 GCS),
+66 <em>property-based tests</em> (proptests) y 4 «targets» de fuzzing. Los resultados muestran un tiempo de arranque
+inferior a 140&nbsp;ms, latencias de observabilidad submilisegundo (mediana 0,26–1,13&nbsp;ms) y una tasa de
+procesamiento superior a 880&nbsp;req/s incluso en el «endpoint» más pesado (<code>/obs/metrics</code>).</p>
+<p>La arquitectura de seguridad incluye autenticación con <strong>Argon2id</strong> (19&nbsp;MiB, 3 pasadas,
+4 carriles), JWT con tokens de acceso de 15 minutos y «refresh tokens» rotativos de uso único (7 días),
+autenticación de dos factores <strong>MFA&nbsp;TOTP</strong> (RFC&nbsp;6238) con detección de reuso y revocación
+por familia de sesiones, autorización por roles (<strong>RBAC</strong>) granular (<em>Admin, Médico, Enfermero,
+Viewer</em>) con matriz <code>resource:action</code> por ruta, cifrado autenticado <strong>ChaCha20-Poly1305</strong>,
+zeroización de secretos en memoria, auditoría PHI inmutable con retención de 6 años, «rate limiting» basado en
+«token bucket» por IP real y endurecimiento contra inyección, XSS y DoS. El paquete de compliance (SPEC-034) mapea
+controles a <strong>HIPAA&nbsp;45&nbsp;CFR&nbsp;164</strong>, <strong>NIST&nbsp;800-53</strong> e
+<strong>ISO&nbsp;27001</strong> Anexo&nbsp;A. El informe incluye un modelo de amenazas con 15 ataques identificados
+y sus respectivas defensas, un análisis de sensibilidad clínica y técnica que evidencia el rigor
+del diseño del sistema.</p>
+<p><strong>Palabras clave:</strong>
+<span class="tag">Rust</span><span class="tag">APACHE II</span><span class="tag">Glasgow Coma Scale</span>
+<span class="tag">UCI</span><span class="tag">WebAssembly</span><span class="tag">Leptos</span>
+<span class="tag">Axum</span><span class="tag">SurrealDB</span><span class="tag">HL7</span>
+<span class="tag">FHIR R4</span><span class="tag">Spec-Driven Development</span><span class="tag">MFA</span>
+<span class="tag">RBAC</span><span class="tag">HIPAA</span></p>
+</section>
+
+<!-- ============================================================ ABSTRACT -->
+<section class="page-break">
+<h2>Abstract</h2>
+<p>In the critical field of intensive medicine, where each decision may be decisive for patients' lives, the
+accuracy of the <strong>APACHE&nbsp;II</strong> severity index emerges as a fundamental pillar for risk stratification
+and efficient resource allocation in Intensive Care Units (ICU). This index, complemented by the Glasgow Coma Scale
+(GCS), the National Early Warning Score 2 (NEWS2), the Sequential Organ Failure Assessment (SOFA), and the
+Simplified Acute Physiology Score III (SAPS&nbsp;III), constitutes the standard reference framework for evaluating the
+severity of critically ill patients.</p>
+<p>This technical report describes the design, implementation, validation, and operation of <strong>dMart&nbsp;UCI</strong>,
+a comprehensive ICU management platform built entirely in the <strong>Rust</strong> programming language (edition
+2024, toolchain 1.98) and compiled to <strong>WebAssembly</strong> using the <strong>Leptos&nbsp;0.8</strong> reactive
+framework. The system deploys as a single production binary (18.2&nbsp;MiB) integrating a high-performance REST API on
+<strong>Axum&nbsp;0.8</strong>, an embedded transactional database (<strong>SurrealDB</strong> on SurrealKV), an HL7 v2.4
+parser with MLLP/MQTT transport, native <strong>FHIR&nbsp;R4</strong> interoperability, a Server-Sent Events (SSE)
+pipeline for real-time monitoring, and an offline-first PWA frontend with Service Worker.</p>
+<p>Development followed the <strong>Spec-Driven Development (SDD)</strong> methodology with 35 specifications
+(SPEC-001 through SPEC-035) across 10 cumulative phases (0–9), Gherkin-format acceptance criteria, and automated
+quality gates. System verification comprised <strong>152 backend tests</strong> (85 library unit tests, 35 API E2E
+tests, and 32 HL7/MLLP integration tests), clinical conformance testing with 13 reference vectors, 66 property-based
+tests, and 4 fuzzing targets. Results demonstrate startup under 140&nbsp;ms, sub-millisecond observability latencies
+(median 0.26–1.13&nbsp;ms), and throughput exceeding 880&nbsp;req/s on the heaviest endpoint.</p>
+<p>The security architecture includes <strong>Argon2id</strong> password hashing (19&nbsp;MiB, 3 passes, 4 lanes),
+JWT with 15-minute access tokens and single-use rotating refresh tokens (7 days), <strong>MFA&nbsp;TOTP</strong>
+(RFC&nbsp;6238) with reuse detection and family-wide revocation, granular <strong>RBAC</strong> with
+resource:action permission matrices, authenticated <strong>ChaCha20-Poly1305</strong> encryption, memory
+zeroization, immutable PHI audit logging with 6-year retention, real-IP-based token-bucket rate limiting, and
+hardening against injection, XSS, and DoS attacks. The compliance pack (SPEC-034) maps controls to
+<strong>HIPAA&nbsp;45&nbsp;CFR&nbsp;164</strong>, <strong>NIST&nbsp;800-53</strong>, and <strong>ISO&nbsp;27001</strong>
+Annex&nbsp;A. The report includes a comprehensive threat model with 15 attacks and corresponding defenses, clinical
+and technical sensitivity analysis demonstrating the design rigor.</p>
+<p><strong>Keywords:</strong>
+<span class="tag">Rust</span><span class="tag">APACHE II</span><span class="tag">Glasgow Coma Scale</span>
+<span class="tag">ICU</span><span class="tag">WebAssembly</span><span class="tag">Leptos</span>
+<span class="tag">Axum</span><span class="tag">SurrealDB</span><span class="tag">HL7</span>
+<span class="tag">FHIR R4</span><span class="tag">SDD</span><span class="tag">MFA</span>
+<span class="tag">RBAC</span><span class="tag">HIPAA</span></p>
+</section>
+
+<!-- ============================================================ ÍNDICE -->
+<section class="page-break">
+<h2>Contenido</h2>
+<div class="toc">
+  <ol>
+    <li><a href="#s1">1. Introducción</a></li>
+    <li><a href="#s2">2. Bases Teóricas</a></li>
+    <li class="l3"><a href="#s2-1">2.1 Índice APACHE II</a></li>
+    <li class="l3"><a href="#s2-2">2.2 Escala de Coma de Glasgow (GCS)</a></li>
+    <li class="l3"><a href="#s2-3">2.3 NEWS2 · SOFA · SAPS III</a></li>
+    <li class="l3"><a href="#s2-4">2.4 Tecnologías del stack</a></li>
+    <li><a href="#s3">3. Marco Regulatorio y Compliance</a></li>
+    <li><a href="#s4">4. Metodología: Spec-Driven Development (SDD)</a></li>
+    <li><a href="#s5">5. Desarrollo y Discusión</a></li>
+    <li class="l3"><a href="#s5-1">5.1 Arquitectura del sistema</a></li>
+    <li class="l3"><a href="#s5-2">5.2 Casos de uso</a></li>
+    <li class="l3"><a href="#s5-3">5.3 Robustez y tolerancia a fallos</a></li>
+    <li class="l3"><a href="#s5-4">5.4 Análisis técnico de sensibilidad</a></li>
+    <li class="l3"><a href="#s5-5">5.5 Pruebas realizadas y QA</a></li>
+    <li class="l3"><a href="#s5-6">5.6 Interfaz y experiencia clínica</a></li>
+    <li class="l3"><a href="#s5-7">5.7 Rendimiento, tiempos de respuesta y benchmark</a></li>
+    <li class="l3"><a href="#s5-8">5.8 Seguridad informática: ataques y defensas</a></li>
+    <li class="l3"><a href="#s5-9">5.9 Escalas de gravedad</a></li>
+    <li><a href="#s6">6. Conclusiones</a></li>
+    <li><a href="#s7">7. Bibliografía (APA 6)</a></li>
+    <li><a href="#s8">Anexos</a></li>
+  </ol>
+</div>
+</section>
+
+<!-- ============================================================ 1 -->
+<section class="page-break" id="s1">
+<h2>1. Introducción</h2>
+<p>En el dinámico y desafiante entorno de la medicina intensiva, donde cada instante es crítico y cada decisión
+puede significar la diferencia entre la vida y la muerte, la precisión y la eficiencia son imperativas. Las
+Unidades de Cuidados Intensivos (UCI) se constituyen en refugios de esperanza donde la innovación tecnológica y los
+conocimientos médicos convergen para salvaguardar la salud y el bienestar de los pacientes más vulnerables
+(Chávez, 2012). Estudios previos han demostrado que los pacientes con estancia prolongada consumen hasta el
+50&nbsp;% de los recursos hospitalarios de la UCI, con una mortalidad elevada (Velásquez &amp; Sánchez, 2002), y que
+el análisis de las variables fisiológicas en tiempo real resulta decisivo para la toma de decisiones médicas
+(Chávez, 2012).</p>
+<p>El índice <strong>APACHE&nbsp;II</strong>, desarrollado por Knaus y colaboradores en 1985, ofrece un sistema
+estandarizado para evaluar la gravedad de la enfermedad y predecir la mortalidad en pacientes ingresados en UCI
+(Knaus et al., 1985). Complementariamente, la Escala de Coma de Glasgow (GCS), desarrollada por Teasdale y Jennett
+en 1974, proporciona una herramienta objetiva y rápida para evaluar el nivel de conciencia, particularmente vital
+para la detección temprana de deterioro neurológico (Teasdale &amp; Jennett, 1974). Martínez y colaboradores (2020)
+confirmaron, mediante un estudio con 68 pacientes, que el APACHE&nbsp;II es una herramienta sumamente útil para el
+médico de la UCI en la estratificación inicial de la severidad clínica.</p>
+<p>Sin embargo, la evaluación manual del APACHE&nbsp;II y de la GCS resulta lenta y propensa a errores, consume
+recursos valiosos del personal médico y retrasa decisiones críticas. En el contexto del Hospital Universitario
+Antonio Patricio de Alcalá (HUAPA) de Cumaná, estado Sucre, los procesos llevados en papel han demostrado ser poco
+fiables e inseguros, tal como fue documentado por Angulo (2019), quien propuso un Agente Inteligente basado en Redes
+Neuronales Artificiales para la identificación de determinantes de estancia en la UCI de dicha institución,
+empleando en aquel momento la metodología OpenUP y tecnología Python.</p>
+<p>El presente trabajo describe la implementación de <strong>dMart&nbsp;UCI</strong>, una plataforma integral de
+gestión para UCI que automatiza el cálculo del APACHE&nbsp;II, la GCS, NEWS2, SOFA y SAPS&nbsp;III, y que ofrece
+capacidades avanzadas de monitoreo en tiempo real, interoperabilidad con monitores de cama vía HL7 v2.4 y FHIR R4,
+analítica de mortalidad asistida por ML y un frontend PWA accesible desde cualquier dispositivo con navegador moderno.
+Los objetivos específicos de esta investigación son:</p>
+<ol>
+  <li>Diseñar e implementar una arquitectura de software robusta y segura, construida íntegramente en Rust, que
+  cumpla con los estándares de seguridad hospitalaria (HIPAA, ISO&nbsp;27001).</li>
+  <li>Automatizar el cálculo de las escalas de severidad APACHE&nbsp;II, GCS, NEWS2, SOFA y SAPS&nbsp;III con
+  validación clínica contra vectores de referencia bibliográficos.</li>
+  <li>Garantizar la seguridad de la información de salud protegida (PHI) mediante autenticación multifactor,
+  autorización por roles, cifrado en reposo y en tránsito, y auditoría inmutable con retención legal.</li>
+  <li>Validar el sistema mediante una estrategia de pruebas en profundidad que incluya tests unitarios, E2E de API,
+  integración HL7, «property-based testing», fuzzing y conformidad clínica con 13 vectores de referencia.</li>
+  <li>Demostrar tiempos de arranque inferiores a 140&nbsp;ms y latencias submilisegundo en los «endpoint» de
+  observabilidad, con un rendimiento superior a 880&nbsp;req/s.</li>
+</ol>
+<p>La metodología empleada es <strong>Spec-Driven Development (SDD)</strong>: la naturaleza del dominio médico
+exige contratos formales verificables (especificaciones en formato Gherkin) y criterios de aceptación medibles
+antes de considerar terminada una funcionalidad. Este enfoque se documenta en la Sección&nbsp;4.</p>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="page-break" id="s2">
+<h2>2. Bases Teóricas</h2>
+
+<h3 id="s2-1">2.1 Índice APACHE II</h3>
+<p>El APACHE&nbsp;II fue introducido por Knaus, Draper, Wagner y Zimmerman (1985) como un sistema de clasificación de
+la severidad de la enfermedad para pacientes en UCI. Se compone de tres componentes: la puntuación de fisiología
+aguda (APS), la puntuación por edad y la puntuación por enfermedades crónicas.</p>
+
+<h4>2.1.1 Fisiología Aguda (APS)</h4>
+<p>El APS evalúa 12 variables fisiológicas, cada una puntuada de 0 a 4 puntos según su desviación respecto de los
+rangos de referencia. La suma de las puntuaciones constituye el componente APS (rango 0–60). Las variables y sus
+rangos de puntuación son:</p>
+<table class="keep">
+  <thead><tr><th>Variable</th><th>Unidad</th><th>Rangos y puntuación (0–4 pts)</th></tr></thead>
+  <tbody>
+    <tr><td>Temperatura rectal</td><td>°C</td><td>36,0–38,4 → 0; 34,0–35,9 / 38,5–38,9 → 1; 32,0–33,9 / 39,0–40,9 → 2; 30,0–31,9 / ≥41,0 → 3; ≤29,9 → 4</td></tr>
+    <tr><td>Presión arterial media</td><td>mmHg</td><td>70–109 → 0; 50–69 / 110–129 → 2; 130–159 → 3; ≥160 → 4; &lt;49 → 4</td></tr>
+    <tr><td>Frecuencia cardíaca</td><td>lpm</td><td>70–109 → 0; 40–69 / 110–139 → 2; 140–179 → 3; ≥180 → 4; &lt;39 → 4</td></tr>
+    <tr><td>Frecuencia respiratoria</td><td>rpm</td><td>12–24 → 0; 10–11 / 25–34 → 1; 6–9 / 35–49 → 2; ≥50 → 4; &lt;5 → 4</td></tr>
+    <tr><td>Oxigenación</td><td>—</td><td>FiO₂ ≥ 0,5: A-aDO₂ &lt;100 → 0; 100–249 → 2; 250–349 → 3; ≥350 → 4 · FiO₂ &lt; 0,5: PaO₂ &gt;70 → 0; 61–70 → 1; 55–60 → 2; &lt;55 → 4</td></tr>
+    <tr><td>pH arterial</td><td>—</td><td>7,33–7,49 → 0; 7,25–7,32 / 7,50–7,59 → 2; 7,15–7,24 / 7,60–7,69 → 3; &lt;7,15 / ≥7,70 → 4</td></tr>
+    <tr><td>Sodio sérico</td><td>mEq/L</td><td>130–149 → 0; 120–129 / 150–154 → 2; 111–119 / 155–159 → 3; ≤110 / ≥160 → 4</td></tr>
+    <tr><td>Potasio sérico</td><td>mEq/L</td><td>3,5–5,4 → 0; 3,0–3,4 / 5,5–5,9 → 1; 2,5–2,9 / 6,0–6,9 → 3; &lt;2,5 / ≥7 → 4</td></tr>
+    <tr><td>Creatinina</td><td>mg/dL</td><td>0,6–1,4 → 0; &lt;0,6 → 2; 1,5–1,9 → 3; ≥3 → 4 (×2 en fallo renal agudo)</td></tr>
+    <tr><td>Hematocrito</td><td>%</td><td>30,0–45,9 → 0; 20,0–29,9 / 46,0–49,9 → 1; &lt;20 / ≥50 → 4</td></tr>
+    <tr><td>Leucocitos</td><td>×10³/mm³</td><td>3,0–14,9 → 0; 1,0–2,9 / 15,0–19,9 → 1; &lt;1 / ≥20 → 2; — → 4</td></tr>
+    <tr><td>GCS</td><td>3–15</td><td>Conversión: 15 − GCS → 0–12 pts</td></tr>
+  </tbody>
+</table>
+
+<h4>2.1.2 Edad y enfermedades crónicas</h4>
+<table class="keep">
+  <thead><tr><th>Edad (años)</th><th>Pts</th><th>Condición crónica</th><th>Pts</th></tr></thead>
+  <tbody>
+    <tr><td>≤ 44</td><td>0</td><td>Insuficiencia hepática (cirrosis, hipertensión portal, sangrado variceal)</td><td>5</td></tr>
+    <tr><td>45–54</td><td>2</td><td>Cardiovascular severa (ICC clase IV NYHA, angina inestable)</td><td>5</td></tr>
+    <tr><td>55–64</td><td>3</td><td>Respiratoria severa (EPOC restrictivo, dependencia de VM)</td><td>5</td></tr>
+    <tr><td>65–74</td><td>5</td><td>Renal crónica (diálisis)</td><td>5</td></tr>
+    <tr><td>≥ 75</td><td>6</td><td>Inmunocompromiso (quimio/radioterapia, transplante, SIDA) · cirugía de emergencia</td><td>5</td></tr>
+  </tbody>
+</table>
+
+<h4>2.1.3 Puntuación total y mortalidad</h4>
+<p>La puntuación total del APACHE&nbsp;II se calcula como
+<strong>APACHE II = APS + Edad + Crónicas</strong>, con rango 0–71. La mortalidad hospitalaria estimada se obtiene
+mediante la fórmula logística original de Knaus et al. (1985):</p>
+<div class="formula">ln (R / (1 − R)) = −3,517 + (0,083 × APACHE II) + 0,379 × cirugía de emergencia</div>
+<p>donde R es el riesgo de mortalidad hospitalaria. En dMart&nbsp;UCI, la conversión se implementa en la función
+<code>apache_mortality()</code> del módulo <code>scales.rs</code> de la librería <code>dmart-shared</code>, como
+función pura y determinista.</p>
+
+<h4>2.1.4 Clasificación de severidad</h4>
+<table class="keep">
+  <thead><tr><th>Puntuación APACHE II</th><th>Mortalidad estimada</th><th>Nivel de severidad</th><th>Color UI</th></tr></thead>
+  <tbody>
+    <tr><td>0–9</td><td>&lt; 10 %</td><td>Bajo</td><td>Verde esmeralda</td></tr>
+    <tr><td>10–19</td><td>10–25 %</td><td>Moderado</td><td>Azul</td></tr>
+    <tr><td>20–29</td><td>25–50 %</td><td>Severo</td><td>Ámbar</td></tr>
+    <tr><td>≥ 30</td><td>&gt; 50 %</td><td>Crítico</td><td>Rojo rose</td></tr>
+  </tbody>
+</table>
+
+<h3 id="s2-2">2.2 Escala de Coma de Glasgow (GCS)</h3>
+<p>La GCS evalúa tres componentes —respuesta ocular (E: 1–4), verbal (V: 1–5) y motora (M: 1–6)— con una
+puntuación total de 3 a 15 puntos (Teasdale &amp; Jennett, 1974). En dMart&nbsp;UCI se clasifica mediante grados de
+trauma craneoencefálico: TCE leve (13–15), TCE moderado (9–12) y TCE severo o coma (3–8), y aporta hasta 12 puntos
+al componente APS del APACHE&nbsp;II mediante la conversión 15&nbsp;−&nbsp;GCS.</p>
+
+<h3 id="s2-3">2.3 NEWS2, SOFA y SAPS III</h3>
+<ul>
+  <li><strong>NEWS2</strong> (National Early Warning Score 2): seis parámetros (frecuencia respiratoria, SpO₂,
+  presión sistólica, frecuencia cardíaca, temperatura y oxígeno suplementario), rango 0–20+. Clasificación: Bajo
+  (0–4), Medio (5–6), Alto (7–19) y Emergencia (≥20), con respuesta clínica asociada.</li>
+  <li><strong>SOFA</strong> (Sequential Organ Failure Assessment): seis sistemas (respiratorio, cardiovascular,
+  coagulación, hepático, neurológico y renal), rango 0–24. Clasificación: Normal (0–1), Disfunción leve/moderada
+  (2–6), Falla orgánica (7–9) y Falla multiorgánica (≥10).</li>
+  <li><strong>SAPS III</strong> (Simplified Acute Physiology Score III): antecedentes (Box 1), circunstancias del
+  ingreso (Box 2) y fisiología de las primeras 24 horas (Box 3), rango 0–100+. Clasificación: Estable (≤30),
+  Riesgo moderado (31–50), Riesgo alto (51–70) y Crítico/Muy alto (&gt;70).</li>
+</ul>
+
+<h3 id="s2-4">2.4 Tecnologías del stack</h3>
+<table class="keep">
+  <thead><tr><th style="width:24%">Tecnología</th><th>Rol en el sistema</th></tr></thead>
+  <tbody>
+    <tr><td>Rust 1.98 · edition 2024</td><td>Lenguaje de sistemas con seguridad de memoria garantizada en compilación (ownership/borrowing), cero costos de abstracción.</td></tr>
+    <tr><td>Leptos 0.8 → WebAssembly</td><td>Framework reactivo que compila el frontend SPA a WASM (2,53 MB) con reactividad fine-grained.</td></tr>
+    <tr><td>Axum 0.8 (Tokio)</td><td>Framework HTTP con enrutado tipado, middleware Tower, SSE nativo.</td></tr>
+    <tr><td>SurrealDB / SurrealKV</td><td>Base de datos multi-modelo embebida, transaccional, con SurrealQL y migraciones versionadas.</td></tr>
+    <tr><td>HL7 v2.4 · MLLP · MQTT</td><td>Mensajería clínica ORU^R01 con drivers Mindray, Philips y genéricos.</td></tr>
+    <tr><td>FHIR R4 · LOINC · CIE-10</td><td>Interoperabilidad: Patient, Observation, Condition, DiagnosticReport, Bundle.</td></tr>
+    <tr><td>Prometheus · Grafana</td><td>Observabilidad: 33 familias de métricas, 6 dashboards, 18 reglas de alerta.</td></tr>
+    <tr><td>Argon2id · JWT · ChaCha20-Poly1305 · zeroize</td><td>Seguridad: hashing de contraseñas, tokens revocables, cifrado autenticado y zeroización en memoria.</td></tr>
+    <tr><td>Docker · Kubernetes/Helm · ArgoCD/Flux</td><td>Despliegue reproducible, HA y GitOps.</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="page-break" id="s3">
+<h2>3. Marco Regulatorio y Compliance</h2>
+<p>El sistema mapea controles a múltiples marcos normativos mediante el paquete de evidencia (SPEC-034), que
+incluye un catálogo de controles (<code>CONTROL_CATALOG.md</code>), inventario de flujos de PHI
+(<code>DATA_FLOWS.md</code>), registro de incidentes (<code>INCIDENTS.md</code>) y marco legal
+(<code>LEGAL.md</code>), junto con scripts de generación y validación
+(<code>compliance_generate.sh</code> / <code>compliance_check.sh</code>).</p>
+<table class="keep">
+  <thead><tr><th style="width:22%">Marco</th><th>Controles implementados</th></tr></thead>
+  <tbody>
+    <tr><td>HIPAA 45 CFR 164</td><td>§164.312(a) Control de acceso · §164.312(b) Auditoría (logs inmutables, retención 6 años) · §164.312(c) Integridad (fingerprint SHA-256) · §164.312(d) Autenticación (MFA) · §164.312(e) Protección en tránsito (TLS/HSTS).</td></tr>
+    <tr><td>ISO 27001:2022</td><td>Controles organizativos (A.5), de personas (A.6), físicos (A.7), tecnológicos (A.8) y de suplidor (A.9), con evidencia auto-generada y evaluación de riesgos trimestral.</td></tr>
+    <tr><td>NIST 800-53</td><td>Categorías AC, AU, CA, CM, IA, IR, MP, PE, RA, SC y SI mapeadas en el catálogo de controles.</td></tr>
+    <tr><td>Ley 118 de 2021 (Cuba)</td><td>Protección de datos personales: consentimiento, minimización y derechos de los titulares; tratamiento seguro de datos de salud como PHI.</td></tr>
+  </tbody>
+</table>
+<div class="callout note"><strong>Alcance declarado.</strong> El despliegue de fábrica opera sobre HTTP directo sin TLS
+automático; los despliegues productivos en red externa deben ubicarse detrás de un proxy TLS (Caddy) y revisarse
+<code>DMART_CORS_ORIGIN</code> y <code>DMART_TRUST_PROXY</code>.</div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="page-break" id="s4">
+<h2>4. Metodología: Spec-Driven Development (SDD)</h2>
+
+<h3>4.1 Justificación de la metodología SDD</h3>
+<p>Si bien la investigación antecedente de Angulo (2019) empleó la metodología OpenUP, el presente proyecto adoptó
+<strong>Spec-Driven Development (SDD)</strong> por las siguientes razones: (a) los criterios de aceptación en
+formato Gherkin son ejecutables y verificables automáticamente, eliminando la ambigüedad de las historias de usuario
+informales; (b) cada SPEC exige gates de calidad obligatorios —<code>cargo fmt</code>,
+<code>cargo clippy -D warnings</code>, <code>cargo audit</code> con cero advisories y tests unitarios/E2E de
+integración— antes de marcarse como completada; (c) existe trazabilidad completa de requisito a implementación
+(commits, tests y criterios go/no-go asociados); y (d) el dominio médico requiere especificaciones clínicas precisas
+—vectores de referencia, fórmulas validadas y rangos fisiológicos— que exigen un contrato formal y verificable.</p>
+
+<h3>4.2 Estructura de las especificaciones</h3>
+<p>Cada SPEC sigue la plantilla <code>specs/TEMPLATE.md</code> con: contexto (problema, usuario objetivo y métrica de
+éxito), criterios de aceptación Gherkin, contratos de API (endpoints, esquemas, códigos de error), modelos de datos
+(tablas SurrealQL, migraciones e índices), casos límite (edge cases), estrategia de pruebas (unitarias, integración,
+property-based, seguridad y fuzz), plan de rollback (feature flags, migraciones reversibles) y definición de
+terminado (Definition of Done).</p>
+
+<h3>4.3 Fases acumulativas (0–9)</h3>
+<table class="keep">
+  <thead><tr><th>Fase</th><th>Alcance</th><th>SPECs de referencia</th><th>Estado</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>Limpieza y cimientos</td><td>001 · toolchain 2024</td><td>Completada</td></tr>
+    <tr><td>1</td><td>Seguridad crítica</td><td>004 (Auth/AuthZ, MFA, RBAC)</td><td>Completada</td></tr>
+    <tr><td>2</td><td>Arquitectura y datos</td><td>002 (persistencia ML)</td><td>Completada</td></tr>
+    <tr><td>3</td><td>DevOps y observabilidad</td><td>005 (Prometheus/Grafana)</td><td>Completada</td></tr>
+    <tr><td>4</td><td>Frontend y UX</td><td>PWA · temas · accesibilidad</td><td>Completada</td></tr>
+    <tr><td>5</td><td>Clínico y QA avanzado</td><td>003 · 027 · 028 (conformidad)</td><td>Completada</td></tr>
+    <tr><td>6</td><td>Despliegue y staging</td><td>006–009 · 012</td><td>Completada</td></tr>
+    <tr><td>7</td><td>Interoperabilidad clínica</td><td>010–020</td><td>Completada</td></tr>
+    <tr><td>8</td><td>Producción y cloud</td><td>021–026 · 029–033</td><td>Completada</td></tr>
+    <tr><td>9</td><td>Compliance y coste</td><td>034 · 035</td><td>Completada</td></tr>
+  </tbody>
+</table>
+
+<h3>4.4 Criterios go/no-go del piloto (R1–R8)</h3>
+<table class="keep">
+  <thead><tr><th>ID</th><th>Criterio</th><th>Métrica de verificación</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td>30 días de uptime sin intervención</td><td><code>uptime_seconds</code> continuo en staging; reinicio automático.</td></tr>
+    <tr><td>R2</td><td>Detecta sus propios fallos</td><td>6 dashboards, 18 alertas, 0 falsas alarmas/semana.</td></tr>
+    <tr><td>R3</td><td>No pierde datos clínicos</td><td>Backup diario con restauración probada (RPO ≤ 24 h, RTO &lt; 4 h).</td></tr>
+    <tr><td>R4</td><td>Despliegue y rollback sin drama</td><td><code>docker compose up</code> reproducible; rollback &lt; 15 min.</td></tr>
+    <tr><td>R5</td><td>Escalas clínicamente correctas</td><td>Vectores de referencia Knaus/GCS (APACHE II + GCS validados).</td></tr>
+    <tr><td>R6</td><td>Un monitor roto no tumba el resto</td><td>Circuit breaker; gap/fault visibles en Grafana.</td></tr>
+    <tr><td>R7</td><td>PHI y seguridad sin sorpresas</td><td>0 advisories; sin PHI en logs, métricas ni labels.</td></tr>
+    <tr><td>R8</td><td>Los cambios no rompen lo existente</td><td>CI gate: tests + clippy + <code>promtool test rules</code>.</td></tr>
+  </tbody>
+</table>
+
+<h3>4.5 Entorno de medición</h3>
+<p>Las mediciones del informe se realizaron el 17 de septiembre de 2026 sobre la rama <code>main</code> (commit
+<code>1d6356f</code>): CPU Intel i5-10400 (12 hilos, ≈2,9 GHz), 11 GiB de RAM, Linux 7.2.4 (x86_64), binario
+<code>target/release/dmart-server</code> (19.116.472 bytes, 18,2 MiB), base de datos temporal por ejecución y
+puerto aislado para el benchmark.</p>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="page-break" id="s5">
+<h2>5. Desarrollo y Discusión</h2>
+
+<h3 id="s5-1">5.1 Arquitectura del sistema</h3>
+<p>La arquitectura es de <strong>monolito modular</strong> compilado a un único binario, donde la librería
+(<code>lib</code>) y el binario (<code>bin</code>) comparten los mismos módulos. Esto simplifica el despliegue en
+redes hospitalarias aisladas (un solo ejecutable, sin dependencias de runtime) y permite que el mismo código se
+reutilice en los tests de integración in-process. El diseño distribuye los componentes en cuatro estratos:
+cliente (PWA/WASM), núcleo del servidor, interoperabilidad (HL7/FHIR) y persistencia/observabilidad.</p>
+
+<div class="callout note"><strong>Monolito modular.</strong> Un solo ejecutable integra API, base de datos,
+HL7/FHIR, motor de escalas, ML y frontend estático; los <em>crates</em> <code>dmart-shared</code>,
+<code>dmart-server</code> y <code>dmart-app</code> componen el <em>workspace</em> Cargo.</div>
+
+<div class="repo keep">
+<pre><span class="g">dmart/</span>
+├─ dmart-shared/   modelos · escalas clínicas · validación · ML (DecisionTree)
+├─ dmart-server/   Axum API · auth/RBAC · HL7+MLLP/MQTT · FHIR R4 · auditoría
+│  ├─ api/          23 submódulos de endpoints (patients, scales, admin, fhir, …)
+│  ├─ hl7/          parser ORU^R01 · framer MLLP · ingest · cliente MQTT
+│  ├─ fhir_bundle/  parser Bundle R4 + conversión LOINC → VitalsMessage
+│  ├─ ews_stream/   Early-Warning Streaming (NEWS2/APACHE/SOFA → SSE)
+│  ├─ migrations/   SurrealQL versionado (001…033)
+│  └─ fuzz/         4 targets (json, hl7, scales, api_json)
+├─ dmart-app/       frontend Leptos/WASM (PWA, Tailwind, Service Worker)
+├─ specs/           35 especificaciones SDD
+├─ docs/            arquitectura · API · compliance · runbooks
+└─ tests/           E2E (Playwright) · carga (k6)</pre>
+</div>
+
+<h3 id="s5-2">5.2 Casos de uso</h3>
+<p>Los requisitos funcionales se agrupan en casos de uso protagonizados por los cuatro roles clínicos del RBAC
+(<em>Admin, Médico, Enfermero</em> y <em>Viewer</em>) junto con los sistemas externos de interoperabilidad
+(monitores HL7 v2.4 y sistemas FHIR R4). Los actores acceden al radar de «scores», a la gestión de pacientes y al
+panel de estadísticas, mientras que los sistemas externos alimentan el flujo de datos clínicos mediante MLLP/MQTT.</p>
+<p>El modelo de dominio garantiza la corrección clínica mediante el patrón de estrategia: las escalas clínicas
+(<code>ScaleEngine</code>) se implementan como funciones puras, lo que asegura su testabilidad sin red ni base de
+datos y habilita el «fingerprint» SHA-256 por medición.</p>
+<p>El flujo de autenticación implementa <strong>MFA&nbsp;TOTP</strong> (RFC&nbsp;6238), rotación de «refresh tokens»
+de un solo uso y revocación por reuso en toda la familia de sesiones, según la SPEC-004.</p>
+
+<h3 id="s5-3">5.3 Robustez y tolerancia a fallos</h3>
+<p>La robustez es un requisito fundamental en entornos hospitalarios, donde la disponibilidad del sistema puede
+influir directamente en la calidad de atención al paciente crítico. dMart&nbsp;UCI implementa las siguientes
+estrategias:</p>
+<table class="keep">
+  <thead><tr><th style="width:30%">Mecanismo</th><th>Descripción</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Backpressure (token bucket)</strong></td><td>Regula la tasa de mensajes de cada monitor de cama, evitando que un dispositivo defectuoso sobrecargue al sistema.</td></tr>
+    <tr><td><strong>Circuit breaker</strong></td><td>Máquina de estados completa (Closed → Open → HalfOpen); 3 éxitos consecutivos (<code>success_threshold=3</code>) para cerrar. Un monitor roto no degrada al resto de la UCI.</td></tr>
+    <tr><td><strong>Reconexión con backoff</strong></td><td><code>connect_with_retry()</code> con backoff exponencial y jitter acotado hacia SurrealKV.</td></tr>
+    <tr><td><strong>Health checks 3 niveles</strong></td><td><code>/obs/live</code> (proceso), <code>/obs/ready</code> (BD), <code>/obs/health</code> (reporte completo).</td></tr>
+    <tr><td><strong>Graceful shutdown</strong></td><td>Drenado de conexiones SSE con tiempo límite (<code>TimeoutStopSec=20</code>).</td></tr>
+    <tr><td><strong>Retención y downsampling</strong></td><td>UPSERT idempotente por bucket, keyset pagination, purga por antigüedad y guard de disco crítico (statvfs &lt;10 %).</td></tr>
+    <tr><td><strong>DR y clúster</strong></td><td>RPO &lt; 1 h / RTO &lt; 4 h; clúster SurrealDB de 3 nodos; Blue/Green + Canary con auto-rollback; Kubernetes/Helm con PDB.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="s5-4">5.4 Análisis técnico de sensibilidad</h3>
+<p>El análisis de sensibilidad evalúa cómo varía la salida del sistema ante cambios en las variables de entrada.
+En dMart&nbsp;UCI se aborda a tres niveles: clínico (escalas), de robustez (circuit breaker y validaciones) y
+numérico (proptests y conformidad).</p>
+<h4>5.4.1 Sensibilidad clínica del APACHE II</h4>
+<p>Las funciones de cálculo son <strong>puras</strong> (sin efectos colaterales, red ni base de datos). La
+puntuación total es <strong>monótona no decreciente</strong> respecto de cada variable fisiológica: un aumento de la
+gravedad siempre produce una puntuación mayor o igual (verificado por proptests). La sensibilidad de la mortalidad es
+exponencial en el «odds ratio»: cada punto adicional de APACHE&nbsp;II incrementa la mortalidad estimada un
+8,3&nbsp;%. La transición crítica de la curva sigmoide se ubica entre 25 y 30 puntos, donde la mortalidad supera el
+50&nbsp;%.</p>
+<p>Los 7 vectores de referencia clínicos validan el comportamiento en puntos extremos del dominio. En particular,
+el fixture de falla multiorgánica extrema alcanza la <strong>cota superior de la escala (71 puntos)</strong>, y el
+fixture de paciente sano obtiene 0 puntos. La suite de conformidad exige match <strong>exacto</strong> del total y de
+los 16 sub-«scores» del desglose.</p>
+<h4>5.4.2 Sensibilidad ante datos límite</h4>
+<table class="keep">
+  <thead><tr><th>Entrada límite</th><th>Comportamiento verificado</th></tr></thead>
+  <tbody>
+    <tr><td>FiO₂ &gt; 1,0</td><td>Rechazado (fracción de oxígeno solo entre 0,21 y 1,00).</td></tr>
+    <tr><td>A-aDO₂ muy alto</td><td><em>Warning</em> crítico-alto (valores &gt;500 mmHg improbables sin soporte extracorpóreo).</td></tr>
+    <tr><td>Edad &gt; 120 años</td><td>Rechazado (límite fisiológico).</td></tr>
+    <tr><td>GCS fuera de rango (verbal/motor)</td><td>Rechazado contra rangos de Teasdale &amp; Jennett.</td></tr>
+    <tr><td>μtrabajos arbitrarios (fuzz)</td><td>Ningún «panic»; robustez del parser HL7 y de las escalas (proptests).</td></tr>
+  </tbody>
+</table>
+<h4>5.4.3 Sensibilidad del circuit breaker</h4>
+<p>El umbral de fallo es configurable; la transición a <em>Open</em> ocurre al superar la tasa de fallos, y en
+<em>HalfOpen</em> se requieren exactamente 3 éxitos consecutivos para cerrar (un fallo reabre inmediatamente). La
+suite incluye 7 pruebas específicas de la máquina de estados; el «bug» histórico del estado <em>HalfOpen</em> no-op fue
+detectado y corregido en el marco de la SPEC-027.</p>
+
+<h3 id="s5-5">5.5 Pruebas realizadas y QA</h3>
+<p>La estrategia de pruebas cubre siete niveles de verificación. La ejecución del 17 de septiembre de 2026
+confirmó <strong>152/152 tests del backend en verde</strong> en aproximadamente 13,5&nbsp;s:</p>
+<table class="keep">
+  <thead><tr><th>Nivel</th><th>Cantidad</th><th>Estado</th><th>Comando / artefacto</th></tr></thead>
+  <tbody>
+    <tr><td>Tests unitarios (lib)</td><td>85</td><td><span class="tag ok">verificado hoy</span></td><td><code>cargo test -p dmart-server --lib</code> (0,33 s)</td></tr>
+    <tr><td>E2E HTTP de API</td><td>35</td><td><span class="tag ok">verificado hoy</span></td><td><code>--test api_tests</code> (9,26 s)</td></tr>
+    <tr><td>Integración HL7/MLLP</td><td>32</td><td><span class="tag ok">verificado hoy</span></td><td><code>--test hl7_integration</code> (3,86 s)</td></tr>
+    <tr><td>Conformidad clínica</td><td>13</td><td><span class="tag ok">verificado</span></td><td>7 vectores APACHE II + 6 GCS (match exacto)</td></tr>
+    <tr><td>Property-based testing</td><td>66</td><td><span class="tag doc">documentado</span></td><td>Monotonicidad, «bounds», robustez HL7</td></tr>
+    <tr><td>Fuzzing</td><td>4 targets</td><td><span class="tag na">en repo</span></td><td><code>fuzz_hl7_parser</code>, <code>fuzz_scales</code>, <code>fuzz_api_json</code>, <code>fuzz_target_1</code></td></tr>
+    <tr><td>E2E navegador (Playwright)</td><td>Suite</td><td><span class="tag na">en repo</span></td><td><code>tests/e2e</code> · login, patients, measurements, admin</td></tr>
+    <tr><td>Carga (k6)</td><td>6 escenarios</td><td><span class="tag na">en repo</span></td><td><code>auth, fhir, hl7, metrics, scales, run_all</code></td></tr>
+  </tbody>
+</table>
+<div class="callout ok"><strong>Total verificado:</strong> 152 tests del backend en verde, sin fallos ni ignorados,
+más el build release del frontend (<code>trunk build --release</code>) y la superficie de seguridad en runtime
+(<code>/obs/health</code> 200; <code>/api/auth/me</code> 401 sin token).</div>
+<p>Los gates de calidad automatizados complementan la estrategia: <code>cargo fmt --check</code> limpio,
+<code>cargo clippy -D warnings</code> con 0 avisos (lib + bin), <code>cargo audit</code> con 0 advisories,
+<code>promtool test rules</code> con 12 casos pasando y cobertura por módulo con umbrales ≥80–90&nbsp;%
+(<code>shared/validation.rs</code> 100&nbsp;%, <code>hl7/mllp.rs</code> 100&nbsp;%, global 65&nbsp;%). La suite de
+conformidad clínica detectó 3 errores aritméticos en vectores calculados a mano —demostrando el valor de la
+automatización para prevenir el error humano— mientras que la implementación de <code>scales.rs</code> resultó
+correcta en todos los casos.</p>
+
+<h3 id="s5-6">5.6 Interfaz y experiencia clínica</h3>
+<p>El frontend es una SPA de Rust compilada a WebAssembly con Leptos&nbsp;0.8 y empaquetada con Trunk. Forma parte del
+binario de distribución en <code>./dist</code> y opera como PWA con Service Worker para tolerar cortes de red en el
+entorno hospitalario. Los artefactos medidos son: bundle WASM de <strong>2,53&nbsp;MB</strong>, JavaScript de arranque
+de 55&nbsp;KB y CSS compilado (Tailwind) de 52&nbsp;KB. Entre las capacidades de interfaz destacan: radar de «scores»
+en vivo que recalcula APACHE&nbsp;II, GCS y SOFA durante el arrastre de controles; «sliders» con precisión por paso
+clínico (temperatura 0,1&nbsp;°C, FiO₂ 0,01, pH 0,01); temas claro/oscuro con tokens de marca; accesibilidad WCAG
+2.1&nbsp;AA (foco visible, <code>aria-label</code>, contraste) y renderizado eficiente que aísla el radar en su propio
+ámbito reactivo.</p>
+<p>A continuación se presentan las pantallas principales del sistema capturadas en tiempo de ejecución (binario
+release 0.1.0, servidor en <code>127.0.0.1:3000</code>, frontend WASM servido por el propio binario):</p>
+<figure class="keep">
+  <img src="img/fig1_login.png" alt="Pantalla de autenticación (login)">
+  <figcaption>Figura 1. Pantalla de autenticación: inicio de sesión con credenciales, ocultador de contraseña y acceso restringido.</figcaption>
+</figure>
+<figure class="keep">
+  <img src="img/fig2_dashboard.png" alt="Dashboard o panel de monitoreo">
+  <figcaption>Figura 2. Panel de monitoreo (radar de «scores»): pacientes activos por gravedad y evolución en tiempo real vía SSE.</figcaption>
+</figure>
+<figure class="keep">
+  <img src="img/fig3_pacientes.png" alt="Listado de pacientes de la UCI">
+  <figcaption>Figura 3. Expediente y listado de pacientes: búsqueda, conclusiones clínicas, APACHE&nbsp;II y estado de gravedad por fila.</figcaption>
+</figure>
+<figure class="keep">
+  <img src="img/fig4_registro.png" alt="Registro de un nuevo paciente">
+  <figcaption>Figura 4. Registro de ingreso a la UCI: identificación, procedencia, diagnóstico y soporte vital del paciente.</figcaption>
+</figure>
+<figure class="keep">
+  <img src="img/fig5_detalle.png" alt="Detalle del paciente crítico">
+  <figcaption>Figura 5. Expediente clínico del paciente: historial de escalas (APACHE&nbsp;II, GCS, SOFA, NEWS2), conectores fisiológicos y evolución.</figcaption>
+</figure>
+<figure class="keep">
+  <img src="img/fig6_medicion.png" alt="Captura de variables para el cálculo de escalas">
+  <figcaption>Figura 6. Registro de medición clínica: entrada de variables fisiológicas que recalcula APACHE&nbsp;II, GCS y SOFA en tiempo real.</figcaption>
+</figure>
+<figure class="keep">
+  <img src="img/fig7_admin.png" alt="Panel de administración">
+  <figcaption>Figura 7. Panel de administración: gestión de usuarios, roles RBAC, camas, configuración institucional y auditoría.</figcaption>
+</figure>
+
+<h3 id="s5-7">5.7 Rendimiento, tiempos de respuesta y benchmark</h3>
+<p>Las mediciones se tomaron sobre el binario release <code>target/release/dmart-server</code> (19.116.472 bytes,
+18,2&nbsp;MiB), con arranque completado cuando <code>/obs/health</code> respondió HTTP 200 y base de datos temporal por
+ejecución.</p>
+<h4>5.7.1 Tiempo de arranque</h4>
+<table class="keep">
+  <thead><tr><th>Ejecución</th><th>Modo</th><th>Tiempo hasta health (ms)</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Base de datos nueva (frío)</td><td>122</td></tr>
+    <tr><td>2</td><td>Base de datos existente</td><td>135</td></tr>
+    <tr><td>3</td><td>Base de datos existente</td><td>136</td></tr>
+    <tr><td>4</td><td>Base de datos existente</td><td>111</td></tr>
+  </tbody>
+</table>
+<p>El arranque completo se mantiene por debajo de ~140&nbsp;ms incluso con la inicialización de SurrealKV, la
+validación de la clave maestra y el <em>seed</em> de datos base. La variabilidad (±20&nbsp;ms) corresponde a I/O y
+perturbaciones del sistema operativo.</p>
+<h4>5.7.2 Latencia de endpoints de observabilidad</h4>
+<p>200 peticiones secuenciales por «endpoint» con cliente HTTP persistente (conexión reutilizada):</p>
+<table class="keep">
+  <thead><tr><th>Endpoint</th><th>Mediana</th><th>p95</th><th>Máximo</th><th>≈ req/s</th></tr></thead>
+  <tbody>
+    <tr><td><code>/obs/live</code></td><td>0,27 ms</td><td>0,80 ms</td><td>39,1 ms</td><td>3 700</td></tr>
+    <tr><td><code>/obs/health</code></td><td>0,26 ms</td><td>0,42 ms</td><td>1,91 ms</td><td>3 775</td></tr>
+    <tr><td><code>/obs/metrics</code></td><td>1,13 ms</td><td>1,55 ms</td><td>4,19 ms</td><td>883</td></tr>
+  </tbody>
+</table>
+<p>El «endpoint» <code>/obs/metrics</code> serializa 33 familias de métricas y permanece muy por debajo del umbral
+de referencia (p95 &lt; 100&nbsp;ms). El máximo aislado en <code>/obs/live</code> corresponde al primer requerimiento
+de la serie (establecimiento de conexión).</p>
+<h4>5.7.3 Huella del artefacto</h4>
+<table class="keep">
+  <thead><tr><th>Componente</th><th>Valor</th></tr></thead>
+  <tbody>
+    <tr><td>Binario release (opt-level z, LTO, strip, panic=abort)</td><td>18,2 MiB (19,1 MB)</td></tr>
+    <tr><td>Bundle WASM del frontend</td><td>2,53 MB</td></tr>
+    <tr><td>Base SurrealKV de demostración</td><td>≈ 696 KB</td></tr>
+    <tr><td>Familias de métricas Prometheus</td><td>33</td></tr>
+  </tbody>
+</table>
+<div class="callout warn"><strong>Alcance del benchmark.</strong> Es una prueba base demostrativa sin TLS, sin
+concurrencia artificial y sin carga de usuarios reales. Para producción se recomienda ejecutar los escenarios
+<code>k6</code> (<code>tests/load/*.js</code>) sobre un despliegue real con credenciales y datos representativos.</div>
+
+<h3 id="s5-8">5.8 Seguridad informática: ataques y defensas</h3>
+<p>dMart&nbsp;UCI gestiona información de salud protegida (PHI) en un entorno hospitalario, lo que lo convierte en
+un objetivo de alto valor. El modelo de amenazas identifica 15 vectores de ataque con sus defensas
+implementadas:</p>
+<table class="keep">
+  <thead><tr><th>#</th><th>Ataque</th><th>Descripción</th><th>Defensa implementada</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Fuerza bruta en login</td><td>Intentos masivos de contraseña.</td><td>Rate limiting por IP real (token bucket, no falsificable), throttle exponencial, respuestas 429 JSON.</td></tr>
+    <tr><td>2</td><td>Robo de refresh token</td><td>Uso no autorizado del token de refresco.</td><td>Rotación single-use, detección de reuso → «revoke-all» de la familia, hashes SHA-256 en DB.</td></tr>
+    <tr><td>3</td><td>Replay de access token</td><td>Reutilización de token expirado.</td><td>Access de 15 min + blacklist JWT en Valkey con TTL (fail-open si cae).</td></tr>
+    <tr><td>4</td><td>Escalada de privilegios</td><td>Acceso con rol bajo a funciones de rol alto.</td><td>RBAC granular <code>resource:action</code> al 100 % de endpoints + gating de interfaz.</td></tr>
+    <tr><td>5</td><td>MFA bypass</td><td>Evitar la segunda factor.</td><td>TOTP RFC 6238 con throttle dedicado (3/5 min por IP) y middleware de ámbito «mfa».</td></tr>
+    <tr><td>6</td><td>Inyección SurrealQL/SQL</td><td>Manipulación de consultas.</td><td>Binds tipados, validación de entrada y transacciones atómicas.</td></tr>
+    <tr><td>7</td><td>XSS</td><td>Inyección de script en la interfaz.</td><td>Escape HTML en más de 20 handlers y sanitización de contenido.</td></tr>
+    <tr><td>8</td><td>Inyección en nombre de archivo</td><td>Manipulación de exportaciones.</td><td>Regex <code>[A-Za-z0-9_-]</code>, eliminación de CR/LF y metacaracteres.</td></tr>
+    <tr><td>9</td><td>Inyección de comandos OS</td><td>Ejecución de comandos del sistema.</td><td>Sin <code>exec</code>/<code>spawn</code>; lógica 100 % en Rust nativo.</td></tr>
+    <tr><td>10</td><td>DoS por conexiones</td><td>Agotar recursos del servidor.</td><td>Límite SSE de 10 conexiones/IP con guard RAII; paginación acotada (<code>MAX_PAGE_LIMIT=200</code>).</td></tr>
+    <tr><td>11</td><td>DoS por payloads grandes</td><td>Mensajes HL7 excesivos.</td><td>Descarte de mensajes &gt;1 MiB y validación estructural previa.</td></tr>
+    <tr><td>12</td><td>DoS por dispositivos defectuosos</td><td>Monitores con tráfico erróneo.</td><td>Circuit breaker + token bucket por fuente; métricas gap/fault.</td></tr>
+    <tr><td>13</td><td>Acceso no autorizado a PHI</td><td>Lectura de datos sin permiso.</td><td>RBAC + multi-tenancy (<code>tenant_id</code> en JWT), auditoría inmutable 6 años.</td></tr>
+    <tr><td>14</td><td>Exfiltración por memoria</td><td>«Dump» de memoria para claves.</td><td>Zeroización (<code>zeroize</code>) de tokens, claves y contraseñas en memoria.</td></tr>
+    <tr><td>15</td><td>MITM / intercepción</td><td>Captura de tráfico.</td><td>TLS vía Caddy, HSTS habilitable, CORS estricto (fail-closed).</td></tr>
+  </tbody>
+</table>
+<div class="callout crit"><strong>Defensa en profundidad.</strong> Además de las defensas específicas, el sistema
+aplica cifrado autenticado ChaCha20-Poly1305 (XChaCha20-Poly1305-IETF), errores sanitizados, auditoría con IP real,
+<code>cargo audit</code> con 0 advisories, traslado de <code>reqwest</code>→<code>rustls</code> (sin OpenSSL) y fuzzing
+como capa reactiva ante entradas malformadas.</div>
+
+<h3 id="s5-9">5.9 Escalas de gravedad</h3>
+<p>El sistema consolida cinco escalas —APACHE II, GCS, NEWS2, SOFA y SAPS&nbsp;III— en un «radar» clínico que
+proporciona una lectura unificada del estado del paciente. Cada medición registra <code>algorithm_version</code> y un
+<strong>fingerprint SHA-256</strong>; el endpoint de auditoría recomputa y verifica la reproducibilidad médico-legal.
+La clasificación de severidad del APACHE&nbsp;II (Sección 2.1.4) se complementa con los niveles propios de cada
+escala:</p>
+<table class="keep">
+  <thead><tr><th>Escala</th><th>Rango</th><th>Niveles de severidad</th></tr></thead>
+  <tbody>
+    <tr><td>APACHE II</td><td>0–71</td><td>Bajo (0–9) · Moderado (10–19) · Severo (20–29) · Crítico (≥30)</td></tr>
+    <tr><td>GCS</td><td>3–15</td><td>TCE leve (13–15) · TCE moderado (9–12) · TCE severo/coma (3–8)</td></tr>
+    <tr><td>NEWS2</td><td>0–20+</td><td>Bajo (0–4) · Medio (5–6) · Alto (7–19) · Emergencia (≥20)</td></tr>
+    <tr><td>SOFA</td><td>0–24</td><td>Normal (0–1) · Disfunción (2–6) · Falla (7–9) · Falla multiorgánica (≥10)</td></tr>
+    <tr><td>SAPS III</td><td>0–100+</td><td>Estable (≤30) · Riesgo moderado (31–50) · Riesgo alto (51–70) · Crítico (&gt;70)</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- ============================================================ 6 -->
+<section class="page-break" id="s6">
+<h2>6. Conclusiones</h2>
+<p>El sistema dMart&nbsp;UCI demuestra que es posible construir una plataforma integral de gestión para Unidades de
+Cuidados Intensivos que cumpla simultáneamente con los estándares de seguridad hospitalaria, las necesidades de
+rendimiento en tiempo real y los requisitos de interoperabilidad clínica, utilizando exclusivamente el ecosistema
+Rust.</p>
+<p><strong>En cuanto a la arquitectura de software</strong>, el diseño de monolito modular compilado a un único
+binario (18,2&nbsp;MiB) simplifica el despliegue en redes hospitalarias aisladas, eliminando procesos externos y
+reduciendo la superficie de ataque. La base de datos embebida SurrealKV ofrece transaccionalidad ACID sin un proceso
+de base de datos separado.</p>
+<p><strong>En cuanto a la robustez</strong>, el sistema implementa defensa en profundidad con «backpressure»,
+«circuit breaker» de máquina de estados completa, reconexión con «backoff» exponencial, «health checks» de tres
+niveles y apagado ordenado; el criterio R6 del ROADMAP —«un monitor roto no tumba el resto»— se verifica con el
+patrón de «circuit breaker» y métricas de huecos/fallos visibles en Grafana.</p>
+<p><strong>En cuanto a la seguridad informática</strong>, el modelo de amenazas documenta 15 vectores de ataque con
+sus defensas: Argon2id, JWT con «refresh tokens» rotativos y detección de reuso, MFA&nbsp;TOTP con «throttle», RBAC
+granular, cifrado ChaCha20-Poly1305, zeroización, auditoría PHI inmutable (6 años) y endurecimiento contra inyección,
+XSS y DoS. El paquete de compliance (SPEC-034) mapea controles a HIPAA, ISO&nbsp;27001 y NIST&nbsp;800-53.</p>
+<p><strong>En cuanto a la validación clínica</strong>, los 152 tests del backend verificados el 17 de septiembre de
+2026 (85&nbsp;lib + 35&nbsp;E2E + 32&nbsp;HL7) pasan sin fallos; se complementan con 66 proptests, 4 «targets» de
+fuzzing y 13 vectores de referencia clínica con match exacto contra Knaus et al. (1985) y Teasdale &amp; Jennett
+(1974). La suite de conformidad detectó 3 errores aritméticos en vectores calculados a mano, demostrando la eficacia
+de la automatización para prevenir el error humano.</p>
+<p><strong>En cuanto al rendimiento</strong>, el arranque se mantiene por debajo de 140&nbsp;ms (mínimo
+111&nbsp;ms), los «endpoint» de observabilidad alcanzan latencias submilisegundo (mediana 0,26–1,13&nbsp;ms) y el
+«endpoint» más pesado (<code>/obs/metrics</code>) procesa más de 880&nbsp;req/s con p95 de 1,55&nbsp;ms.</p>
+<p><strong>En cuanto a la metodología</strong>, Spec-Driven Development se consolidó como el enfoque adecuado para el
+dominio médico, al proporcionar contratos formales verificables, gates de calidad automatizados y trazabilidad
+completa de requisito a implementación. Las 35 especificaciones documentan exhaustivamente cada decisión de diseño,
+su justificación clínica y sus criterios de aceptación medibles.</p>
+<div class="callout warn"><strong>Limitaciones reconocidas.</strong> El binario actual (~19 MB) supera la meta
+publicada de ~8 MB por las dependencias acumuladas (HL7, FHIR, SurrealDB, ML); las pruebas de carga concurrente, el
+fuzzing prolongado y la cobertura instrumentada no se re-ejecutaron en esta sesión; NEWS2, SOFA y SAPS&nbsp;III aún
+no cuentan con vectores de referencia bibliográficos completos; el motor de similitud usa barrido por «tenant»
+(adecuado hasta ~10.000 pacientes) y el despliegue local opera sobre HTTP directo sin TLS automático.</div>
+<p><strong>Recomendaciones para el piloto:</strong> (1) ejecutar en «staging» los escenarios k6 y el fuzzing
+prolongado, registrando disponibilidad a 30 días ligada a los criterios R1–R8; (2) completar vectores clínicos con
+cita para NEWS2, SOFA y SAPS&nbsp;III; (3) fijar TLS obligatorio en despliegues externos y ejecutar el «drill» de
+recuperación de forma trimestral; (4) confirmar en «commit» las mejoras de interfaz y añadir pruebas de UI para los
+flujos de medición; y (5) re-evaluar el índice de similitud (HNSW) y el servicio ML (ONNX) al superar ~10.000
+pacientes.</p>
+</section>
+
+<!-- ============================================================ 7 -->
+<section class="page-break" id="s7">
+<h2>7. Bibliografía</h2>
+<div class="ref">
+<p>Angulo Peña, R. A. (2019). <em>Agente inteligente basado en Redes Neuronales Artificiales para la identificación de
+los determinantes de la estadía de pacientes en la Unidad de Cuidados Intensivos del HUAPA Cumaná, estado
+Sucre</em> [Trabajo Especial de Grado, Licenciatura en Informática, Universidad de Oriente, Núcleo de Sucre].</p>
+<p>Chávez, V. (2012). Caracterización epidemiológica de la unidad de cuidados intensivos del hospital universitario
+de Coro «Dr. Alfredo Van Grieken». <em>Revista de la Universidad del Zulia, 5</em>(12), 129–147.</p>
+<p>HL7 International. (2020). <em>Health Level Seven Version 2.4: An application protocol for electronic data
+exchange in healthcare environments</em>. https://www.hl7.org/implement/standards/product_brief.cfm?product_id=51</p>
+<p>Health Level Seven International. (2021). <em>HL7 FHIR Release 4 (v4.0.1)</em>. https://www.hl7.org/fhir/</p>
+<p>International Organization for Standardization. (2022). <em>ISO/IEC 27001:2022 — Information security,
+cybersecurity and privacy protection: Information security management systems — Requirements</em>. ISO.</p>
+<p>Jones, M., Bradley, J., &amp; Sakimura, N. (2015). <em>JSON Web Token (JWT)</em> (RFC 7519).
+Internet Engineering Task Force. https://doi.org/10.17487/RFC7519</p>
+<p>Klabnik, S., &amp; Nichols, C. (2021). <em>The Rust Programming Language</em> (2.ª ed.). No Starch Press.</p>
+<p>Knaus, W. A., Draper, E. A., Wagner, D. P., &amp; Zimmerman, J. E. (1985). APACHE II: A severity of disease
+classification system. <em>Critical Care Medicine, 13</em>(10), 818–829. https://doi.org/10.1097/00003246-198510000-00009</p>
+<p>Ley 118 de 2021, Protección de datos personales. (2021). Asamblea Nacional del Poder Popular, República de
+Cuba.</p>
+<p>Martínez Ll., Y. I., &amp; De la Torre, A. (2020). Valoración del APACHE II inicial en la unidad de cuidados
+intensivo emergente. <em>Revista de Ciencias Médicas de Pinar del Río, 24</em>(3), e4418.</p>
+<p>M'Raihi, D., Machani, S., Pei, M., &amp; Rydell, J. (2011). <em>TOTP: Time-based one-time password
+algorithm</em> (RFC 6238). Internet Engineering Task Force. https://doi.org/10.17487/RFC6238</p>
+<p>National Institute of Standards and Technology. (2020). <em>Security and privacy controls for information systems
+and organizations</em> (NIST SP 800-53 Rev. 5). U.S. Department of Commerce. https://doi.org/10.6028/NIST.SP.800-53r5</p>
+<p>Open Web Application Security Project. (2021). <em>OWASP Application Security Verification Standard (ASVS)
+v4.0</em>. https://owasp.org/www-project-asvs/</p>
+<p>Teasdale, G., &amp; Jennett, B. (1974). Assessment of coma and impaired consciousness: A practical scale.
+<em>The Lancet, 304</em>(7872), 81–84. https://doi.org/10.1016/S0140-6736(74)91639-0</p>
+<p>U.S. Department of Health and Human Services. (1996). Health Insurance Portability and Accountability Act (HIPAA):
+Security and privacy (45 CFR Part 164). <em>Federal Register</em>.</p>
+<p>Velásquez, L., &amp; Sánchez, M. (2002). Estancia prolongada en terapia intensiva: predicción y consecuencias.
+<em>Revista de la Asociación Mexicana de Medicina Crítica y Terapia Intensiva, 16</em>(2), 41–47.</p>
+</div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section class="page-break" id="s8">
+<h2>Anexos</h2>
+<h3>A.1 Estructura del repositorio</h3>
+<table class="keep">
+  <thead><tr><th style="width:30%">Ruta</th><th>Contenido</th></tr></thead>
+  <tbody>
+    <tr><td><code>dmart-shared/</code></td><td>Modelos, escalas clínicas, validación y ML.</td></tr>
+    <tr><td><code>dmart-server/</code></td><td>Servidor Axum, 23 submódulos de API, HL7, FHIR, seguridad, observabilidad, migraciones y fuzz.</td></tr>
+    <tr><td><code>dmart-app/</code></td><td>Frontend Leptos/WASM, componentes y páginas.</td></tr>
+    <tr><td><code>specs/</code></td><td>35 especificaciones SDD (SPEC-001…035).</td></tr>
+    <tr><td><code>docs/</code></td><td>Arquitectura, API, escalas clínicas, compliance y runbooks.</td></tr>
+    <tr><td><code>scripts/</code></td><td>18 scripts de despliegue, DR, compliance y coste.</td></tr>
+    <tr><td><code>tests/</code></td><td>E2E (Playwright) y carga (k6).</td></tr>
+  </tbody>
+</table>
+<h3>A.2 Glosario</h3>
+<table class="keep">
+  <thead><tr><th style="width:18%">Término</th><th>Significado</th></tr></thead>
+  <tbody>
+    <tr><td>UCI</td><td>Unidad de Cuidados Intensivos.</td></tr>
+    <tr><td>PHI</td><td>Protected Health Information (información de salud protegida).</td></tr>
+    <tr><td>MLLP</td><td>Lower Layer Protocol de HL7 sobre TCP.</td></tr>
+    <tr><td>SDD</td><td>Spec-Driven Development.</td></tr>
+    <tr><td>RPO / RTO</td><td>Objetivo de punto de recuperación / objetivo de tiempo de recuperación.</td></tr>
+    <tr><td>SSE</td><td>Server-Sent Events.</td></tr>
+    <tr><td>PWA</td><td>Progressive Web App.</td></tr>
+    <tr><td>WASM</td><td>WebAssembly.</td></tr>
+  </tbody>
+</table>
+<div class="callout crit"><strong>Nota de integridad.</strong> Los valores de arranque y latencia corresponden al
+binario «release» de este repositorio medidos el 17/09/2026; los recuentos de tests provienen de la ejecución de la
+suite rápida del backend en esa fecha. Los datos de cobertura, fuzz, auditoría de dependencias y carga provienen de
+informes históricos del proyecto y no fueron re-ejecutados en su totalidad en esta sesión. Este documento no
+sustituye una auditoría externa.</div>
+
+<p class="footer-note">dMart UCI — Informe Técnico Final v5.0.0 · 17 de septiembre de 2026<br>
+Centeno-Romero, M. V. y Angulo Peña, R. A. · Universidad de Oriente — Núcleo de Sucre</p>
+</section>
+
+</body>
+</html>

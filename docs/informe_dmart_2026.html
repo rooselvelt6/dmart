@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>dMart UCI — Informe técnico v3</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --soft:#f8fafc;
+    --accent:#2563eb; --accent2:#0d9488; --crit:#dc2626; --warn:#d97706; --ok:#059669;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); font-size:10.6pt; line-height:1.5; background:#fff;
+  }
+  @page{ size:A4; margin:15mm 13mm 16mm 13mm; }
+
+  h1,h2,h3,h4{margin:0 0 .4em 0; line-height:1.2; page-break-after:avoid;}
+  h2{
+    font-size:16pt; color:var(--ink); margin-top:0;
+    padding-bottom:6px; border-bottom:2px solid var(--accent);
+  }
+  h3{font-size:12.5pt; color:var(--accent); margin-top:1.1em;}
+  h4{font-size:11pt; color:var(--ink); margin-top:.8em;}
+  p{margin:.45em 0;}
+  a{color:var(--accent); text-decoration:none;}
+  code{font-family:"JetBrains Mono","Consolas",monospace; font-size:9.2pt;
+       background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:0 3px;}
+  ul,ol{margin:.4em 0 .6em 1.1em; padding:0;}
+  li{margin:.18em 0;}
+  small{color:var(--muted);}
+
+  .page-break{page-break-before:always;}
+  .avoid{page-break-inside:avoid;}
+
+  /* ---------- Cover ---------- */
+  .cover{
+    min-height:255mm; display:flex; flex-direction:column; justify-content:space-between;
+    background:linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#0d9488 140%);
+    color:#fff; border-radius:18px; padding:26mm 20mm; margin:-2mm 0 0 0;
+  }
+  .cover .brand{font-size:12pt; letter-spacing:.32em; text-transform:uppercase; color:#7dd3fc;}
+  .cover h1{font-size:38pt; font-weight:800; margin:10mm 0 4mm; letter-spacing:-.5px;}
+  .cover .sub{font-size:14pt; color:#cbd5e1; max-width:150mm; line-height:1.45;}
+  .cover .meta{margin-top:8mm; font-size:11pt; color:#e2e8f0;}
+  .cover .stack{
+    margin-top:6mm; font-size:9.5pt; color:#94a3b8;
+    border-top:1px solid rgba(255,255,255,.18); padding-top:4mm;
+  }
+  .cover .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:3mm; margin-top:8mm;}
+  .cover .kpi{background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16);
+    border-radius:10px; padding:4mm 2mm; text-align:center;}
+  .cover .kpi b{display:block; font-size:15pt; color:#fff;}
+  .cover .kpi span{font-size:7.6pt; color:#cbd5e1; text-transform:uppercase; letter-spacing:.04em;}
+
+  /* ---------- Components ---------- */
+  .kpi-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:3mm; margin:4mm 0 2mm;}
+  .kpi-card{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--accent);
+    border-radius:8px; padding:3mm;}
+  .kpi-card b{display:block; font-size:14pt; color:var(--accent); line-height:1.1;}
+  .kpi-card span{font-size:8.2pt; color:var(--muted);}
+
+  table{width:100%; border-collapse:collapse; margin:.5em 0 .9em; font-size:9.5pt;}
+  th,td{border:1px solid var(--line); padding:5px 7px; text-align:left; vertical-align:top;}
+  th{background:#f1f5f9; font-weight:700; color:var(--ink);}
+  tr:nth-child(even) td{background:#fbfdff;}
+  td.num{text-align:right; font-family:"JetBrains Mono",monospace; white-space:nowrap;}
+
+  .note{border-left:4px solid var(--accent); background:#eff6ff; border-radius:0 8px 8px 0;
+    padding:7px 11px; margin:.6em 0; font-size:9.6pt;}
+  .warn{border-left:4px solid var(--warn); background:#fffbeb; border-radius:0 8px 8px 0;
+    padding:7px 11px; margin:.6em 0; font-size:9.6pt;}
+  .ok{border-left:4px solid var(--ok); background:#ecfdf5; border-radius:0 8px 8px 0;
+    padding:7px 11px; margin:.6em 0; font-size:9.6pt;}
+  .crit{border-left:4px solid var(--crit); background:#fef2f2; border-radius:0 8px 8px 0;
+    padding:7px 11px; margin:.6em 0; font-size:9.6pt;}
+
+  .tag{display:inline-block; font-size:8pt; font-weight:700; padding:1px 7px; border-radius:20px;
+    background:#e0e7ff; color:#3730a3; margin-right:4px;}
+  .tag.ok{background:#dcfce7; color:#166534;}
+  .tag.doc{background:#fef3c7; color:#92400e;}
+  .tag.na{background:#e2e8f0; color:#475569;}
+
+  .cols2{display:grid; grid-template-columns:1fr 1fr; gap:5mm;}
+  .arch{
+    font-family:"JetBrains Mono",monospace; font-size:8.6pt; background:#0f172a; color:#e2e8f0;
+    border-radius:10px; padding:5mm; white-space:pre; line-height:1.45; overflow:hidden;
+  }
+  .arch .k{color:#7dd3fc;}
+</style>
+</head>
+<body>
+
+<!-- ============ PORTADA ============ -->
+<section class="cover">
+  <div>
+    <div class="brand">dMart UCI · Informe técnico</div>
+    <h1>Sistema de gestión para Unidades de Cuidados Intensivos</h1>
+    <p class="sub">Plataforma distribuida segura, offline-first y tolerante a fallos, construida íntegramente en Rust
+      y compilada a WebAssembly. Arquitectura, seguridad, capacidades clínicas, experiencia de usuario,
+      operación y calidad verificada sobre el estado real del repositorio.</p>
+  </div>
+  <div>
+    <div class="kpis">
+      <div class="kpi"><b>152</b><span>tests hoy</span></div>
+      <div class="kpi"><b>&lt;140 ms</b><span>arranque</span></div>
+      <div class="kpi"><b>69</b><span>rutas API</span></div>
+      <div class="kpi"><b>35</b><span>SPECs</span></div>
+      <div class="kpi"><b>4</b><span>roles RBAC</span></div>
+    </div>
+    <div class="meta">
+      Informe <strong>v3.0.0</strong> · 17 de septiembre de 2026 · Elaborado por el equipo de desarrollo.<br>
+      Estado: rama <code style="background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:#fff">main</code>
+      @ <code style="background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:#fff">1d6356f</code>
+      + mejoras de interfaz en el árbol de trabajo.
+    </div>
+    <div class="stack">
+      Stack: Rust 1.98 (edition 2024) · Axum 0.8 · SurrealDB / SurrealKV embebido · Leptos 0.8 → WebAssembly ·
+      HL7 v2.4 + MLLP/MQTT · FHIR R4 · Prometheus · systemd
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESUMEN ============ -->
+<section class="page-break">
+  <h2>Resumen ejecutivo</h2>
+  <p><strong>dMart UCI</strong> es una plataforma de gestión para Unidades de Cuidados Intensivos que concentra en un
+  único binario de producción la API REST (Axum 0.8), el transporte en tiempo real (SSE), una base de datos
+  embebida transaccional (SurrealDB sobre SurrealKV), el parser HL7 v2 sobre MLLP y MQTT, el motor de escalas
+  clínicas (APACHE II, GCS, NEWS2, SOFA, SAPS III), la interoperabilidad FHIR R4 y el frontend PWA compilado a
+  WebAssembly con Leptos 0.8. El despliegue no requiere procesos externos obligatorios: el servidor sirve la SPA
+  desde <code>./dist</code> y persiste los datos en un directorio SurrealKV local.</p>
+
+  <p>El proyecto se desarrolló con <strong>Spec-Driven Development (SDD)</strong>: las 35 especificaciones
+  (SPEC‑001…035) están cerradas y alineadas a un roadmap de 10 fases acumulativas (0 a 9). El estado de hoy se
+  verificó ejecutando los tres conjuntos de prueba rápidos del backend: <strong>152 tests en verde</strong>
+  (85 de librería + 35 E2E de API + 32 de integración HL7/MLLP). Sobre el binario release actual
+  (<strong>19,1 MB</strong>, 18,2 MiB) se tomó una nueva medición de arranque (frío 122 ms; caliente 111–136 ms) y
+  de latencia base de los endpoints de observabilidad.</p>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><b>152/152</b><span>Tests backend hoy (85 lib + 35 API + 32 HL7)</span></div>
+    <div class="kpi-card"><b>111–136 ms</b><span>Arranque en caliente (medido hoy)</span></div>
+    <div class="kpi-card"><b>29 672</b><span>Líneas de Rust en 106 archivos</span></div>
+    <div class="kpi-card"><b>69</b><span>Rutas HTTP en el router de la API</span></div>
+    <div class="kpi-card"><b>33</b><span>Familias de métricas Prometheus</span></div>
+    <div class="kpi-card"><b>4 · 3</b><span>Roles RBAC · Nodos SurrealDB en clúster</span></div>
+    <div class="kpi-card"><b>2,53 MB</b><span>Bundle WASM del frontend</span></div>
+    <div class="kpi-card"><b>0</b><span>Warnings de <code>clippy -D warnings</code></span></div>
+  </div>
+
+  <div class="ok"><strong>Hallazgo verificable de hoy:</strong> los 152 tests del backend pasan en la rama de
+  trabajo, incluyendo <code>test_e2e_staff_list_includes_all_roles_and_filters</code> (gestión de personal con
+  filtro por rol) y <code>test_e2e_rbac_viewer_cannot_create_patient</code> (aislamiento por rol restaurado). El
+  frontend compila limpio con <code>trunk build --release</code> y el servidor en ejecución responde
+  <code>/obs/health</code> con HTTP 200.</div>
+
+  <div class="note"><strong>Lectura honesta del informe:</strong> los valores marcados como «verificado hoy»
+  se midieron en esta sesión. Los objetivos históricos del proyecto (cobertura global, fuzz de larga duración,
+  escenarios k6/Playwright, <code>cargo audit</code>) se indican como «documentado» o «en repo, no re-ejecutado
+  hoy». El binario real es ~19 MB, no los ~8 MB de la meta publicada en el README; se reporta el valor medido.</div>
+
+  <h3>Índice de contenidos</h3>
+  <table>
+    <tr><td>1. Qué es dMart UCI</td><td>5. Capacidades clínicas</td><td>9. QA y pruebas</td></tr>
+    <tr><td>2. Alcance y metodología</td><td>6. Frontend y experiencia clínica</td><td>10. Despliegue y operación local</td></tr>
+    <tr><td>3. Arquitectura de sistema</td><td>7. Confiabilidad y tolerancia a fallos</td><td>11. Resultados y recomendaciones</td></tr>
+    <tr><td>4. Seguridad integral</td><td>8. Rendimiento y benchmark</td><td>12. Anexos</td></tr>
+  </table>
+</section>
+
+<!-- ============ 1 ============ -->
+<section>
+  <h2>1. Qué es dMart UCI</h2>
+  <p>dMart UCI es un sistema de gestión clínica para Unidades de Cuidados Intensivos, diseñado para operar en
+  redes hospitalarias aisladas (<em>offline-first</em>), con datos clínicos sensibles (PHI) protegidos en reposo y
+  en tránsito, integración con monitores de cama (HL7 v2.4 ORU^R01 / MLLP / MQTT), interoperabilidad FHIR R4 y
+  soporte multi-tenant. Entre sus capacidades principales:</p>
+  <ul>
+    <li><strong>Pacientes:</strong> CRUD completo, ingresos y egresos con desenlace (mejorado / trasladado /
+      fallecido), visibilidad y búsqueda de egresados por estado, e historial longitudinal con timeline.</li>
+    <li><strong>Monitores de cama:</strong> parser HL7 v2 + transporte MLLP (TCP) y MQTT; registro de dispositivos
+      y calidad de datos; backpressure con token bucket y circuit breaker.</li>
+    <li><strong>Scores de severidad:</strong> APACHE II (0–71), GCS, NEWS2, SOFA y SAPS III, con grados de
+      severidad, desglose por componente y fingerprint SHA-256 versionado por medición.</li>
+    <li><strong>Mortalidad y analítica:</strong> riesgo hospitalario por fórmula APACHE II, modelo ML piloto
+      (árbol de decisión) y motor de similitud de pacientes con embeddings clínicos deterministas.</li>
+    <li><strong>Interoperabilidad:</strong> FHIR R4 nativo (Patient, Observation con LOINC, Condition con CIE-10,
+      DiagnosticReport y Bundle) y exportación CSV/PDF por paciente con fingerprint.</li>
+    <li><strong>Operación clínica avanzada:</strong> CDS (reglas de soporte a la decisión), tele-ICU, alertas con
+      escalada, retención y downsampling de vitales, y auditoría de scores reproducible.</li>
+    <li><strong>Frontend PWA:</strong> Leptos/WASM offline-capable con Service Worker, tema claro/oscuro,
+      diseño responsive, radar de scores en vivo y controles de escala interactivos.</li>
+  </ul>
+
+  <div class="note"><strong>Propósito del documento.</strong> Este informe técnico describe la arquitectura y las
+  capacidades del sistema tal como existe hoy en el repositorio, con métricas de calidad y rendimiento
+  reproducibles. Sustituye a la versión v2 e incorpora nuevas secciones de experiencia de usuario, operación local
+  real y límites de validación explícitos.</div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section>
+  <h2>2. Alcance y metodología</h2>
+  <p>El informe se elabora desde la versión de trabajo de la rama <code>main</code> (commit
+  <code>1d6356f</code>, «fix(app): recuperar identidad de sesión vía /auth/me para el gating»), que incorpora las
+  mejoras de seguridad y sesión de las últimas iteraciones. Sobre esa base existen cambios de interfaz
+  (riel coloreado de sliders, accesibilidad y formularios de medición) presentes en el árbol de trabajo y aún no
+  confirmados en un commit al cierre de este informe.</p>
+
+  <table class="avoid">
+    <tr><th style="width:22%">Aspecto</th><th>Valor verificado</th></tr>
+    <tr><td>Lenguaje / toolchain</td><td>Rust 1.98.0, <code>edition 2024</code>, pin en <code>rust-toolchain.toml</code>;
+      compila para <code>x86_64-linux-gnu</code> y <code>wasm32-unknown-unknown</code>.</td></tr>
+    <tr><td>Código</td><td>Workspace Cargo con <code>dmart-shared</code>, <code>dmart-server</code>,
+      <code>dmart-app</code> (WASM) y <code>dmart-server/fuzz</code>; 106 archivos <code>.rs</code> y
+      ~29 672 líneas en los tres crates principales.</td></tr>
+    <tr><td>Metodología</td><td>Spec-Driven Development con 35 SPECs (001–035) y fases acumulativas 0–9;
+      go/no-go de piloto definido por criterios R1–R8.</td></tr>
+    <tr><td>Entorno de medición</td><td>CPU x86_64 de 12 hilos (Intel i5-10400 ≈ 2,9 GHz), 11 GiB de RAM,
+      Linux 7.2.4; binario release preconstruido; BD temporal por ejecución; puerto aislado para el benchmark.</td></tr>
+    <tr><td>Día de verificación</td><td>17 de septiembre de 2026 — 152/152 tests del backend + build WASM release
+      + medición de arranque y latencias.</td></tr>
+    <tr><td>Herramientas de prueba</td><td><code>cargo test -p dmart-server</code> (lib, <code>api_tests</code>,
+      <code>hl7_integration</code>), <code>trunk build --release</code>, medición con cliente HTTP persistente
+      (Node/undici) y arranque medido hasta <code>health 200</code>.</td></tr>
+  </table>
+
+  <h3>Convención de estados</h3>
+  <p>Para evitar ambigüedad, cada afirmación cuantitativa se etiqueta cuando corresponde:</p>
+  <p>
+    <span class="tag ok">verificado hoy</span> medido en esta sesión.
+    <span class="tag doc">documentado</span> proveniente de informes históricos del proyecto.
+    <span class="tag na">en repo, no ejecutado</span> existe el artefacto pero no se ejecutó aquí.
+  </p>
+
+  <div class="warn"><strong>Limitación declarada.</strong> Este informe no constituye una auditoría externa. Las
+  pruebas de carga con usuarios concurrentes (k6), el fuzz de larga duración, la cobertura con <code>llvm-cov</code>
+  y las suites Playwright no se re-ejecutaron completas en esta sesión por límites de tiempo y recursos; se
+  recomienda reproducirlas en un entorno controlado antes de un despliegue productivo o una auditoría formal.</div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section>
+  <h2>3. Arquitectura de sistema</h2>
+  <p>La arquitectura es de <strong>monolito modular</strong> compilado a un único binario, donde la librería
+  (<code>lib</code>) y el binario (<code>bin</code>) comparten los mismos módulos. Esto simplifica el despliegue
+  en redes aisladas (un solo ejecutable, sin dependencias de runtime) y permite que el mismo código se reutilice
+  en los tests de integración in-process.</p>
+
+  <div class="arch"><span class="k">dmart/</span>
+├─ <span class="k">dmart-shared/</span>   modelos · escalas clínicas · validación · ML (árbol de decisión)
+├─ <span class="k">dmart-server/</span>   Axum API · auth/RBAC · HL7+MLLP/MQTT · FHIR R4 · auditoría
+│  ├─ api/          23 submódulos de endpoints (patients, scales, admin, fhir, …)
+│  ├─ hl7/          parser ORU^R01 · framer MLLP · ingest · cliente MQTT
+│  ├─ fhir_bundle/  parser Bundle R4 + conversión LOINC → VitalsMessage
+│  ├─ ews_stream/   Early-Warning Streaming (NEWS2/APACHE/SOFA → SSE)
+│  ├─ migrations/   SurrealQL versionado (001…033)
+│  └─ fuzz/         4 targets (json, hl7, scales, api_json)
+├─ <span class="k">dmart-app/</span>      frontend Leptos/WASM (PWA, Tailwind, Service Worker)
+├─ <span class="k">specs/</span>          35 especificaciones SDD
+├─ <span class="k">docs/</span>           arquitectura · API · compliance · runbooks
+└─ <span class="k">tests/</span>          E2E (Playwright) · carga (k6)</div>
+
+  <h3>3.1 Módulos del backend</h3>
+  <table>
+    <tr><th>Módulo</th><th>Responsabilidad</th></tr>
+    <tr><td><code>api/</code></td><td>23 submódulos: pacientes, camas, equipos, staff, escalas, export CSV/PDF, FHIR, CDS, tele-ICU, dispositivos, calidad, retención, ML, tenants, auditoría de scores.</td></tr>
+    <tr><td><code>auth.rs</code> · <code>mfa.rs</code> · <code>rbac.rs</code></td><td>Autenticación JWT, MFA TOTP con throttle, autorización por rol y permisos <code>resource:action</code>.</td></tr>
+    <tr><td><code>db.rs</code> · <code>migrations.rs</code></td><td>Conexión a SurrealKV con reintentos y migraciones SurrealQL idempotentes.</td></tr>
+    <tr><td><code>hl7/</code> · <code>ingest/</code> · <code>server_ingest.rs</code></td><td>Ingesta desde monitores de cama, backpressure y circuit breaker.</td></tr>
+    <tr><td><code>fhir_bundle.rs</code> · <code>patient_timeline.rs</code> · <code>cds_rules.rs</code></td><td>Interoperabilidad FHIR, timeline longitudinal y reglas clínicas.</td></tr>
+    <tr><td><code>metrics.rs</code> · <code>observability.rs</code></td><td>Registro Prometheus (33 familias), health checks, tracing, shutdown ordenado y reconexión.</td></tr>
+    <tr><td><code>ml_serving.rs</code> · <code>similarity.rs</code></td><td>Servicio ML con registry en memoria y motor de similitud con embeddings de 128 dimensiones.</td></tr>
+    <tr><td><code>retention.rs</code> · <code>data_quality.rs</code> · <code>escalation.rs</code> · <code>teleicu.rs</code> · <code>device_registry.rs</code></td><td>Retención/downsampling, validación de mensajes, escalada de alertas, tele-ICU y registro de dispositivos.</td></tr>
+    <tr><td><code>security.rs</code> · <code>crypto.rs</code> · <code>audit.rs</code> · <code>tenant.rs</code> · <code>cache.rs</code></td><td>Sanitización, cifrado ChaCha20-Poly1305, auditoría PHI, multi-tenant y caché/revocación opcional.</td></tr>
+  </table>
+
+  <h3>3.2 Superficie HTTP</h3>
+  <p>El router monta tres capas: <code>/api</code> (69 rutas REST), <code>/obs</code> (observabilidad) y un
+  <em>fallback</em> <code>ServeDir</code> que entrega la SPA y sus rutas desde <code>./dist</code>. Algunos
+  endpoints representativos:</p>
+  <table>
+    <tr><th style="width:38%">Ruta</th><th>Función</th></tr>
+    <tr><td><code>POST /api/auth/login</code> · <code>/auth/mfa/verify</code></td><td>Login, refresh rotativo, verificación MFA y logout.</td></tr>
+    <tr><td><code>GET /api/patients</code> · <code>/patients/{id}/timeline</code></td><td>Listado con filtros por estado y timeline longitudinal.</td></tr>
+    <tr><td><code>POST /api/patients/{id}/scales/{apache,gcs,news2,sofa,saps3}</code></td><td>Cálculo y registro de escalas con fingerprint.</td></tr>
+    <tr><td><code>GET /api/patients/{id}/export/{csv,pdf}</code></td><td>Exportación con nombre de archivo saneado.</td></tr>
+    <tr><td><code>/api/admin/{stats,staff,audit,scores}</code></td><td>Administración de personal, auditoría y verificación de scores.</td></tr>
+    <tr><td><code>/api/fhir/Patient</code> · <code>/api/ml/{predict,similarity}</code></td><td>Interoperabilidad FHIR y analítica ML.</td></tr>
+    <tr><td><code>GET /obs/{health,live,ready,metrics}</code></td><td>Liveness, readiness, salud y métricas Prometheus.</td></tr>
+    <tr><td><code>GET /</code> · <code>/patients/:id/measure</code></td><td>SPA servida por el propio servidor (fallback).</td></tr>
+  </table>
+
+  <h3>3.3 Modelo de datos y migraciones</h3>
+  <p>SurrealQL embebido con <code>include_str!</code> y catálogo registrado; 14 archivos de migración cubren las
+  versiones <code>001</code> a <code>033</code> (la numeración salta donde el esquema se consolidó en una versión
+  posterior). Las migraciones se aplican de forma idempotente en el arranque mediante <code>run_migrations</code>.</p>
+  <table>
+    <tr><th>Tabla</th><th>Record ID</th><th>Índices / detalle</th></tr>
+    <tr><td><code>patients</code></td><td>UUID</td><td><code>created_at</code>, <code>estado_gravedad</code>, <code>historia_clinica</code>; datos PHI + scores.</td></tr>
+    <tr><td><code>camas</code> / <code>equipos</code></td><td>UUID</td><td>Ocupación y asignación de ventiladores/monitores.</td></tr>
+    <tr><td><code>users</code> / <code>staff</code></td><td>UUID / username</td><td><code>user_id</code>, <code>username</code>, <code>rol</code>, <code>activo</code>.</td></tr>
+    <tr><td><code>mfa_settings</code></td><td>user_id</td><td>Secreto TOTP + backup codes con SHA-256.</td></tr>
+    <tr><td><code>refresh_tokens</code></td><td>token_hash</td><td>UNIQUE; rotación single-use y detección de reuso.</td></tr>
+    <tr><td><code>audit_logs</code></td><td>UUID</td><td><code>timestamp</code>, <code>user_id</code>, <code>action</code>, <code>resource</code>; retención 6 años.</td></tr>
+    <tr><td><code>measurements</code> · agregados</td><td>bucket</td><td>Fingerprint SHA-256 + downsampling horario/diario.</td></tr>
+    <tr><td><code>tenant</code> · <code>patient_embedding</code> · <code>ml_models</code></td><td>slug / UUID</td><td>Multi-tenant, embeddings clínicos y modelos ML.</td></tr>
+  </table>
+
+  <h3>3.4 Empaquetado y despliegue</h3>
+  <ul>
+    <li><strong>Docker multi-stage distroless</strong> con <code>read_only</code>, <code>cap_drop: ALL</code>,
+      <code>no-new-privileges</code> y healthcheck <code>/obs/health</code>.</li>
+    <li><strong>Kubernetes / Helm chart HA</strong> (Deployment, StatefulSet SurrealDB, HPA, Ingress,
+      NetworkPolicy, PDB) y <strong>GitOps</strong> con ArgoCD/Flux.</li>
+    <li><strong>Clúster SurrealDB de 3 nodos</strong> en compose dedicado para alta disponibilidad.</li>
+    <li><strong>Blue/Green + Canary</strong> con auto-rollback y scripts de despliegue/estado.</li>
+    <li><strong>DR y backup</strong> con scripts de backup/restore/verify/drill y objetivos RPO &lt; 1 h / RTO &lt; 4 h.</li>
+  </ul>
+</section>
+
+<!-- ============ 4 ============ -->
+<section>
+  <h2>4. Seguridad integral</h2>
+
+  <h3>4.1 Identidad y sesión</h3>
+  <table>
+    <tr><th style="width:24%">Pilar</th><th>Implementación</th></tr>
+    <tr><td>Contraseñas</td><td>Argon2id con <code>m_cost</code> por defecto de 19 MiB (3 pasadas, 4 carriles) y
+      validación de clave maestra al arranque (<em>fail-fast</em>, <code>validate_master_key</code>).</td></tr>
+    <tr><td>JWT</td><td>HS256 con scope de sesión/MFA; access de 15 min y refresh de 7 días rotativo (single-use,
+      revocación en base de datos); blacklist con TTL en Valkey y degradación <em>fail-open</em> si cae.</td></tr>
+    <tr><td>MFA</td><td>TOTP (RFC 6238) + backup codes. Throttle dedicado en <code>/auth/mfa/verify</code>
+      (3 intentos / 5 min por IP real).</td></tr>
+    <tr><td>Sesión de frontend</td><td>Persistencia de sesión y recuperación de identidad vía
+      <code>/auth/me</code>; auto-refresh y logout real que invalida el token en el servidor.</td></tr>
+    <tr><td>Rate limiting</td><td>Token bucket por IP real (no falsificable) y throttle de login exponencial;
+      las respuestas 429 se devuelven como JSON.</td></tr>
+  </table>
+
+  <h3>4.2 Autorización por roles (RBAC)</h3>
+  <p>El sistema define cuatro roles con permisos granulares <code>resource:action</code> en una tabla única
+  (<code>permission_for(method, path)</code>), aplicados por middleware en el servidor y replicados como
+  <em>gating</em> de interfaz en el frontend:</p>
+  <table>
+    <tr><th>Rol (API)</th><th>Etiqueta UI</th><th>Permisos representativos</th></tr>
+    <tr><td><code>Admin</code></td><td>Administrador</td><td>Acceso total: usuarios, configuración, auditoría, tenants.</td></tr>
+    <tr><td><code>Doctor</code> (<code>Medico</code>)</td><td>Médico</td><td>Pacientes, mediciones y escalas; sin gestión de usuarios.</td></tr>
+    <tr><td><code>Nurse</code> (<code>Enfermero</code>)</td><td>Enfermero</td><td>Mediciones y escritura de escalas; no crea pacientes.</td></tr>
+    <tr><td><code>Viewer</code></td><td>Visualizador</td><td>Solo lectura; sin creación ni escritura de escalas.</td></tr>
+  </table>
+  <p>Una capa de sesión en <code>dmart-shared</code> unifica la definición de roles entre backend y frontend para
+  evitar divergencias. La gestión de personal admite filtro por rol y validaciones de alta (nombre, usuario y
+  contraseña mínima).</p>
+
+  <h3>4.3 Cifrado y manejo de secretos</h3>
+  <ul>
+    <li>Cifrado autenticado <strong>ChaCha20-Poly1305</strong> (XChaCha20-Poly1305-IETF) para datos sensibles.</li>
+    <li><strong>Zeroización</strong> (<code>zeroize</code>) de tokens, claves y contraseñas en memoria
+      (<code>LoginResponse</code>, <code>RefreshRequest</code>, MFA, clave maestra).</li>
+    <li>Los hashes de contraseña nunca se exponen en respuestas (<code>UserInfo</code>).</li>
+  </ul>
+
+  <h3>4.4 Endurecimiento de la superficie web</h3>
+  <ul>
+    <li><strong>Sanitización de nombres de archivo</strong> en export CSV/PDF (regex <code>[A-Za-z0-9_-]</code>,
+      eliminación de CR/LF y metacaracteres).</li>
+    <li><strong>Paginación acotada</strong> (<code>MAX_PAGE_LIMIT = 200</code>) con tope defensivo en la capa de base de datos.</li>
+    <li><strong>Límite de conexiones SSE</strong> (máximo 10 por IP con registro y guard RAII).</li>
+    <li><strong>Errores sanitizados</strong> en más de 20 handlers: el cliente recibe un mensaje genérico y el
+      detalle se registra internamente.</li>
+    <li><strong>Auditoría con IP real</strong> en login exitoso/fallido y acciones críticas (borrado, cambio de
+      configuración, cambio de autenticación, acceso denegado).</li>
+    <li><strong>CORS estricto</strong> con allowlist de cabeceras y orígenes por variable de entorno
+      (<em>fail-closed</em>); HSTS habilitable por entorno.</li>
+    <li><strong>Aislamiento multi-tenant</strong> con <code>tenant_id</code> en el JWT y en los modelos.</li>
+  </ul>
+
+  <h3>4.5 Estado de compliance</h3>
+  <p>El paquete de evidencia (SPEC-034) mapea controles a HIPAA 45 CFR 164, NIST 800-53 e ISO 27001 Anexo A, con
+  inventario de flujos de PHI, registro de incidentes y marco legal, además de scripts de generación y validación
+  (<code>compliance_generate.sh</code> / <code>compliance_check.sh</code>). Se documenta explícitamente que el
+  tránsito HTTP directo de fábrica no incorpora TLS automático y que los despliegues productivos en red externa
+  deben operar detrás de un proxy TLS (Caddy).</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section>
+  <h2>5. Capacidades clínicas</h2>
+
+  <h3>5.1 Motor de escalas</h3>
+  <p>Las escalas se implementan en <code>dmart-shared</code> como funciones puras —lo que las hace testeables sin
+  red ni base de datos— y se exponen por API y en la interfaz con cálculo en vivo.</p>
+  <table>
+    <tr><th>Escala</th><th>Rango</th><th>Detalle</th></tr>
+    <tr><td>APACHE II</td><td>0–71</td><td>APS fisiológico (12 variables) + edad + enfermedades crónicas; mortalidad calculada.</td></tr>
+    <tr><td>GCS</td><td>3–15</td><td>Ojos, verbal y motor con grados de trauma (leve/moderado/severo).</td></tr>
+    <tr><td>NEWS2</td><td>0–20+</td><td>FR, SpO₂, presión sistólica, FC, temperatura y oxígeno suplementario; nivel y respuesta.</td></tr>
+    <tr><td>SOFA</td><td>0–24</td><td>Respiratorio, cardiovascular, coagulación, hepático, neurológico y renal; mortalidad estimada.</td></tr>
+    <tr><td>SAPS III</td><td>0–100+</td><td>Box 1 (antecedentes), Box 2 (circunstancias), Box 3 (fisiología).</td></tr>
+  </table>
+  <p>Cada medición registra <code>algorithm_version</code> y un <strong>fingerprint SHA-256</strong>; el endpoint de
+  auditoría recomputa y verifica la reproducibilidad. La conformidad clínica compara APACHE II y GCS contra
+  vectores de referencia bibliográficos (Knaus 1985; Teasdale &amp; Jennett 1974).</p>
+
+  <h3>5.2 Mortalidad y analítica</h3>
+  <ul>
+    <li>Riesgo hospitalario por fórmula APACHE II y modelo ML piloto (árbol de decisión) con backend determinista.</li>
+    <li>Servicio ML con registry en memoria y API de predicción simple y por lotes.</li>
+    <li>Motor de similitud de pacientes con embeddings clínicos de 128 dimensiones y similitud de coseno,
+      acotado por tenant.</li>
+  </ul>
+
+  <h3>5.3 Ingesta desde monitores de cama</h3>
+  <ul>
+    <li>Parser HL7 v2.4 (<code>ORU^R01</code>) y framer MLLP sobre TCP, más cliente MQTT; drivers Mindray,
+      Philips y genéricos.</li>
+    <li><strong>Backpressure</strong> con token bucket por fuente y <strong>circuit breaker</strong> con máquina
+      de estados completa, de modo que un monitor defectuoso no degrada al resto de la UCI.</li>
+    <li>Métricas de huecos/fallos (<em>gap/fault</em>) y validación de calidad de mensajes.</li>
+  </ul>
+
+  <h3>5.4 Interoperabilidad y exportación</h3>
+  <ul>
+    <li>FHIR R4 nativo: <code>Patient</code>, <code>Observation</code> (códigos LOINC),
+      <code>Condition</code> (CIE-10), <code>DiagnosticReport</code> y <code>Bundle</code> de transacción/batch/collection.</li>
+    <li>Exportación CSV y PDF por paciente, con fingerprint de integridad y saneamiento de nombre de archivo.</li>
+  </ul>
+
+  <h3>5.5 Operación clínica avanzada</h3>
+  <ul>
+    <li><strong>Timeline longitudinal</strong> con eventos del paciente (SPEC-015).</li>
+    <li><strong>CDS</strong>: motor de reglas de soporte a la decisión con planes evaluables.</li>
+    <li><strong>Tele-ICU</strong>: sesiones y vista en vivo.</li>
+    <li><strong>Alertas y escalada</strong>: reglas Prometheus, dashboards Grafana y runbook on-call.</li>
+    <li><strong>Retención y downsampling</strong>: agregados horarios/diarios (AVG/MIN/MAX/count) con purga por
+      antigüedad, guard de disco crítico y job diario.</li>
+  </ul>
+</section>
+
+<!-- ============ 6 ============ -->
+<section>
+  <h2>6. Frontend y experiencia clínica</h2>
+  <p>El frontend es una aplicación de página única escrita en Rust y compilada a WebAssembly con
+  <strong>Leptos 0.8</strong> y empaquetada con <strong>Trunk</strong>. No es un añadido cosmético: forma parte del
+  binario de distribución en <code>./dist</code> y opera como PWA con Service Worker para tolerar cortes de red en
+  el entorno hospitalario.</p>
+
+  <table>
+    <tr><th style="width:30%">Artefacto</th><th>Valor medido</th></tr>
+    <tr><td>Bundle WASM</td><td class="num">2,53 MB</td></tr>
+    <tr><td>JavaScript de arranque</td><td class="num">55 KB</td></tr>
+    <tr><td>CSS compilado (Tailwind)</td><td class="num">52 KB</td></tr>
+    <tr><td>PWA</td><td><code>manifest.webmanifest</code>, <code>sw.js</code>, icono vectorial</td></tr>
+  </table>
+
+  <h3>6.1 Sistema de diseño</h3>
+  <ul>
+    <li><strong>Tokens de tema</strong> en variables CSS: paleta clínica clara («Clinical White») y oscura
+      («Enterprise Dark»), con transición suave entre ambas.</li>
+    <li><strong>Tarjetas glassmorphism</strong>, badges de severidad y un kit de componentes reutilizables
+      (<code>ui_kit</code>, <code>dashboard_kit</code>, alertas clínicas, radar, toggle, selector de tema).</li>
+    <li><strong>Diseño responsive</strong> con barra lateral fija en escritorio y colapsable en móvil, y
+      tipografía monoespaciada para valores clínicos.</li>
+  </ul>
+
+  <h3>6.2 Escalas interactivas</h3>
+  <ul>
+    <li><strong>Radar de scores en vivo</strong>: APACHE II, GCS y SOFA se recalculan mientras se ajustan los
+      controles, con colores según umbrales de advertencia y criticidad.</li>
+    <li><strong>Controles de escala (sliders)</strong> con riel de progreso coloreado por variable fisiológica y
+      color por métrica (antes todos los controles compartían el mismo color de acento).</li>
+    <li><strong>Precisión por paso</strong>: cada control respeta su incremento clínico (temperatura 0,1 °C,
+      FiO₂ 0,01, pH 0,01, etc.).</li>
+    <li><strong>Renderizado eficiente</strong>: el radar se aísla en su propio ámbito reactivo para que el
+      ajuste de un control no reconstruya toda la página durante el arrastre.</li>
+    <li><strong>Observaciones y registro</strong> integrados en el panel lateral, con botón de guardado que
+      muestra estado de carga y errores sanitizados.</li>
+  </ul>
+
+  <h3>6.3 Sesión, roles y perfil</h3>
+  <ul>
+    <li><strong>Gating por rol</strong> en la interfaz: la navegación y las acciones se habilitan según el rol
+      del usuario autenticado, en coherencia con el RBAC del servidor.</li>
+    <li><strong>Recuperación de identidad</strong> al recargar: si existe token pero no usuario en memoria, el
+      frontend consulta <code>/auth/me</code>, restaura la sesión o la limpia si el token ya no es válido.</li>
+    <li><strong>Perfil self-service</strong> (<code>/perfil</code>): cambio de contraseña por el propio usuario.</li>
+    <li><strong>Auto-refresh</strong> de tokens y <strong>logout real</strong> que revoca en el servidor.</li>
+  </ul>
+
+  <h3>6.4 Accesibilidad y formularios</h3>
+  <ul>
+    <li>Anillo de foco visible consistente para navegación por teclado (WCAG 2.4.7).</li>
+    <li>Etiquetas asociadas a los campos y atributos <code>aria-label</code> en los controles de escala.</li>
+    <li>Estados de foco, deshabilitado y contraste tanto en tema claro como oscuro.</li>
+    <li>Barra de acción fija en móvil para el registro de mediciones.</li>
+  </ul>
+
+  <h3>6.5 Rutas de la aplicación</h3>
+  <table>
+    <tr><th>Ruta</th><th>Acceso</th><th>Contenido</th></tr>
+    <tr><td><code>/login</code></td><td>Público</td><td>Inicio de sesión.</td></tr>
+    <tr><td><code>/patients</code> · <code>/patients/:id</code></td><td>Autenticado</td><td>Listado y ficha del paciente.</td></tr>
+    <tr><td><code>/patients/new</code> · <code>/patients/:id/edit</code></td><td>Médico/Admin</td><td>Alta y edición de pacientes.</td></tr>
+    <tr><td><code>/patients/:id/measure</code></td><td>Médico/Enfermero</td><td>Medición de escalas.</td></tr>
+    <tr><td><code>/admin</code></td><td>Admin</td><td>Gestión de personal, camas y auditoría.</td></tr>
+    <tr><td><code>/perfil</code></td><td>Autenticado</td><td>Cambio de contraseña self-service.</td></tr>
+  </table>
+</section>
+
+<!-- ============ 7 ============ -->
+<section>
+  <h2>7. Confiabilidad y tolerancia a fallos</h2>
+  <ul>
+    <li><strong>Ingesta con backpressure</strong> (token bucket + circuit breaker): un monitor roto no degrada al
+      resto de la UCI; se expone el estado del circuito y métricas de fallos.</li>
+    <li><strong>Reconexión a SurrealKV</strong> con backoff exponencial y jitter acotado
+      (<code>connect_with_retry</code>).</li>
+    <li><strong>Health checks</strong> de tres niveles: <code>/obs/live</code>, <code>/obs/ready</code> y
+      <code>/obs/health</code>.</li>
+    <li><strong>Apagado ordenado</strong> (graceful shutdown) con drenado y tiempo límite configurable.</li>
+    <li><strong>Retención y downsampling</strong> con UPSERT idempotente y paginación por keyset, más guard de
+      disco crítico.</li>
+    <li><strong>Auditabilidad de scores</strong>: fingerprint SHA-256 por medición y endpoint de verificación
+      de reproducibilidad.</li>
+    <li><strong>Alertas y escalada</strong> sobre métricas Prometheus, con reglas y dashboards.</li>
+    <li><strong>Respaldos</strong> con retención y verificación; en clúster se dispone de PDB/minAvailable y
+      multiproceso.</li>
+  </ul>
+  <div class="note">Los objetivos de recuperación documentados son <strong>RPO &lt; 1 h</strong> y
+  <strong>RTO &lt; 4 h</strong>, con drill de restore ejecutable en staging. En el despliegue local de este
+  repositorio, el respaldo corre como unidad <em>systemd</em> diaria (§10).</div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section>
+  <h2>8. Rendimiento y benchmark</h2>
+  <p>Las mediciones de esta sección se tomaron el <strong>17 de septiembre de 2026</strong> sobre el binario
+  release <code>target/release/dmart-server</code> (<strong>19 116 472 bytes</strong>, es decir 18,2 MiB). El
+  arranque se consideró completado cuando <code>/obs/health</code> respondió HTTP 200, con base de datos temporal
+  por ejecución.</p>
+
+  <h3>8.1 Tiempo de arranque</h3>
+  <table>
+    <tr><th>Ejecución</th><th>Modo</th><th>Tiempo hasta health (ms)</th></tr>
+    <tr><td>1</td><td>Base de datos nueva (frío)</td><td class="num">122</td></tr>
+    <tr><td>2</td><td>Base de datos existente</td><td class="num">135</td></tr>
+    <tr><td>3</td><td>Base de datos existente</td><td class="num">136</td></tr>
+    <tr><td>4</td><td>Base de datos existente</td><td class="num">111</td></tr>
+  </table>
+  <p>El arranque completo se mantiene por debajo de ~140 ms incluso con la inicialización de SurrealKV, la
+  validación de clave maestra y el <em>seed</em> de datos base. La variabilidad observada (±20 ms) corresponde a
+  I/O y perturbaciones del sistema, y es consistente con el rango medido en la versión anterior del informe.</p>
+
+  <h3>8.2 Latencia de endpoints de observabilidad</h3>
+  <p>200 peticiones secuenciales por endpoint con cliente HTTP persistente (conexión reutilizada) sobre el
+  servidor en ejecución:</p>
+  <table>
+    <tr><th>Endpoint</th><th>Mediana</th><th>p95</th><th>Máx.</th><th>≈ req/s</th></tr>
+    <tr><td><code>/obs/live</code></td><td class="num">0,27 ms</td><td class="num">0,80 ms</td><td class="num">39,1 ms</td><td class="num">3 700</td></tr>
+    <tr><td><code>/obs/health</code></td><td class="num">0,26 ms</td><td class="num">0,42 ms</td><td class="num">1,91 ms</td><td class="num">3 775</td></tr>
+    <tr><td><code>/obs/metrics</code></td><td class="num">1,13 ms</td><td class="num">1,55 ms</td><td class="num">4,19 ms</td><td class="num">883</td></tr>
+  </table>
+  <p>El endpoint <code>/metrics</code> serializa 33 familias de métricas y sigue muy por debajo del umbral de
+  referencia (p95 &lt; 100 ms). El valor máximo aislado en <code>/obs/live</code> corresponde al primer
+  requerimiento de la serie (establecimiento de conexión).</p>
+
+  <div class="warn"><strong>Alcance del benchmark.</strong> Es una prueba base demostrativa sin TLS, sin
+  concurrencia artificial y sin carga de usuarios reales. Para producción se recomienda ejecutar los escenarios
+  <code>k6</code> (<code>tests/load/*.js</code>) sobre un despliegue real con credenciales y datos representativos.</div>
+
+  <h3>8.3 Huella del artefacto</h3>
+  <table>
+    <tr><th>Componente</th><th>Valor</th></tr>
+    <tr><td>Binario release (opt-level z, LTO, strip, panic=abort)</td><td class="num">18,2 MiB (19,1 MB)</td></tr>
+    <tr><td>Bundle WASM del frontend</td><td class="num">2,53 MB</td></tr>
+    <tr><td>Base SurrealKV de demostración</td><td class="num">≈ 696 KB</td></tr>
+    <tr><td>Familias de métricas Prometheus</td><td class="num">33</td></tr>
+  </table>
+  <div class="note">El README documenta una meta de «single binary ~8 MB», pero el binario medido hoy es ~19 MB.
+  La diferencia proviene de las dependencias acumuladas (HL7, FHIR, SurrealDB, ML) y se reporta el valor real.</div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section>
+  <h2>9. QA y pruebas</h2>
+  <p>El backend se verifica con tres conjuntos ejecutados hoy, más gates de estilo y seguridad documentados en el
+  proyecto. La tabla distingue lo verificado en esta sesión de lo que está presente en el repositorio pero no se
+  re-ejecutó.</p>
+
+  <table>
+    <tr><th>Mecanismo</th><th>Estado</th><th>Comando / artefacto</th></tr>
+    <tr><td>Tests unitarios (lib)</td><td><span class="tag ok">verificado hoy</span>85/85 ✓</td><td><code>cargo test -p dmart-server --lib</code></td></tr>
+    <tr><td>E2E HTTP de API</td><td><span class="tag ok">verificado hoy</span>35/35 ✓</td><td><code>--test api_tests</code> (auth, RBAC, MFA, multi-tenant, retención, staff)</td></tr>
+    <tr><td>Integración HL7/MLLP</td><td><span class="tag ok">verificado hoy</span>32/32 ✓</td><td><code>--test hl7_integration</code> (parser, framer, ingest, TCP real)</td></tr>
+    <tr><td>Build del frontend</td><td><span class="tag ok">verificado hoy</span>OK ✓</td><td><code>trunk build --release</code></td></tr>
+    <tr><td>Superficie de seguridad en runtime</td><td><span class="tag ok">verificado hoy</span>OK ✓</td><td><code>/obs/health</code> 200, <code>/api/auth/me</code> 401 sin token</td></tr>
+    <tr><td>Clippy estricto</td><td><span class="tag doc">documentado</span>0 warnings</td><td><code>-- -D warnings</code> (lib + bin)</td></tr>
+    <tr><td>Formato</td><td><span class="tag doc">documentado</span>limpio</td><td><code>cargo fmt --all -- --check</code></td></tr>
+    <tr><td>Conformidad clínica</td><td><span class="tag doc">documentado</span>APACHE II + GCS ✓</td><td>Vectores de referencia (SPEC-028); NEWS2/SOFA/SAPS III parcialmente pendientes de vectores con cita.</td></tr>
+    <tr><td>Cobertura</td><td><span class="tag doc">documentado</span>objetivo ≥ 60 %</td><td><code>cargo llvm-cov</code> (no re-ejecutado hoy)</td></tr>
+    <tr><td>Fuzzing</td><td><span class="tag na">en repo</span>4 targets</td><td><code>fuzz_hl7_parser</code>, <code>fuzz_scales</code>, <code>fuzz_api_json</code>, <code>fuzz_target_1</code></td></tr>
+    <tr><td>E2E Playwright</td><td><span class="tag na">en repo</span>suite <code>tests/e2e</code></td><td>Configuración y tests presentes; no ejecutados hoy.</td></tr>
+    <tr><td>Carga k6</td><td><span class="tag na">en repo</span>6 escenarios</td><td><code>auth, fhir, hl7, metrics, scales, run_all</code></td></tr>
+    <tr><td>Auditoría de dependencias</td><td><span class="tag doc">documentado</span>0 advisories</td><td><code>cargo audit</code> (CI/local)</td></tr>
+  </table>
+
+  <div class="ok"><strong>Total verificado hoy:</strong> 152 tests del backend
+  (85 + 35 + 32) en verde, sin fallos ni ignorados, más el build release del frontend.</div>
+
+  <div class="warn"><strong>Límites de validación.</strong> Persisten sin ejecutar: carga con usuarios
+  concurrentes, fuzz prolongado, cobertura instrumentada y E2E de navegador. El rendimiento con monitores HL7
+  físicos no puede probarse sin infraestructura. Se dispone de los scripts para completar estos escenarios en
+  staging.</div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section>
+  <h2>10. Despliegue y operación local</h2>
+  <p>Además de las variantes Docker/Kubernetes, el repositorio se opera en esta máquina como servicio   de usuario
+  de <code>systemd</code> con persistencia habilitada (<code>Linger=yes</code>), lo que permite que el
+  servidor se mantenga activo sin sesión interactiva y se reinicie automáticamente ante fallos.</p>
+
+  <h3>10.1 Unidades systemd de usuario</h3>
+  <table>
+    <tr><th>Unidad</th><th>Función</th><th>Detalle</th></tr>
+    <tr><td><code>dmart-server.service</code></td><td>Servidor</td><td><code>Type=simple</code>, <code>Restart=always</code>,
+      <code>RestartSec=3</code>, apagado con <code>SIGTERM</code> y <code>TimeoutStopSec=20</code>.</td></tr>
+    <tr><td><code>dmart-backup.service</code></td><td>Respaldo</td><td><code>Type=oneshot</code>; invoca
+      <code>scripts/backup.sh</code> sobre <code>data/backups</code>.</td></tr>
+    <tr><td><code>dmart-backup.timer</code></td><td>Programación</td><td>Diario a las 02:00, <code>Persistent=true</code>,
+      retardo aleatorio de 15 min.</td></tr>
+  </table>
+
+  <h3>10.2 Configuración de ejecución</h3>
+  <table>
+    <tr><th>Variable</th><th>Valor local (sin secretos)</th></tr>
+    <tr><td><code>DMART_PORT</code> / <code>DMART_HOST</code></td><td><code>3000</code> / <code>0.0.0.0</code></td></tr>
+    <tr><td><code>DMART_DB_PATH</code></td><td><code>./data/dmart.db</code> (directorio SurrealKV embebido)</td></tr>
+    <tr><td><code>DMART_DIST_PATH</code></td><td><code>./dist</code> (SPA compilada servida por el binario)</td></tr>
+    <tr><td><code>JWT_EXPIRY_HOURS</code></td><td><code>1</code></td></tr>
+    <tr><td><code>DMART_ENABLE_HSTS</code> / <code>DMART_TRUST_PROXY</code></td><td><code>true</code> / <code>false</code></td></tr>
+    <tr><td><code>DMART_CORS_ORIGIN</code></td><td><code>http://localhost:3000,http://127.0.0.1:3000</code></td></tr>
+  </table>
+  <p>Las claves sensibles (<code>DMART_MASTER_KEY</code>, <code>JWT_SECRET</code>, contraseña de administrador)
+  residen en <code>.env</code>, que está excluido del control de versiones. La base de datos y el directorio de
+  respaldos también están ignorados por Git.</p>
+
+  <h3>10.3 Observabilidad y verificación</h3>
+  <table>
+    <tr><th>Endpoint</th><th>Comprobación local</th></tr>
+    <tr><td><code>/obs/health</code> · <code>/obs/live</code> · <code>/obs/ready</code></td><td>HTTP 200 con estado del sistema.</td></tr>
+    <tr><td><code>/obs/metrics</code></td><td>33 familias de métricas en formato Prometheus.</td></tr>
+    <tr><td><code>/</code></td><td>SPA servida desde <code>./dist</code> (200).</td></tr>
+    <tr><td><code>/api/auth/me</code></td><td>401 sin token (protección activa).</td></tr>
+  </table>
+  <div class="note">El frontend compilado no forma parte del binario: reconstruir <code>./dist</code> con
+  <code>trunk build --release</code> es suficiente para actualizar la interfaz sin reiniciar el servidor, ya que
+  este entrega los archivos desde disco.</div>
+  <div class="warn">El despliegue local opera sobre HTTP directo sin TLS. Antes de exponerlo fuera de la máquina
+  debe colocarse detrás de un proxy TLS (Caddy) y revisarse <code>DMART_CORS_ORIGIN</code> y
+  <code>DMART_TRUST_PROXY</code>.</div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section>
+  <h2>11. Resultados, limitaciones y recomendaciones</h2>
+
+  <h3>Fortalezas verificadas</h3>
+  <ul>
+    <li><strong>Madurez funcional y de seguridad:</strong> autenticación + MFA + RBAC de cuatro roles,
+      sanitización, límites, zeroización y auditoría de PHI.</li>
+    <li><strong>Arranque y latencia de base excelentes:</strong> arranque por debajo de ~140 ms y endpoints de
+      observabilidad en el orden de centenas de microsegundos.</li>
+    <li><strong>Defensa en profundidad:</strong> tests unitarios, E2E de API, integración HL7, proptests, fuzz y
+      vectores clínicos, con gates de estilo.</li>
+    <li><strong>Portabilidad de despliegue:</strong> binario único, Docker distroless, Helm/GitOps, clúster de
+      base de datos y estrategia de recuperación.</li>
+    <li><strong>Experiencia clínica cuidada:</strong> escalas con radar en vivo, controles accesibles y
+      operación offline-first.</li>
+  </ul>
+
+  <h3>Limitaciones y riesgos abiertos</h3>
+  <ul>
+    <li>Las pruebas de carga concurrente, el fuzz prolongado y la cobertura instrumentada no se re-ejecutaron hoy;
+      deben reproducirse antes de una auditoría.</li>
+    <li>NEWS2, SOFA y SAPS III aún no cuentan con vectores de referencia bibliográficos completos.</li>
+    <li>El motor de similitud usa barrido por tenant (adecuado hasta ~10 000 pacientes), no un índice vectorial
+      dedicado; el ML es determinista, no un modelo ONNX en producción.</li>
+    <li>El despliegue local no incorpora TLS automático; requiere proxy en red externa.</li>
+    <li>El binario real (~19 MB) supera la meta publicada de ~8 MB.</li>
+  </ul>
+
+  <h3>Recomendaciones</h3>
+  <ol>
+    <li>Ejecutar en staging los escenarios <code>k6</code> y el fuzz de larga duración; registrar métricas de
+      disponibilidad a 30 días ligadas a los criterios R1–R8.</li>
+    <li>Completar los vectores clínicos con cita para NEWS2, SOFA y SAPS III.</li>
+    <li>Fijar TLS obligatorio en despliegues externos y ejecutar el drill de recuperación de forma trimestral.</li>
+    <li>Confirmar en un commit las mejoras de interfaz hoy en el árbol de trabajo y añadir pruebas de UI para
+      los flujos de medición.</li>
+    <li>Re-evaluar el índice de similitud (HNSW) y el servicio ML (ONNX) al superar ~10 000 pacientes.</li>
+  </ol>
+</section>
+
+<!-- ============ 12 ============ -->
+<section>
+  <h2>12. Anexos</h2>
+
+  <h3>12.1 Estructura del repositorio</h3>
+  <table>
+    <tr><th>Ruta</th><th>Contenido</th></tr>
+    <tr><td><code>dmart-shared/</code></td><td>Modelos, escalas clínicas, validación y ML.</td></tr>
+    <tr><td><code>dmart-server/</code></td><td>Servidor Axum, 23 submódulos de API, HL7, FHIR, seguridad, observabilidad, migraciones y fuzz.</td></tr>
+    <tr><td><code>dmart-app/</code></td><td>Frontend Leptos/WASM, componentes y páginas.</td></tr>
+    <tr><td><code>specs/</code></td><td>35 especificaciones SDD (SPEC-001…035).</td></tr>
+    <tr><td><code>docs/</code></td><td>Arquitectura, API, escalas clínicas, compliance y runbooks (16 archivos).</td></tr>
+    <tr><td><code>scripts/</code></td><td>18 scripts de despliegue, DR, compliance y coste.</td></tr>
+    <tr><td><code>tests/</code></td><td>E2E (Playwright) y carga (k6).</td></tr>
+    <tr><td>Raíz</td><td><code>Dockerfile</code>, <code>docker-compose.*</code>, <code>helm/</code>, <code>flux/</code>, <code>.argocd/</code>, <code>prometheus/</code>, <code>grafana/</code>, <code>systemd/</code>, <code>README.md</code>, <code>ROADMAP.md</code>, <code>CHANGELOG.md</code>.</td></tr>
+  </table>
+
+  <h3>12.2 Fuentes del informe</h3>
+  <ul>
+    <li>Código y estructura: <code>dmart-shared/src</code>, <code>dmart-server/src</code>, <code>dmart-app/src</code>.</li>
+    <li>Documentación: <code>README.md</code>, <code>ROADMAP.md</code>, <code>CHANGELOG.md</code>,
+      <code>docs/</code> (ARQUITECTURA, API, compliance, runbooks), <code>specs/</code> (001–035).</li>
+    <li>Mediciones del 17/09/2026: <code>cargo test -p dmart-server --lib</code> (85),
+      <code>--test api_tests</code> (35), <code>--test hl7_integration</code> (32),
+      <code>trunk build --release</code>, arranque hasta <code>health 200</code> y 200 peticiones por endpoint.</li>
+    <li>Estado de versión: rama <code>main</code>, commit <code>1d6356f</code>, más cambios de interfaz en el
+      árbol de trabajo al cierre del informe.</li>
+  </ul>
+
+  <h3>12.3 Glosario</h3>
+  <table>
+    <tr><th>Término</th><th>Significado</th></tr>
+    <tr><td>UCI</td><td>Unidad de Cuidados Intensivos.</td></tr>
+    <tr><td>PHI</td><td>Protected Health Information (información de salud protegida).</td></tr>
+    <tr><td>MLLP</td><td>Lower Layer Protocol de HL7 sobre TCP.</td></tr>
+    <tr><td>SDD</td><td>Spec-Driven Development.</td></tr>
+    <tr><td>RPO / RTO</td><td>Objetivo de punto de recuperación / objetivo de tiempo de recuperación.</td></tr>
+    <tr><td>SSE</td><td>Server-Sent Events.</td></tr>
+    <tr><td>PWA</td><td>Progressive Web App.</td></tr>
+    <tr><td>WASM</td><td>WebAssembly.</td></tr>
+  </table>
+
+  <div class="crit"><strong>Letra pequeña de integridad.</strong> Los valores de arranque y latencia corresponden
+  al binario release de este repositorio medidos el 17/09/2026; los recuentos de tests provienen de la ejecución de
+  la suite rápida del backend en esa fecha. Los datos de cobertura, fuzz, auditoría de dependencias y carga
+  provienen de informes históricos del proyecto y no fueron re-ejecutados en su totalidad en esta sesión; se marcan
+  como «documentado» o «en repo». Este documento no sustituye una auditoría externa.</div>
+
+  <p style="margin-top:14mm;text-align:center;color:var(--muted);font-size:9pt">
+    dMart UCI — Informe técnico v3.0.0 · 17 de septiembre de 2026
+  </p>
+</section>
+
+</body>
+</html>
