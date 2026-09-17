@@ -121,6 +121,8 @@ fn patients_to_list_items(patients: &[Patient]) -> Vec<PatientListItem> {
                 ultimo_saps3_score: p.ultimo_saps3_score,
                 ultimo_news2_score: p.ultimo_news2_score,
                 mortality_risk: p.mortality_risk,
+                fecha_egreso_uci: p.fecha_egreso_uci.clone(),
+                desenlace_uci: p.desenlace_uci.clone(),
             }
         })
         .collect()

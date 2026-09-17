@@ -37,11 +37,37 @@ pub fn PatientDetailPage() -> impl IntoView {
     let show_delete_modal = RwSignal::new(false);
     let deleting = RwSignal::new(false);
     let navigate = use_navigate();
+    let nav_delete = navigate.clone();
+    let nav_egreso = navigate.clone();
+
+    let show_egreso_modal = RwSignal::new(false);
+    let egresando = RwSignal::new(false);
+    let desenlace = RwSignal::new("Mejorado".to_string());
+
+    let do_egreso = StoredValue::new(move || {
+        let pid = id();
+        let d = desenlace.get();
+        egresando.set(true);
+        let nav = nav_egreso.clone();
+        spawn_local(async move {
+            match api::egreso_paciente(&pid, &d).await {
+                Ok(_) => {
+                    egresando.set(false);
+                    nav("/patients", Default::default());
+                }
+                Err(e) => {
+                    egresando.set(false);
+                    show_egreso_modal.set(false);
+                    show_alert(&format!("Error al egresar: {}", e));
+                }
+            }
+        });
+    });
 
     let do_delete = StoredValue::new(move || {
         let pid = id();
         deleting.set(true);
-        let nav = navigate.clone();
+        let nav = nav_delete.clone();
         spawn_local(async move {
             match api::delete_patient(&pid).await {
                 Ok(_) => {
@@ -93,6 +119,20 @@ pub fn PatientDetailPage() -> impl IntoView {
                                             <a href=format!("/api/patients/{}/export/csv", p.patient_id) class="btn-outline px-4 py-3" title="CSV">
                                                 <i class="fa-solid fa-file-csv mr-2"></i>"CSV"
                                             </a>
+                                            {if p.fecha_egreso_uci.is_empty() {
+                                                Either::Left(view! {
+                                                    <button on:click=move |_| show_egreso_modal.set(true) class="btn-outline px-4 py-3" title="Egresar paciente">
+                                                        <i class="fa-solid fa-door-open mr-2"></i>"Egresar"
+                                                    </button>
+                                                })
+                                            } else {
+                                                Either::Right(view! {
+                                                    <span class="px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap" style="background:rgba(148,163,184,0.15); color:#94A3B8;">
+                                                        <i class="fa-solid fa-door-open mr-1"></i>
+                                                        {if p.desenlace_uci.is_empty() { "Egresado".to_string() } else { format!("Egresado · {}", p.desenlace_uci) }}
+                                                    </span>
+                                                })
+                                            }}
                                             <button on:click=move |_| show_delete_modal.set(true) class="btn-danger p-2" title="Eliminar" aria-label="Eliminar paciente">
                                                 <i class="fa-solid fa-trash" aria-hidden="true"></i>
                                             </button>
@@ -291,6 +331,41 @@ pub fn PatientDetailPage() -> impl IntoView {
                                 disabled=deleting
                             >
                                 {move || if deleting.get() { "Eliminando..." } else { "Eliminar Paciente" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
+            <Show when=move || show_egreso_modal.get()>
+                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+                    <div class="glass-card p-8 max-w-md mx-4">
+                        <h3 class="text-xl font-bold text-uci-text mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-door-open text-uci-accent"></i>"Confirmar Egreso"
+                        </h3>
+                        <p class="text-uci-muted mb-4">"El paciente saldrá de la UCI y se liberarán su cama y equipos asignados. Seleccione el desenlace clínico:"</p>
+                        <select
+                            class="form-input w-full mb-6"
+                            on:change=move |ev| desenlace.set(event_target_value(&ev))
+                        >
+                            <option value="Mejorado" selected>"Mejorado"</option>
+                            <option value="Trasladado">"Trasladado"</option>
+                            <option value="Fallecido">"Fallecido"</option>
+                        </select>
+                        <div class="flex gap-3 justify-end">
+                            <button
+                                on:click=move |_| show_egreso_modal.set(false)
+                                class="btn-outline"
+                                disabled=egresando
+                            >
+                                "Cancelar"
+                            </button>
+                            <button
+                                on:click=move |_| do_egreso.with_value(|f| f())
+                                class="btn-primary"
+                                disabled=egresando
+                            >
+                                {move || if egresando.get() { "Egresando..." } else { "Confirmar Egreso" }}
                             </button>
                         </div>
                     </div>

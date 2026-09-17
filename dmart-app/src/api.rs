@@ -720,14 +720,17 @@ pub async fn create_patient_with_equipos(
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 
-pub async fn egreso_paciente(id: &str) -> ApiResult<String> {
-    let resp: ApiResponse<String> = authed_post(&format!("{}/patients/{}/egreso", API_BASE, id))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+pub async fn egreso_paciente(id: &str, desenlace: &str) -> ApiResult<String> {
+    let resp: ApiResponse<String> = authed_post(&format!(
+        "{}/patients/{}/egreso?desenlace={}",
+        API_BASE, id, desenlace
+    ))
+    .send()
+    .await
+    .map_err(|e| e.to_string())?
+    .json()
+    .await
+    .map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 

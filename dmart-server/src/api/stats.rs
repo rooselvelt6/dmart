@@ -130,6 +130,8 @@ pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
                         ultimo_saps3_score: p.ultimo_saps3_score,
                         ultimo_news2_score: p.ultimo_news2_score,
                         mortality_risk: p.mortality_risk,
+                        fecha_egreso_uci: p.fecha_egreso_uci.clone(),
+                        desenlace_uci: p.desenlace_uci.clone(),
                     }
                 })
                 .collect();

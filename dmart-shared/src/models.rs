@@ -768,6 +768,13 @@ pub struct PatientListItem {
     pub ultimo_saps3_score: Option<u32>,
     pub ultimo_news2_score: Option<u32>,
     pub mortality_risk: Option<f32>,
+
+    /// Fecha de egreso (ISO datetime). Vacía = paciente aún activo en UCI.
+    #[serde(default)]
+    pub fecha_egreso_uci: String,
+    /// Desenlace al egreso: `Mejorado`, `Trasladado`, `Fallecido` (vacío = activo).
+    #[serde(default)]
+    pub desenlace_uci: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

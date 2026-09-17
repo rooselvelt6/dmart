@@ -16,6 +16,7 @@ const ROW_HEIGHT: f64 = 72.0;
 pub fn PatientsPage() -> impl IntoView {
     let search_debounced = RwSignal::new(String::new());
     let retry = RwSignal::new(0u32);
+    let show_egresados = RwSignal::new(false);
     let patients_resource = LocalResource::new(move || {
         let q = search_debounced.get();
         let _r = retry.get();
@@ -73,7 +74,20 @@ pub fn PatientsPage() -> impl IntoView {
         Some(Ok(list)) if list.is_empty() => view! {
             <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">"No se encontraron pacientes"</div>
         }.into_any(),
-        Some(Ok(list)) => view! {
+        Some(Ok(list)) => {
+            let incluir_egresados = show_egresados.get();
+            let list: Vec<_> = list
+                .into_iter()
+                .filter(|p| incluir_egresados || p.fecha_egreso_uci.is_empty())
+                .collect();
+            if list.is_empty() {
+                view! {
+                    <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">
+                        {if incluir_egresados { "No se encontraron pacientes" } else { "No hay pacientes activos en UCI" }}
+                    </div>
+                }.into_any()
+            } else {
+            view! {
             <div class="glass-card overflow-hidden">
                 <div style="overflow-y:auto; max-height:65vh;" on:scroll=on_scroll>
                     {move || {
@@ -97,6 +111,9 @@ pub fn PatientsPage() -> impl IntoView {
                                                     <svg class="w-4 h-4 md:w-5 md:h-5" style="color:var(--uci-accent);" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                                 </div>
                                                 <span class="font-semibold text-sm truncate" style="color:var(--uci-text);">{p.nombre_completo.clone()}</span>
+                                                {(!p.fecha_egreso_uci.is_empty()).then(|| view! {
+                                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0" style="background:rgba(148,163,184,0.2); color:#94A3B8;">"Egresado"</span>
+                                                })}
                                             </div>
                                             <div style="color:var(--uci-muted);">
                                                 <div class="text-sm truncate">{p.cedula.clone()}</div>
@@ -136,7 +153,9 @@ pub fn PatientsPage() -> impl IntoView {
                     }}
                 </div>
             </div>
-        }.into_any(),
+            }.into_any()
+            }
+        },
         Some(Err(e)) => view! {
             <ErrorState
                 message=format!("No se pudieron cargar los pacientes: {}", e)
@@ -162,6 +181,16 @@ pub fn PatientsPage() -> impl IntoView {
                 <div class="mb-4 md:mb-5">
                     <input type="text" class="form-input w-full" placeholder="Buscar por nombre, cedula o historia clinica..." on:input=on_search />
                 </div>
+
+                <label class="flex items-center gap-2 mb-4 md:mb-5 cursor-pointer select-none w-fit">
+                    <input
+                        type="checkbox"
+                        class="w-4 h-4"
+                        prop:checked=move || show_egresados.get()
+                        on:change=move |_| show_egresados.update(|v| *v = !*v)
+                    />
+                    <span class="text-sm" style="color:var(--uci-muted);">"Mostrar pacientes egresados"</span>
+                </label>
 
     <Suspense fallback=move || view! { <LoadingState label="Cargando pacientes..." /> }>
                     {move || render_list()}
