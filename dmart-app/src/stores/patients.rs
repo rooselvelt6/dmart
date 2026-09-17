@@ -12,10 +12,7 @@ struct CacheEntry {
 }
 
 fn get_current_timestamp() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    (js_sys::Date::now() / 1000.0) as u64
 }
 
 pub fn load_patients_cached() -> Option<Vec<PatientListItem>> {

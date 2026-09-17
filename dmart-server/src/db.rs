@@ -233,7 +233,7 @@ pub async fn get_patient(db: &Surreal<Db>, id: &str) -> Result<Option<Patient>> 
 /// Busca paciente por número de registro médico (historia clínica) o cédula.
 /// Usado por la integración HL7 (PID-3) para vincular monitores a pacientes.
 pub async fn get_patient_by_mrn(db: &Surreal<Db>, mrn: &str) -> Result<Option<Patient>> {
-    let q = format!("%{}%", mrn.trim());
+    let q = mrn.trim().to_string();
     let patients: Vec<Patient> = db
         .query(
             "SELECT * FROM patients WHERE historia_clinica = $mrn OR cedula = $mrn \
@@ -246,7 +246,7 @@ pub async fn get_patient_by_mrn(db: &Surreal<Db>, mrn: &str) -> Result<Option<Pa
         // búsqueda con comodines por si trae espacios/guiones distintos
         let patients: Vec<Patient> = db
             .query(
-                "SELECT * FROM patients WHERE historia_clinica ~= $q OR cedula ~= $q \
+                "SELECT * FROM patients WHERE historia_clinica ~ $q OR cedula ~ $q \
                  ORDER BY created_at DESC LIMIT 1",
             )
             .bind(("q", q))
@@ -409,9 +409,9 @@ pub async fn search_patients(
     offset: u32,
 ) -> Result<Vec<Patient>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
-    let q = format!("%{}%", query);
+    let q = query.to_string();
     let patients: Vec<Patient> = db
-        .query("SELECT * FROM patients WHERE nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q ORDER BY created_at DESC LIMIT $limit START $offset")
+        .query("SELECT * FROM patients WHERE nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("q", q))
         .bind(("limit", limit as i64))
         .bind(("offset", offset as i64))
@@ -421,9 +421,9 @@ pub async fn search_patients(
 }
 
 pub async fn search_patients_count(db: &Surreal<Db>, query: &str) -> Result<u64> {
-    let q = format!("%{}%", query);
+    let q = query.to_string();
     let count: Vec<serde_json::Value> = db
-        .query("SELECT count() as count FROM patients WHERE nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q GROUP BY count")
+        .query("SELECT count() as count FROM patients WHERE nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q GROUP BY count")
         .bind(("q", q))
         .await?
         .take(0)?;
@@ -439,9 +439,9 @@ pub async fn search_patients_for_tenant(
     offset: u32,
 ) -> Result<Vec<Patient>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
-    let q = format!("%{}%", query);
+    let q = query.to_string();
     let patients: Vec<Patient> = db
-        .query("SELECT * FROM patients WHERE tenant_id = $tenant AND (nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q) ORDER BY created_at DESC LIMIT $limit START $offset")
+        .query("SELECT * FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q) ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("tenant", tenant_id.to_string()))
         .bind(("q", q))
         .bind(("limit", limit as i64))
@@ -457,9 +457,9 @@ pub async fn search_patients_count_for_tenant(
     query: &str,
     tenant_id: &str,
 ) -> Result<u64> {
-    let q = format!("%{}%", query);
+    let q = query.to_string();
     let count: Vec<serde_json::Value> = db
-        .query("SELECT count() as count FROM patients WHERE tenant_id = $tenant AND (nombre ~= $q OR apellido ~= $q OR cedula ~= $q OR historia_clinica ~= $q) GROUP BY count")
+        .query("SELECT count() as count FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q) GROUP BY count")
         .bind(("tenant", tenant_id.to_string()))
         .bind(("q", q))
         .await?
