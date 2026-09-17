@@ -170,7 +170,7 @@ Ninguna pendiente — **SPECs 001–035 completadas** (2026-09-16).
 
 ## Documentación
 
-- [ROADMAP.md](ROADMAP.md) — Plan de fases y hitos
+- [roadmapFinal.md](roadmapFinal.md) — Plan de fases y hitos
 - [CHANGELOG.md](CHANGELOG.md) — Historial de versiones (conventional commits)
 - [specs/](specs/) — Especificaciones SDD con criterios Gherkin
 - [docs/ADR.md](docs/ADR.md) — Architecture Decision Records
@@ -180,7 +180,7 @@ Ninguna pendiente — **SPECs 001–035 completadas** (2026-09-16).
 
 ## Contribución
 
-1. Lee [ROADMAP.md](ROADMAP.md) y elige una SPEC pendiente
+1. Lee [roadmapFinal.md](roadmapFinal.md) y elige una SPEC pendiente
 2. Abre issue con la especificación (formato Gherkin en `specs/`)
 3. Implementa → tests → `cargo fmt && cargo clippy -D warnings`
 4. Actualiza CHANGELOG.md y abre PR
