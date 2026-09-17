@@ -726,6 +726,7 @@ fn EquiposPanel() -> impl IntoView {
 #[component]
 fn StaffPanel() -> impl IntoView {
     let (staff, set_staff) = signal::<Vec<StaffInfo>>(vec![]);
+    let (rol_filter, set_rol_filter) = signal("todos".to_string());
     let (show_form, set_show_form) = signal(false);
     let (edit_user, set_edit_user) = signal::<Option<StaffInfo>>(None);
     let (form_nombre, set_form_nombre) = signal(String::new());
@@ -764,13 +765,31 @@ fn StaffPanel() -> impl IntoView {
     };
 
     let save = move || {
-        saving.set(true);
-        error_msg.set(None);
         let nombre = form_nombre.get();
         let username = form_username.get();
         let password = form_password.get();
         let rol_str = form_rol.get();
         let user_id = edit_user.get().map(|u| u.user_id.clone());
+
+        if nombre.trim().is_empty() {
+            error_msg.set(Some("El nombre es obligatorio".to_string()));
+            return;
+        }
+        if user_id.is_none() && username.trim().is_empty() {
+            error_msg.set(Some("El usuario es obligatorio".to_string()));
+            return;
+        }
+        if user_id.is_none() && password.len() < 8 {
+            error_msg.set(Some("La contraseña debe tener al menos 8 caracteres".to_string()));
+            return;
+        }
+        if user_id.is_some() && !password.is_empty() && password.len() < 8 {
+            error_msg.set(Some("La contraseña debe tener al menos 8 caracteres".to_string()));
+            return;
+        }
+
+        saving.set(true);
+        error_msg.set(None);
 
         spawn_local(async move {
             let result = if let Some(ref id) = user_id {
@@ -812,15 +831,26 @@ fn StaffPanel() -> impl IntoView {
 
     view! {
         <div>
-            <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <h2 class="text-lg font-bold" style="color:var(--uci-text);">
                     <i class="fa-solid fa-users mr-2" style="color:var(--uci-accent);"></i>"Gestión de Personal"
                 </h2>
-                <button on:click=move |_| { reset_form(); set_show_form.update(|v| *v = !*v); }
-                    class="px-4 py-2 rounded-lg text-sm font-medium text-white"
-                    style="background:var(--uci-accent);">
-                    <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { "Cancelar" } else { "Nuevo Personal" }}
-                </button>
+                <div class="flex items-center gap-3">
+                    <select class="form-select" aria-label="Filtrar por rol"
+                        prop:value=move || rol_filter.get()
+                        on:change=move |ev| set_rol_filter.set(event_target_value(&ev))>
+                        <option value="todos">"Todos los roles"</option>
+                        <option value="Admin">"Admin"</option>
+                        <option value="Medico">"Médico"</option>
+                        <option value="Enfermero">"Enfermero"</option>
+                        <option value="Viewer">"Viewer"</option>
+                    </select>
+                    <button on:click=move |_| { reset_form(); set_show_form.update(|v| *v = !*v); }
+                        class="px-4 py-2 rounded-lg text-sm font-medium text-white"
+                        style="background:var(--uci-accent);">
+                        <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { "Cancelar" } else { "Nuevo Personal" }}
+                    </button>
+                </div>
             </div>
 
             {move || error_msg.get().map(|e| view! {
@@ -883,7 +913,11 @@ fn StaffPanel() -> impl IntoView {
                         </tr>
                     </thead>
                     <tbody class="divide-y" style="border-color:var(--uci-border);">
-                        {move || staff.get().iter().map(|u| {
+                        {move || {
+                            let filtro = rol_filter.get();
+                            staff.get().iter()
+                                .filter(|u| filtro == "todos" || u.rol.to_string() == filtro)
+                                .map(|u| {
                             let user = u.clone();
                             let uid1 = u.user_id.clone();
                             let uid2 = u.user_id.clone();
@@ -925,7 +959,7 @@ fn StaffPanel() -> impl IntoView {
                                     </td>
                                 </tr>
                             }
-                        }).collect_view()}
+                        }).collect_view()}}
                     </tbody>
                 </table>
             </div>
