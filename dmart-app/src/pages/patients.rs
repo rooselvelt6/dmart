@@ -16,12 +16,13 @@ const ROW_HEIGHT: f64 = 72.0;
 pub fn PatientsPage() -> impl IntoView {
     let search_debounced = RwSignal::new(String::new());
     let retry = RwSignal::new(0u32);
-    let show_egresados = RwSignal::new(false);
+    let estado_filter = RwSignal::new("activos".to_string());
     let patients_resource = LocalResource::new(move || {
         let q = search_debounced.get();
+        let estado = estado_filter.get();
         let _r = retry.get();
         async move {
-            api::list_patients(Some(&q))
+            api::list_patients(Some(&q), Some(&estado))
                 .await
                 .map_err(|e| e.to_string())
         }
@@ -71,20 +72,21 @@ pub fn PatientsPage() -> impl IntoView {
 
     let render_list = move || {
         match patients_resource.get() {
-        Some(Ok(list)) if list.is_empty() => view! {
-            <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">"No se encontraron pacientes"</div>
-        }.into_any(),
+        Some(Ok(list)) if list.is_empty() => {
+            let msg = match estado_filter.get().as_str() {
+                "egresados" => "No hay pacientes egresados",
+                "todos" => "No se encontraron pacientes",
+                _ => "No hay pacientes activos en UCI",
+            };
+            view! {
+                <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">{msg}</div>
+            }.into_any()
+        },
         Some(Ok(list)) => {
-            let incluir_egresados = show_egresados.get();
-            let list: Vec<_> = list
-                .into_iter()
-                .filter(|p| incluir_egresados || p.fecha_egreso_uci.is_empty())
-                .collect();
+            let list: Vec<_> = list;
             if list.is_empty() {
                 view! {
-                    <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">
-                        {if incluir_egresados { "No se encontraron pacientes" } else { "No hay pacientes activos en UCI" }}
-                    </div>
+                    <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">"No se encontraron pacientes"</div>
                 }.into_any()
             } else {
             view! {
@@ -182,15 +184,25 @@ pub fn PatientsPage() -> impl IntoView {
                     <input type="text" class="form-input w-full" placeholder="Buscar por nombre, cedula o historia clinica..." on:input=on_search />
                 </div>
 
-                <label class="flex items-center gap-2 mb-4 md:mb-5 cursor-pointer select-none w-fit">
-                    <input
-                        type="checkbox"
-                        class="w-4 h-4"
-                        prop:checked=move || show_egresados.get()
-                        on:change=move |_| show_egresados.update(|v| *v = !*v)
-                    />
-                    <span class="text-sm" style="color:var(--uci-muted);">"Mostrar pacientes egresados"</span>
-                </label>
+                <div class="flex flex-wrap gap-2 mb-4 md:mb-5">
+                    {[("activos", "Activos"), ("egresados", "Egresados"), ("todos", "Todos")]
+                        .into_iter()
+                        .map(|(val, label)| {
+                            let is_active = move || estado_filter.get() == val;
+                            view! {
+                                <button
+                                    type="button"
+                                    class=move || if is_active() {
+                                        "btn-primary px-4 py-2".to_string()
+                                    } else {
+                                        "btn-outline px-4 py-2".to_string()
+                                    }
+                                    on:click=move |_| estado_filter.set(val.to_string())
+                                >{label}</button>
+                            }
+                        })
+                        .collect_view()}
+                </div>
 
     <Suspense fallback=move || view! { <LoadingState label="Cargando pacientes..." /> }>
                     {move || render_list()}

@@ -29,7 +29,9 @@ pub struct TenantListItem {
 }
 
 async fn patient_count(db: &Database, slug: &str) -> u64 {
-    crate::db::count_patients_for_tenant(db, slug).await.unwrap_or(0)
+    crate::db::count_patients_for_tenant(db, slug, crate::db::EstadoFilter::Todos)
+        .await
+        .unwrap_or(0)
 }
 
 /// GET /api/admin/tenants — lista todos los tenants (super_admin).

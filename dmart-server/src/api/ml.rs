@@ -216,8 +216,14 @@ async fn regenerate_embeddings_api(
     State(db): State<Database>,
     claims: Claims,
 ) -> impl IntoResponse {
-    let patients: Vec<dmart_shared::models::Patient> = crate::db::list_patients_for_tenant(db.as_ref(), &claims.tenant_id, 1000, 0)
-        .await
+    let patients: Vec<dmart_shared::models::Patient> = crate::db::list_patients_for_tenant(
+        db.as_ref(),
+        &claims.tenant_id,
+        crate::db::EstadoFilter::Todos,
+        1000,
+        0,
+    )
+    .await
         .unwrap_or_default();
     let mut count = 0usize;
     for p in patients {

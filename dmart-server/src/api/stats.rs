@@ -139,7 +139,7 @@ pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
             let stats = UciStats {
                 ejecutivo,
                 total_pacientes: agg.total as usize,
-                pacientes_activos: agg.total as usize,
+                pacientes_activos: agg.total.saturating_sub(agg.egresados) as usize,
                 por_gravedad: gravedad,
                 promedios,
                 reciente: items,

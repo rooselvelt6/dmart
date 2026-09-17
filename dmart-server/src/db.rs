@@ -355,6 +355,36 @@ pub async fn update_patient(
     Ok(updated)
 }
 
+/// Filtro por estado del paciente para listados y búsquedas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EstadoFilter {
+    #[default]
+    Activos,
+    Egresados,
+    Todos,
+}
+
+impl EstadoFilter {
+    /// Interpreta el valor recibido por query string (`activos` por defecto).
+    pub fn from_query(value: Option<&str>) -> Self {
+        match value.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
+            Some("egresados") | Some("egresado") => Self::Egresados,
+            Some("todos") | Some("all") => Self::Todos,
+            _ => Self::Activos,
+        }
+    }
+
+    /// Fragmento SurrealQL que se anexa al final de una cláusula WHERE.
+    /// Un paciente está egresado cuando `fecha_egreso_uci` tiene valor.
+    fn sql(&self) -> &'static str {
+        match self {
+            Self::Activos => " AND (fecha_egreso_uci IS NONE OR fecha_egreso_uci = '')",
+            Self::Egresados => " AND (fecha_egreso_uci IS NOT NONE AND fecha_egreso_uci != '')",
+            Self::Todos => "",
+        }
+    }
+}
+
 pub async fn list_patients(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Patient>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let patients: Vec<Patient> = db
@@ -370,12 +400,17 @@ pub async fn list_patients(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<
 pub async fn list_patients_for_tenant(
     db: &Surreal<Db>,
     tenant_id: &str,
+    estado: EstadoFilter,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Patient>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
+    let sql = format!(
+        "SELECT * FROM patients WHERE tenant_id = $tenant{} ORDER BY created_at DESC LIMIT $limit START $offset",
+        estado.sql()
+    );
     let patients: Vec<Patient> = db
-        .query("SELECT * FROM patients WHERE tenant_id = $tenant ORDER BY created_at DESC LIMIT $limit START $offset")
+        .query(sql)
         .bind(("tenant", tenant_id.to_string()))
         .bind(("limit", limit as i64))
         .bind(("offset", offset as i64))
@@ -393,9 +428,17 @@ pub async fn count_patients(db: &Surreal<Db>) -> Result<u64> {
 }
 
 /// SPEC-025: recuento de pacientes filtrado por tenant (RLS).
-pub async fn count_patients_for_tenant(db: &Surreal<Db>, tenant_id: &str) -> Result<u64> {
+pub async fn count_patients_for_tenant(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+    estado: EstadoFilter,
+) -> Result<u64> {
+    let sql = format!(
+        "SELECT count() as count FROM patients WHERE tenant_id = $tenant{} GROUP BY count",
+        estado.sql()
+    );
     let count: Vec<serde_json::Value> = db
-        .query("SELECT count() as count FROM patients WHERE tenant_id = $tenant GROUP BY count")
+        .query(sql)
         .bind(("tenant", tenant_id.to_string()))
         .await?
         .take(0)?;
@@ -435,13 +478,18 @@ pub async fn search_patients_for_tenant(
     db: &Surreal<Db>,
     query: &str,
     tenant_id: &str,
+    estado: EstadoFilter,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Patient>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let q = query.to_string();
+    let sql = format!(
+        "SELECT * FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q){} ORDER BY created_at DESC LIMIT $limit START $offset",
+        estado.sql()
+    );
     let patients: Vec<Patient> = db
-        .query("SELECT * FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q) ORDER BY created_at DESC LIMIT $limit START $offset")
+        .query(sql)
         .bind(("tenant", tenant_id.to_string()))
         .bind(("q", q))
         .bind(("limit", limit as i64))
@@ -456,10 +504,15 @@ pub async fn search_patients_count_for_tenant(
     db: &Surreal<Db>,
     query: &str,
     tenant_id: &str,
+    estado: EstadoFilter,
 ) -> Result<u64> {
     let q = query.to_string();
+    let sql = format!(
+        "SELECT count() as count FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q){} GROUP BY count",
+        estado.sql()
+    );
     let count: Vec<serde_json::Value> = db
-        .query("SELECT count() as count FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q) GROUP BY count")
+        .query(sql)
         .bind(("tenant", tenant_id.to_string()))
         .bind(("q", q))
         .await?

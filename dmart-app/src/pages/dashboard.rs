@@ -49,7 +49,9 @@ pub fn DashboardPage() -> impl IntoView {
         let current = refresh.get();
         async move {
             let _ = current;
-            api::list_patients(None).await.unwrap_or_default()
+            api::list_patients(None, Some("activos"))
+                .await
+                .unwrap_or_default()
         }
     });
 

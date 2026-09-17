@@ -40,7 +40,7 @@ pub async fn fetch_patients_cached() -> Vec<PatientListItem> {
         return cached;
     }
 
-    match api::list_patients(None).await {
+    match api::list_patients(None, Some("activos")).await {
         Ok(patients) => {
             save_patients_cached(&patients);
             patients

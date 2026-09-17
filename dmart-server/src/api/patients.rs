@@ -26,6 +26,8 @@ pub struct ListPatientsQuery {
     pub q: Option<String>,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
+    /// `activos` (por defecto), `egresados` o `todos`.
+    pub estado: Option<String>,
 }
 
 // GET /api/patients?q=<search>&limit=50&offset=0
@@ -41,10 +43,12 @@ pub async fn list_patients(
     };
     let limit = pagination.limit();
     let offset = pagination.offset();
+    let estado = db_ops::EstadoFilter::from_query(params.estado.as_deref());
 
     if let Some(q) = params.q.filter(|s| !s.is_empty()) {
-        let result = db_ops::search_patients_for_tenant(&db, &q, &tenant_id, limit, offset).await;
-        let total = db_ops::search_patients_count_for_tenant(&db, &q, &tenant_id)
+        let result =
+            db_ops::search_patients_for_tenant(&db, &q, &tenant_id, estado, limit, offset).await;
+        let total = db_ops::search_patients_count_for_tenant(&db, &q, &tenant_id, estado)
             .await
             .unwrap_or(0);
         match result {
@@ -71,8 +75,8 @@ pub async fn list_patients(
             }
         }
     } else {
-        let result = db_ops::list_patients_for_tenant(&db, &tenant_id, limit, offset).await;
-        let total = db_ops::count_patients_for_tenant(&db, &tenant_id)
+        let result = db_ops::list_patients_for_tenant(&db, &tenant_id, estado, limit, offset).await;
+        let total = db_ops::count_patients_for_tenant(&db, &tenant_id, estado)
             .await
             .unwrap_or(0);
         match result {

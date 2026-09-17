@@ -63,11 +63,19 @@ pub async fn login(username: &str, password: &str) -> ApiResult<LoginResponse> {
 
 // ─── Patients ──────────────────────────────────────────────────────────────
 
-pub async fn list_patients(query: Option<&str>) -> ApiResult<Vec<PatientListItem>> {
-    let url = match query {
-        Some(q) if !q.is_empty() => format!("{}/patients?q={}", API_BASE, q),
-        _ => format!("{}/patients", API_BASE),
-    };
+pub async fn list_patients(
+    query: Option<&str>,
+    estado: Option<&str>,
+) -> ApiResult<Vec<PatientListItem>> {
+    let mut url = format!("{}/patients", API_BASE);
+    let mut sep = '?';
+    if let Some(q) = query.filter(|q| !q.is_empty()) {
+        url.push_str(&format!("{sep}q={q}"));
+        sep = '&';
+    }
+    if let Some(e) = estado.filter(|e| !e.is_empty()) {
+        url.push_str(&format!("{sep}estado={e}"));
+    }
     let resp: ApiResponse<PaginatedResponse<PatientListItem>> = authed_get(&url)
         .send()
         .await
