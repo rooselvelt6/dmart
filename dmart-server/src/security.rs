@@ -6,11 +6,13 @@
 //! - Clickjacking (X-Frame-Options)
 
 use axum::{
+    Json,
     extract::{ConnectInfo, Request, State},
     http::{HeaderValue, StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use dmart_shared::models::ApiResponse;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -256,11 +258,11 @@ pub async fn login_throttle_middleware(
     if let Some(remaining) = throttle.is_locked(&key).await {
         return (
             StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, &remaining.to_string())],
-            format!(
+            [(header::CONTENT_TYPE, "application/json")],
+            Json(ApiResponse::<()>::err(format!(
                 "Account temporarily locked. Try again in {} seconds.",
                 remaining
-            ),
+            ))),
         )
             .into_response();
     }
@@ -271,8 +273,10 @@ pub async fn login_throttle_middleware(
         tracing::warn!("Login throttle triggered for IP: {}", key);
         return (
             StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, "300")],
-            "Too many failed attempts. Account locked for 5 minutes.",
+            [(header::CONTENT_TYPE, "application/json")],
+            Json(ApiResponse::<()>::err(
+                "Too many failed attempts. Account locked for 5 minutes.",
+            )),
         )
             .into_response();
     }
