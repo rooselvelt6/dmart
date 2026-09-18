@@ -176,159 +176,129 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     let mut ops: Vec<Op> = Vec::new();
     let left = Mm(15.0);
     let page_h = 297.0_f32;
+    let right = 195.0; // A4 width 210 - 15 margin
 
-    let mut y = 270.0_f32;
+    let mut y = page_h - 15.0;
 
-    // Header
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        "SISTEMA UCI — REGISTRO DE PACIENTE",
-        true,
-        14.0,
-    );
-    y -= 8.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        &format!(
-            "Historia Clínica: {}   Cédula: {}",
-            patient.historia_clinica, patient.cedula
-        ),
-        false,
-        10.0,
-    );
+    // ===== HEADER =====
+    push_text(&mut ops, left, page_h, y, "SAHUAPA HOSPITAL ANTONIO PATRICIO DE ALCALA", true, 14.0);
     y -= 6.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        &format!("Paciente: {} {}", patient.nombre, patient.apellido),
-        true,
-        12.0,
-    );
-    y -= 6.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        &format!(
-            "Sexo: {:?}   Color de Piel: {}",
-            patient.sexo,
-            patient.color_piel.label()
-        ),
-        false,
-        9.0,
-    );
-    y -= 5.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        &format!(
-            "Fecha Nacimiento: {}   Ingreso UCI: {}",
-            patient.fecha_nacimiento, patient.fecha_ingreso_uci
-        ),
-        false,
-        9.0,
-    );
-    y -= 5.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        &format!("Diagnóstico UCI: {}", patient.diagnostico_uci),
-        false,
-        9.0,
-    );
-    y -= 5.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        &format!(
-            "Tipo Admisión: {:?}   VM: {}   Procesos Invasivos: {}",
-            patient.tipo_admision,
-            patient.ventilacion_mecanica,
-            patient.procesos_invasivos.join(", ")
-        ),
-        false,
-        9.0,
-    );
+    push_text(&mut ops, left, page_h, y, "Unidad de Cuidados Intensivos — Registro Clínico", false, 10.0);
+    y -= 10.0;
 
-    y -= 8.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        "─── EVOLUCIÓN APACHE II ───",
-        true,
-        11.0,
-    );
-    y -= 6.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        "  Fecha/Hora              Apache II   GCS   Severidad       Mortalidad",
-        true,
-        9.0,
-    );
-    y -= 5.0;
+    // ===== PATIENT INFO — two column grid =====
+    let col1 = left;
+    let col2 = Mm(105.0);
+    let row_h = 5.2;
 
-    for m in measurements {
-        if y < 20.0 {
-            pages.push(std::mem::take(&mut ops));
-            y = 270.0;
-        }
-        let line = format!(
-            "  {:<25} {:>8}    {:>3}   {:<12}    {:>6.1}%",
-            &m.timestamp[..19],
-            m.apache_score,
-            m.gcs_score,
-            m.severity.label(),
-            m.mortality_risk,
-        );
-        push_text(&mut ops, left, page_h, y, &line, false, 8.0);
-        y -= 4.5;
+    macro_rules! row {
+        ($label:expr, $value:expr) => {{
+            push_text(&mut ops, col1, page_h, y, $label, true, 9.0);
+            push_text(&mut ops, col2, page_h, y, $value, false, 9.0);
+            y -= row_h;
+        }};
     }
 
+    row!("Historia Clínica:", &patient.historia_clinica);
+    row!("Cédula:", &patient.cedula);
+    row!("Paciente:", &format!("{} {}", patient.nombre, patient.apellido));
+    row!("Sexo / Edad:", &format!("{:?} / {} años", patient.sexo, patient.edad));
+    row!("Color de Piel:", &patient.color_piel.label());
+    row!("Fecha Nacimiento:", &patient.fecha_nacimiento[..10.min(patient.fecha_nacimiento.len())]);
+    row!("Ingreso Hospital:", &patient.fecha_ingreso_hospital[..19.min(patient.fecha_ingreso_hospital.len())]);
+    row!("Ingreso UCI:", &patient.fecha_ingreso_uci[..19.min(patient.fecha_ingreso_uci.len())]);
+    row!("Tipo Admisión:", &format!("{:?}", patient.tipo_admision));
+    row!("Ventilación Mecánica:", if patient.ventilacion_mecanica { "Sí" } else { "No" });
+    row!("Diagnóstico Hospital:", &patient.diagnostico_hospital);
+    row!("Diagnóstico UCI:", &patient.diagnostico_uci);
+
+    if !patient.procesos_invasivos.is_empty() {
+        row!("Procesos Invasivos:", &patient.procesos_invasivos.join(", "));
+    }
+
+    y -= 8.0;
+
+    // ===== CURRENT SEVERITY STATUS =====
+    push_text(&mut ops, left, page_h, y, "ESTADO DE GRAVEDAD ACTUAL", true, 12.0);
+    y -= 7.0;
+    push_text(&mut ops, left, page_h, y, &format!("Nivel: {}", patient.estado_gravedad.label()), true, 14.0);
+    y -= 6.5;
+    push_text(&mut ops, left, page_h, y, &format!("APACHE II: {} | GCS: {}", patient.ultimo_apache_score.unwrap_or(0), patient.ultimo_gcs_score.unwrap_or(0)), false, 10.0);
     y -= 5.0;
+    if let Some(sofa) = patient.ultimo_sofa_score {
+        push_text(&mut ops, left, page_h, y, &format!("SOFA: {} | SAPS III: {} | NEWS2: {}", sofa, patient.ultimo_saps3_score.unwrap_or(0), patient.ultimo_news2_score.unwrap_or(0)), false, 9.0);
+        y -= 5.0;
+    }
+    if let Some(mort) = patient.mortality_risk {
+        push_text(&mut ops, left, page_h, y, &format!("Mortalidad estimada: {:.1}%", mort), false, 10.0);
+        y -= 5.0;
+    }
+
+    y -= 10.0;
+
+    // ===== MEASUREMENTS TABLE =====
+    push_text(&mut ops, left, page_h, y, "EVOLUCIÓN DE ESCALAS CLÍNICAS", true, 12.0);
+    y -= 8.0;
+
+    // Table header
+    push_text(&mut ops, left, page_h, y, "  Fecha/Hora            APACHE II   GCS   SOFA   SAPS III   NEWS2   Severidad     Mortalidad    Temp   PAM   FC   FR   pH    Na    K    Cr   Hct  Leuc  FiO2  SpO2", true, 7.0);
+    y -= 5.5;
+
+    for m in measurements {
+        if y < 25.0 {
+            pages.push(std::mem::take(&mut ops));
+            ops.clear();
+            y = page_h - 15.0;
+            // Re-draw header on new page
+            push_text(&mut ops, left, page_h, y, "EVOLUCIÓN DE ESCALAS CLÍNICAS (cont.)", true, 12.0);
+            y -= 6.0;
+            push_text(&mut ops, left, page_h, y, "  Fecha/Hora            APACHE II   GCS   SOFA   SAPS III   NEWS2   Severidad     Mortalidad    Temp   PAM   FC   FR   pH    Na    K    Cr   Hct  Leuc  FiO2  SpO2", true, 7.0);
+            y -= 5.5;
+        }
+
+        let ad = &m.apache_data;
+        let line = format!(
+            "  {:<19} {:>8}    {:>3}   {:>4}   {:>8}   {:>5}   {:<10}    {:>7.1}%    {:>4.1} {:>4.0} {:>4.0} {:>4.0} {:>4.2} {:>5.0} {:>4.1} {:>4.1} {:>4.0} {:>5.0} {:>4.2} {:>4.0}",
+            &m.timestamp[..19.min(m.timestamp.len())],
+            m.apache_score,
+            m.gcs_score,
+            m.sofa_score.unwrap_or(0),
+            m.saps3_score.unwrap_or(0),
+            m.news2_score.unwrap_or(0),
+            m.severity.label(),
+            m.mortality_risk,
+            ad.temperatura,
+            ad.presion_arterial_media,
+            ad.frecuencia_cardiaca,
+            ad.frecuencia_respiratoria,
+            ad.ph_arterial,
+            ad.sodio_serico,
+            ad.potasio_serico,
+            ad.creatinina,
+            ad.hematocrito,
+            ad.leucocitos,
+            ad.fio2,
+            ad.spo2,
+        );
+        push_text(&mut ops, left, page_h, y, &line, false, 6.5);
+        y -= 4.8;
+    }
+
+    y -= 12.0;
+
+    // Footer
     push_text(
         &mut ops,
         left,
         page_h,
         y,
         &format!(
-            "Estado actual de gravedad: {}",
-            patient.estado_gravedad.label()
-        ),
-        true,
-        10.0,
-    );
-    y -= 4.0;
-    push_text(
-        &mut ops,
-        left,
-        page_h,
-        y,
-        &format!(
-            "Mortalidad estimada: {}",
-            patient.estado_gravedad.mortality_estimate()
+            "Generado: {} — dMart UCI v{}",
+            chrono::Utc::now().format("%Y-%m-%d %H:%M UTC"),
+            env!("CARGO_PKG_VERSION")
         ),
         false,
-        9.0,
+        7.0,
     );
 
     pages.push(ops);
