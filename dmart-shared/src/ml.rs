@@ -219,6 +219,16 @@ impl MortalityModel {
         pred[0] as f32
     }
 
+    /// Getter for the inner decision tree model
+    pub fn model(&self) -> &DecisionTree<f32, usize> {
+        &self.model
+    }
+
+    /// Getter for feature names
+    pub fn feature_names(&self) -> &Vec<String> {
+        &self.feature_names
+    }
+
     /// Predice probabilidad de mortalidad (0.0 - 1.0)
     pub fn predict_proba(&self, features: &MortalityFeatures) -> f32 {
         // Para DecisionTree, usar la predicción de clase como proxy
