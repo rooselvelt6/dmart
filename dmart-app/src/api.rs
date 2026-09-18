@@ -592,11 +592,19 @@ pub async fn get_scales_history(patient_id: &str) -> ApiResult<Vec<Value>> {
 // ─── Export helpers ─────────────────────────────────────────────────────────
 
 pub fn export_csv_url(patient_id: &str) -> String {
-    format!("{}/patients/{}/export/csv", API_BASE, patient_id)
+    let mut url = format!("{}/patients/{}/export/csv", API_BASE, patient_id);
+    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
+        url = format!("{}?token={}", url, token);
+    }
+    url
 }
 
 pub fn export_pdf_url(patient_id: &str) -> String {
-    format!("{}/patients/{}/export/pdf", API_BASE, patient_id)
+    let mut url = format!("{}/patients/{}/export/pdf", API_BASE, patient_id);
+    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
+        url = format!("{}?token={}", url, token);
+    }
+    url
 }
 
 // ─── Admin ──────────────────────────────────────────────────────────

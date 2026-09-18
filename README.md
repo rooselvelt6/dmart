@@ -1,184 +1,151 @@
-# dMart UCI
+<div align="center">
 
-<p align="center">
-  <img src="dmart-app/icon.svg" alt="dMart UCI" width="140" height="140">
-</p>
+# 🏥 dMart UCI
 
-<p align="center">
-  <strong>Sistema de Gestión de Unidad de Cuidados Intensivos — 100% Rust, WebAssembly, SurrealDB</strong>
-</p>
+**Sistema de Gestión de Unidad de Cuidados Intensivos**
+_100% Rust · WebAssembly · SurrealDB — offline-first, grado hospitalario_
 
-<p align="center">
-  <a href="https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://www.rust-lang.org/"><img alt="Rust" src="https://img.shields.io/badge/Rust-1.98-orange?logo=rust"></a>
-  <a href="https://webassembly.org/"><img alt="WebAssembly" src="https://img.shields.io/badge/Frontend-WebAssembly-654FF0?logo=webassembly"></a>
-  <a href="https://leptos.dev/"><img alt="Leptos" src="https://img.shields.io/badge/UI-Leptos%200.8-FF4B4B?logo=leptos"></a>
-  <a href="https://github.com/tokio-rs/axum"><img alt="Axum" src="https://img.shields.io/badge/Backend-Axum%200.8-99A0AA"></a>
-  <a href="https://surrealdb.com/"><img alt="SurrealDB" src="https://img.shields.io/badge/DB-SurrealKV-FF00A0?logo=surrealdb"></a>
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-146%20passing-10B981">
-  <img alt="Coverage" src="https://img.shields.io/badge/Coverage-65%25-22c55e">
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-3B82F6"></a>
-</p>
+<img src="dmart-app/icon.svg" alt="dMart UCI" width="120">
+
+[![CI](https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml/badge.svg)](https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/Rust-1.98-orange?logo=rust)](https://www.rust-lang.org/)
+[![WASM](https://img.shields.io/badge/Frontend-WebAssembly-654FF0?logo=webassembly)](https://webassembly.org/)
+[![Leptos](https://img.shields.io/badge/UI-Leptos%200.8-FF4B4B?logo=leptos)](https://leptos.dev/)
+[![Axum](https://img.shields.io/badge/Backend-Axum%200.8-99A0AA)](https://github.com/tokio-rs/axum)
+[![SurrealDB](https://img.shields.io/badge/DB-SurrealKV-FF00A0?logo=surrealdb)](https://surrealdb.com/)
+[![Tests](https://img.shields.io/badge/Tests-144%20verdes-10B981)](.#testing)
+[![Coverage](https://img.shields.io/badge/Coverage-%E2%89%A560%25-22c55e)](specs/027-coverage-gate-ci.md)
+[![License](https://img.shields.io/badge/License-MIT-3B82F6)](LICENSE)
+
+</div>
 
 ---
 
-## Descripción
+## ✨ El proyecto en una frase
 
-**dMart UCI** es una plataforma integral de gestión para Unidades de Cuidados Intensivos, construida íntegramente en **Rust** y compilada a **WebAssembly** con **Leptos**. Diseñada para operar en red hospitalaria aislada (**offline-first**), sin dependencias externas obligatorias. Un solo binario (`dmart-server` ~8 MB) que incluye API REST, WebSocket/SSE, base de datos embebida (SurrealKV), parser HL7 v2 + MLLP, motor de scores clínicos y frontend PWA.
+> Un **solo binario Rust (~8 MB)** que aloja la UCI completa: API REST + WebSocket/SSE,
+> parser **HL7 v2 + MLLP/MQTT**, **FHIR R4**, scores clínicos (APACHE II, NEWS2, GCS, SOFA…),
+> **ML de mortalidad y estancia**, auditoría inmutable **WORM**, Web Push con VAPID,
+> y frontend **PWA (Leptos/WASM)** — operando en red hospitalaria **aislada, sin internet**.
 
-### Capacidades clínicas validadas
+---
+
+## 🎯 Roadmap entregado (SPEC-001 → SPEC-052)
+
+Las **52 specs** del roadmap están completadas. Esta es la hoja de ruta que cerramos:
+
+| Fase | Alcanzada | Qué se entregó |
+|------|-----------|----------------|
+| **1 · Fundaciones** | SPEC-001…008 | Fix WASM, auth hardening, observabilidad, Docker multistage, CI, seguridad |
+| **2 · Interop + ML** | SPEC-009…038 | FHIR R4, HL7 integración, ML ensemble, LOS-NN, early warning, escalamiento |
+| **3 · Producción** | SPEC-039…043 | Helm HA, GitOps ArgoCD/Flux, cluster SurrealDB, DR, multi-tenancy, SBOM/SLSA |
+| **4 · Operación** | SPEC-044…052 | Soporte/RBAC, auditoría WORM, SLO/SLI, SLI streaming, **Web Push VAPID** |
+
+> 🏷️ Tag de cierre: **`roadmap-final-SPEC-052`** · Ultimo commit: `40d213b`
+
+---
+
+## 🧩 Capacidades clínicas
 
 | Dominio | Implementación |
 |---------|----------------|
-| **Pacientes** | CRUD completo, ingresos/egresos con desenlace (Mejorado/Trasladado/Fallecido), historial longitudinal con timeline |
-| **Monitores de cama** | Parser HL7 v2 (ORU^R01) + transporte **MLLP** (TCP) y **MQTT** — drivers Mindray, Philips, genéricos; backpressure SPEC-031 |
-| **Scores de severidad** | **APACHE II** (71 pts: APS + Edad + Crónicos), **GCS** animado, **NEWS2**, **SOFA**, **SAPS III** — rangos clínicos con validación y desglose |
-| **Mortalidad** | Riesgo hospitalario calculado (fórmula APACHE II) + ML piloto (DecisionTree, ~85–90 % prec.) |
-| **Interoperabilidad** | **FHIR R4** nativo: Patient, Observation (LOINC 8867-4/9279-1/2708-6/8310-5), Condition (CIE-10), DiagnosticReport, Bundle transaction/batch/collection |
-| **Exportación** | CSV / PDF por paciente con fingerprint SPEC-029 |
-| **Frontend PWA** | Offline-capable (Service Worker), glassmorphism, dark/light, responsive, animaciones de severidad, QR FHIR |
+| **Pacientes** | CRUD, ingresos/egresos con desenlace, historial longitudinal con timeline |
+| **Monitores de cama** | HL7 v2 `ORU^R01` + **MLLP (TCP)** y **MQTT** — drivers Mindray, Philips, genéricos; backpressure |
+| **Severidad** | **APACHE II**, **GCS** animado, **NEWS2**, **SOFA**, **SAPS III** — validación clínica |
+| **Mortalidad** | Riesgo hospitalario (fórmula APACHE II) + **ensemble de ML** (DecisionTree/LR/GBM) |
+| **Estancia (LOS)** | Red neuronal **MLP/LSTM** (candle, feature-gated) + predictor stub sin dependencias |
+| **Early Warning** | **EWS streaming**: NEWS2/Apache/SOFA → **SSE** en tiempo real por cama |
+| **Prevención de esquirlas** | SLI/SLO + error budgets + **alerta de escalamiento** |
+| **Interoperabilidad** | **FHIR R4**: Patient, Observation (LOINC), Condition (CIE-10), DiagnosticReport, Bundle |
+| **Exportación** | CSV / PDF por paciente, con **fingerprint de integridad** (SPEC-029) |
 
-### Seguridad grado hospitalario (HIPAA)
+---
+
+## 🔒 Seguridad grado hospitalario
 
 | Pilar | Implementación |
 |-------|----------------|
-| **Autenticación** | Argon2id (19 MiB, 3 passes, 4 lanes), JWT HS256 revocable (access 15 min / refresh 7 días), **MFA TOTP** RFC 6238 + backup codes |
-| **Autorización** | **RBAC** granular: `Admin · Médico · Enfermero · Viewer` — permisos por ruta (`rbac.rs`), middleware `require_role!` |
-| **Cifrado** | **ChaCha20-Poly1305** (XChaCha20-Poly1305-IETF) + zeroización de secretos en memoria (`zeroize`) |
-| **Auditoría PHI** | Log inmutable de acceso con retención **6 años**, fingerprint SHA-256 por registro (SPEC-029) |
-| **Hardening** | Rate limiting por IP real (token bucket), login throttling exponencial, HSTS, CSP, sanitización HTML/SQL, CORS estricto |
-| **QA defensivo** | **cargo-fuzz** (3 targets: json, hl7, scales), **proptest** (bounds, monotonicidad, robustez), E2E Playwright (8 suites), k6 load (1000 VU) |
+| **AuthN** | **Argon2id**, JWT **HS256 revocable** (access 15 min / refresh 7 días), **MFA TOTP** RFC 6238 |
+| **AuthZ** | **RBAC granular**: `Admin · Médico · Enfermero · Viewer · Soporte` — middleware `require_role!` |
+| **Cifrado** | **ChaCha20-Poly1305**, secretos en memoria con **zeroize** |
+| **Auditoría WORM** | Log inmutable con **SHA-256 encadenado + lotes firmados**, retención **6 años** |
+| **Web Push** | **VAPID** real (RFC 8292) para notificaciones del navegador (SPEC-052) |
+| **FW defensivo** | Rate limit por IP, login throttling, HSTS, CSP, sanitización, CORS estricto |
+| **SBOM/SLSA** itoría** | Log inmutable **WORM** con cadena + lotes firmados (SPEC-049), retención 6 años |
+| **Web Push** | VAPID (RFC 8292) + VAPID JWT firmado (SPEC-052) |
+| **Hardening** | Rate limiting por IP, login throttle, HSTS, CSP, sanitización HTML/SQL, CORS estricto |
 
 ---
 
-## Arquitectura
+## 🧱 Arquitectura
 
 ```
 dmart/
-├─ dmart-shared/   # Modelos, escalas clínicas, validación, ML (DecisionTree)
-├─ dmart-server/   # Axum API · auth/RBAC · HL7+MLLP/MQTT · FHIR R4 · auditoría
-│  ├─ hl7/         #   Parser ORU^R01 · MLLP framer · ingest · MQTT client
-│  ├─ fhir_bundle/ #   Bundle R4 parser + conversión LOINC→VitalsMessage
-│  ├─ ews_stream/  #   Early-Warning Streaming (NEWS2/Apache/SOFA → SSE)
-│  ├─ migrations/  #   SurrealQL versionado (DMART_001..)
+├─ dmart-shared/   # Modelos, escalas clínicas, validación, ML (DecisionTree/Ensemble/LOS-NN)
+├─ dmart-server/   # Axum API · auth/RBAC · HL7+MLLP/MQTT · FHIR R4 · auditoría WORM
+│  ├─ hl7/         #   Parser ORU^R01 · MLLP framing · ingest HL7 v2
+│  ├─ api/         #   flags · versioning · push · ml · rbac · versionado
+│  ├─ migrations/  #   SurrealQL versionado (DMART_001…049)
 │  └─ fuzz/        #   cargo-fuzz (json, hl7, scales)
-├─ dmart-app/      # Frontend Leptos/WASM (PWA, Tailwind, Service Worker)
-├─ specs/          # Spec-Driven Development (SPEC-001…031+)
-├─ tests/          # E2E (Playwright) · load (k6)
-└─ docs/           # ADR · API · APACHE_II · GCS
+├─ dmart-app/      # Frontend Leptos/WASM (PWA offline, Service Worker, Web Push)
+├─ specs/          # Spec-Driven Development (SPEC-001…052)
+└─ docs/           # API · ADR · compliance (HIPAA/HITRUST/ISO)
 ```
 
-**Características de runtime:**
-- **Single binary** (~8 MB release) — `dmart-server` incluye todo: API, DB, HL7, FHIR, métricas
-- **SurrealKV embebido** — sin proceso externo, ACID, consultas SQL-like
-- **Hot-reload dev** — `cargo watch` + `trunk serve` para backend/frontend simultáneo
-- **Observabilidad nativa** — Prometheus `/metrics`, health `/obs/health`, tracing structured JSON
+**Runtime:**
+- **Single binary** — sin procesos externos obligatorios (SurrealKV embebido)
+- **SurrealDB** con `surrealkv` (DB embebida) y modo Docker/HA con migraciones versionadas
+- **Hot-reload dev** — `cargo watch` + `trunk serve`
+- **Observabilidad** — Prometheus `/metrics`, health endpoint, tracing JSON
 
 ---
 
-## Inicio rápido
+## 🚀 Inicio rápido
 
-### Prerrequisitos
-- **Rust 1.98+** (`rustup default 1.98`)
-- Target WASM: `rustup target add wasm32-unknown-unknown`
-- Frontend dev: `cargo install trunk --locked`
-
-### Desarrollo local
 ```bash
+# Requisitos
+rustup default 1.84
+rustup target add wasm32-unknown-unknown
+cargo install trunk --locked
+
 # Terminal 1 — Backend (puerto 3030)
-cd dmart-server
-cargo run --release
+cd dmart-server && cargo run --release
 
 # Terminal 2 — Frontend (puerto 8080, proxy a 3030)
-cd dmart-app
-trunk serve --open --port 8080
+cd dmart-app && trunk serve --open --port 8080
 ```
 
-### Tests y gates de calidad
+### Tests y calidad
+
 ```bash
-# Suite completa (lib + bin + integración)
-cargo test -p dmart-server
+# Gate rápido (lib + HL7 + contract) — ~15 s, sin build WASM
+cargo test -p dmart-server --test api_tests --test hl7_integration
 
-# Formato + clippy estricto (gate CI)
-cargo fmt --all -- --check
-cargo clippy -p dmart-server --lib --bin dmart-server -- -D warnings
-
-# Cobertura (SPEC-027: ≥ 60 % global)
-cargo llvm-cov -p dmart-server --lib --test api_tests --test hl7_integration
-```
-
-### Docker (producción)
-```bash
-# Build multi-stage (builder + runtime distroless)
-docker compose -f docker-compose.prod.yml up -d --build
-
-# Health checks
-curl -f http://localhost:3030/obs/health
+# Suites individuales
+cargo test -p dmart-server --lib                 # 104 verdes
+cargo test -p dmart-server --test contract_tests # 8 verdes
+cargo llvm-cov -p dmart-server --lib --test api_tests   # cobertura
 ```
 
 ---
 
-## Estado del proyecto — Spec-Driven Development
-
-### SPECs completadas — **gate `clippy -D warnings` = 0/0 (lib + bin) + tests verdes**
-
-| SPEC | Tema | Commit | Tests | Gate |
-|------|------|--------|-------|------|
-| 001 | Fix WASM build | — | — | ✅ |
-| 002 | ML model persistence | — | — | ✅ |
-| 003 | HL7 MLLP integration tests | — | 32 | ✅ |
-| 004 | Auth/AuthZ hardening (JWT, MFA, RBAC) | — | 31 | ✅ |
-| 005 | Prometheus/Grafana | — | — | ✅ |
-| 006 | Docker multistage staging | — | — | ✅ |
-| 007 | CI pipeline completo | — | — | ✅ |
-| 008 | Alertas operativas | — | — | ✅ |
-| 009 | Backup automático | — | — | ✅ |
-| **010** | **Restore / Disaster Recovery** | `c662e1e` | 3 | 0/0 |
-| **011** | **Runbook / On-Call operativo** | `c662e1e` | 2 | 0/0 |
-| 012 | Production staging compose | — | — | ✅ |
-| **013** | **FHIR R4 Bundle ingestion** | `5143791` | 4 | 0/0 |
-| **014** | **Early-Warning Streaming (EWS)** | `5143791` | 4 | 0/0 |
-| **015** | **Patient Timeline API (event sourcing)** | `—` | 5 | 0/0 |
-| **016** | **Clinical Decision Support (FHIR PlanDefinition)** | `—` | 4 | 0/0 |
-| **017** | **Device Registry** | `—` | 15 | 0/0 |
-| **018** | **Data Quality (vital validation)** | `—` | 13 | 0/0 |
-| **019** | **Alert Escalation** | `—` | 7 | 0/0 |
-| **020** | **Tele-ICU** | `—` | 8 | 0/0 |
-| 027 | Coverage gate CI (llvm-cov ≥ 60 %) | — | — | ✅ |
-| 028 | Clinical reference vectors (conformance) | — | 38 | ✅ |
-| **029** | **Score fingerprint auditability** | `—` | 6 | 0/0 |
-| **030** | **Retention / downsampling** | `—` | 4 | 0/0 |
-| **031** | **Bin/lib HL7 dedupe → 0 dead-code** | `bfecaf0` | 63 | 0/0 |
-| **021** | **Kubernetes Helm Chart (HA production)** | `81101b5` | — | ✅ |
-| **022** | **GitOps ArgoCD/Flux (sync main→prod)** | `81101b5` | — | ✅ |
-| **023** | **SurrealDB Cluster (3+ nodos, HA)** | `81101b5` | — | ✅ |
-| **024** | **Disaster Recovery (RPO<1h, RTO<4h)** | `81101b5` | 3 | 0/0 |
-| **025** | **Multi-tenancy (aislamiento de datos)** | `81101b5` | 3 | 0/0 |
-| **026** | **Blue/Green + Canary Deploy** | `81101b5` | — | ✅ |
-| **032** | **ML Serving ONNX/WASM (inferencia)** | `81101b5` | 5 | 0/0 |
-| **033** | **Patient Similarity Engine** | `81101b5` | 3 | 0/0 |
-| **034** | **HIPAA/NIST/ISO 27001 Evidence Pack** | `81101b5` | — | ✅ |
-| **035** | **Cost Optimization (right-sizing)** | `81101b5` | — | ✅ |
-
-**Métricas globales:** **210 tests** pasando (82 lib + 128 integración) · `clippy -D warnings` = **0/0** (lib + bin) · coverage **65 %** (SPEC-027) · SPECs 001–035 **todas completadas** ✅
-
-### Backlog pendiente
-
-Ninguna pendiente — **SPECs 001–035 completadas** (2026-09-16).
-
----
-
-## Documentación
+## 📚 Documentación
 
 - [roadmapFinal.md](roadmapFinal.md) — Plan de fases y hitos
 - [CHANGELOG.md](CHANGELOG.md) — Historial de versiones (conventional commits)
-- [specs/](specs/) — Especificaciones SDD con criterios Gherkin
+- [specs/](specs/) — Especificaciones SDD (SPEC-001…052)
 - [docs/ADR.md](docs/ADR.md) — Architecture Decision Records
 - [docs/API.md](docs/API.md) — Endpoints REST + FHIR + WebSocket
 
 ---
 
-## Contribución
+## 📊 Cobertura
+
+**SPEC-027** exige coverage global **≥ 60 %** en el server (lib + bin). El gate de CI lo verifica con `cargo llvm-cov`. Módulos protegidos (ML, HL7, seguridad, auditoría, escalamiento, RBAC) tienen requisitos de cobertura por fichero.
+
+---
+
+## 🤝 Contribución
 
 1. Lee [roadmapFinal.md](roadmapFinal.md) y elige una SPEC pendiente
 2. Abre issue con la especificación (formato Gherkin en `specs/`)
@@ -187,7 +154,7 @@ Ninguna pendiente — **SPECs 001–035 completadas** (2026-09-16).
 
 ---
 
-## Licencia
+## 📜 Licencia
 
 **MIT** — Copyright © 2026 · [rooselvelt6](https://github.com/rooselvelt6)
 
@@ -195,7 +162,7 @@ Ninguna pendiente — **SPECs 001–035 completadas** (2026-09-16).
 
 <div align="center">
 
-**dMart UCI** — Un solo binario para una UCI completa.  
+**dMart UCI** — Un solo binario para una UCI completa.
 Hecho con ❤️ y Rust.
 
 </div>

@@ -3,5 +3,12 @@ target = "index.html"
 dist = "../dist"
 minify = "never"
 
+# El SW (PWA) hace que los preloads inyectados por Trunk no se reutilicen y
+# generen avisos en consola (cross-world SW mismatch). Se eliminan del HTML final.
+[[hooks]]
+stage = "post_build"
+command = "sh"
+command_arguments = ["-c", "perl -pi -e 's/<link rel=\"modulepreload\"[^>]*>//g; s/<link rel=\"preload\"[^>]*type=\"application\\/wasm\"[^>]*>//g' \"$TRUNK_STAGING_DIR/index.html\""]
+
 [[proxy]]
 backend = "http://127.0.0.1:3000/api"

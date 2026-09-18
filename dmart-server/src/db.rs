@@ -291,7 +291,9 @@ pub async fn create_patient_with_assignments(
                 UPDATE type::thing('equipos', $e) SET cama_id = $cama_id;
             };
         };
-LET $created = CREATE type::thing('patients', $pid) CONTENT $patient RETURN AFTER;
+        LET $patient = $patient;
+        $patient.patient_id = $pid;
+        LET $created = CREATE type::thing('patients', $pid) CONTENT $patient RETURN AFTER;
         COMMIT TRANSACTION;
         RETURN $created;
     "#;

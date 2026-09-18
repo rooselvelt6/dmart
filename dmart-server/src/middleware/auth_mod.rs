@@ -51,7 +51,10 @@ pub async fn auth_middleware(
 
     let token = match auth_header.and_then(extract_token_from_header) {
         Some(t) => Some(t.to_string()),
-        None if path.starts_with("/realtime") || path.starts_with("/monitores") => {
+        None if path.starts_with("/realtime")
+            || path.starts_with("/monitores")
+            || path.contains("/export/") =>
+        {
             request.uri().query().and_then(|q| {
                 q.split('&')
                     .find_map(|kv| kv.strip_prefix("token=").map(str::to_string))
