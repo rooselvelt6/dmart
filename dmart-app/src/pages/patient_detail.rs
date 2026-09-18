@@ -113,10 +113,10 @@ pub fn PatientDetailPage() -> impl IntoView {
                                             <a href=format!("/patients/{}/edit", p.patient_id) class="btn-outline p-2" title="Editar">
                                                 <i class="fa-solid fa-pen"></i>
                                             </a>
-                                            <a href=format!("/api/patients/{}/export/pdf", p.patient_id) target="_blank" class="btn-outline px-4 py-3" title="PDF">
+                                            <a href=api::export_pdf_url(&p.patient_id) target="_blank" class="btn-outline px-4 py-3" title="PDF">
                                                 <i class="fa-solid fa-file-pdf mr-2"></i>"PDF"
                                             </a>
-                                            <a href=format!("/api/patients/{}/export/csv", p.patient_id) class="btn-outline px-4 py-3" title="CSV">
+                                            <a href=api::export_csv_url(&p.patient_id) class="btn-outline px-4 py-3" title="CSV">
                                                 <i class="fa-solid fa-file-csv mr-2"></i>"CSV"
                                             </a>
                                             {if p.fecha_egreso_uci.is_empty() {
