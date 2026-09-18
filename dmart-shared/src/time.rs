@@ -15,17 +15,14 @@ pub fn now_rfc3339() -> String {
         // Fallback if toISOString fails
         let secs = (now / 1000.0) as i64;
         let millis = (now % 1000.0) as u32;
-        format!("{}.{:03}Z", 
-            chrono_fallback::format_utc(secs), 
-            millis
-        )
+        format!("{}.{:03}Z", chrono_fallback::format_utc(secs), millis)
     })
 }
 
 #[cfg(target_arch = "wasm32")]
 pub fn now_date_string() -> String {
     use js_sys::Date;
-    let now = Date::new(&wasm_bindgen::JsValue::from_f64(Date::now()));
+    let date = Date::new(&wasm_bindgen::JsValue::from_f64(Date::now()));
     let year = date.get_utc_full_year();
     let month = date.get_utc_month() + 1;
     let day = date.get_utc_date();
@@ -44,18 +41,23 @@ mod chrono_fallback {
         // Minimal UTC formatting without chrono
         let days = secs / 86400;
         let secs_of_day = secs % 86400;
-        if secs_of_day < 0 { return "1970-01-01T00:00:00".to_string(); }
-        
+        if secs_of_day < 0 {
+            return "1970-01-01T00:00:00".to_string();
+        }
+
         let hours = secs_of_day / 3600;
         let mins = (secs_of_day % 3600) / 60;
         let secs = secs_of_day % 60;
-        
+
         // Very rough date calculation (good enough for fallback)
         let year = 1970 + (days / 365) as i64;
         let day_of_year = days % 365;
         let month = (day_of_year / 30) + 1;
         let day = (day_of_year % 30) + 1;
-        
-        format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", year, month, day, hours, mins, secs)
+
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
+            year, month, day, hours, mins, secs
+        )
     }
 }
