@@ -1,0 +1,123 @@
+name: Release Image — SBOM + Firma + Provenance (SPEC-048)
+
+# Se dispara al empujar un tag vX.Y.Z (o manual con un tag existente).
+# Publica la imagen en GHCR, genera SBOM CycloneDX, firma keyless con cosign
+# y emite attestation de provenance SLSA build level 2. No usa credenciales
+# de larga vida: solo GITHUB_TOKEN + OIDC.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag existente a publicar/firmar (ej. v1.0.0)'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  RUST_VERSION: "1.98"
+  IMAGE: ghcr.io/ucigtm/dmart-server
+
+jobs:
+  image:
+    name: Build, sign & attest image
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine release tag
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          case "$tag" in
+            v*) ;;
+            *) echo "❌ tag inválido: '$tag' (debe empezar por v)"; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Publicando ${{ env.IMAGE }}:$tag"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-stage image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.ver.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate image SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: image.sbom.cdx.json
+          artifact-name: dmart-server-image-sbom
+
+      - name: Verify SBOM non-empty
+        run: |
+          set -euo pipefail
+          test -s image.sbom.cdx.json || { echo "❌ SBOM vacío"; exit 1; }
+          echo "✅ SBOM $(stat -c%s image.sbom.cdx.json) bytes"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image (keyless)
+        run: |
+          set -euo pipefail
+          cosign sign --yes \
+            "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+
+      - name: Attest SBOM (CycloneDX)
+        run: |
+          set -euo pipefail
+          cosign attest --yes \
+            --predicate image.sbom.cdx.json \
+            --type cyclonedx \
+            "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+
+      - name: Emit SLSA build provenance (level 2)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Summary
+        run: |
+          {
+            echo "## Imagen firmada ${{ env.IMAGE }}:${{ steps.ver.outputs.tag }}"
+            echo ""
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- SBOM: \`image.sbom.cdx.json\` (CycloneDX) + attestation"
+            echo "- Firma: cosign keyless (Fulcio/Rekor)"
+            echo "- Provenance: SLSA build level 2 (\`actions/attest-build-provenance\`)"
+            echo ""
+            echo "Verificar: \`scripts/verify-image.sh ${{ env.IMAGE }}:${{ steps.ver.outputs.tag }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

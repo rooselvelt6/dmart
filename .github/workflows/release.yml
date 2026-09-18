@@ -20,6 +20,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   RUST_VERSION: "1.98"
@@ -116,6 +118,19 @@ jobs:
       - name: Build backend (release)
         run: cargo build --release -p dmart-server
 
+      - name: Generate binary SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: target/release/dmart-server
+          format: cyclonedx-json
+          output-file: dmart-server.sbom.cdx.json
+          artifact-name: dmart-server-binary-sbom
+
+      - name: Attest build provenance (SLSA level 2)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: target/release/dmart-server
+
       # ── Frontend (trunk + wasm-opt) ──────────────────────────
       - name: Install trunk
         uses: taiki-e/install-action@v2
@@ -168,6 +183,7 @@ jobs:
           generate_release_notes: false
           files: |
             target/release/dmart-server
+            dmart-server.sbom.cdx.json
             dist/**
 
       - name: Summary
