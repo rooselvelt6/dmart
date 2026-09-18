@@ -46,6 +46,24 @@ fn authed_delete(url: &str) -> gloo_net::http::RequestBuilder {
     }
 }
 
+/// Limpia sesión local y redirige a login si el servidor responde 401/403.
+async fn check_auth_response<T>(resp: gloo_net::http::Response, err_ctx: &str) -> Result<ApiResponse<T>, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    if resp.status() == 401 || resp.status() == 403 {
+        crate::stores::session::clear_session();
+        let window = web_sys::window().expect("window");
+        let _ = window.location().set_href("/login");
+        return Err("Sesión expirada".into());
+    }
+    let api_resp: ApiResponse<T> = resp
+        .json()
+        .await
+        .map_err(|e| format!("{}: {}", err_ctx, e))?;
+    Ok(api_resp)
+}
+
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
 pub async fn login(username: &str, password: &str) -> ApiResult<LoginResponse> {
@@ -64,39 +82,34 @@ pub async fn login(username: &str, password: &str) -> ApiResult<LoginResponse> {
 
 /// Identidad del usuario autenticado (rol, nombre, ...).
 pub async fn me() -> ApiResult<UserInfo> {
-    let resp: ApiResponse<UserInfo> = authed_get(&format!("{}/auth/me", API_BASE))
+    let resp = authed_get(&format!("{}/auth/me", API_BASE))
         .send()
         .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
         .map_err(|e| e.to_string())?;
-    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+    let api_resp = check_auth_response::<UserInfo>(resp, "me").await?;
+    api_resp.data.ok_or_else(|| api_resp.error.unwrap_or_default())
 }
 
 /// Renueva el access token usando la cookie httpOnly del refresh token.
 pub async fn refresh_session() -> ApiResult<LoginResponse> {
-    let resp: ApiResponse<LoginResponse> = Request::post(&format!("{}/auth/refresh", API_BASE))
+    let resp = Request::post(&format!("{}/auth/refresh", API_BASE))
         .credentials(RequestCredentials::Include)
         .send()
         .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
         .map_err(|e| e.to_string())?;
-    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+    let api_resp = check_auth_response::<LoginResponse>(resp, "refresh").await?;
+    api_resp.data.ok_or_else(|| api_resp.error.unwrap_or_default())
 }
 
 /// Cierre de sesión real: revoca tokens en servidor y limpia la cookie.
 pub async fn logout() -> ApiResult<()> {
-    let _: ApiResponse<()> = authed_post(&format!("{}/auth/logout", API_BASE))
+    let resp = authed_post(&format!("{}/auth/logout", API_BASE))
         .credentials(RequestCredentials::Include)
         .send()
         .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
         .map_err(|e| e.to_string())?;
+    let _ = check_auth_response::<()>(resp, "logout").await;
+    crate::stores::session::clear_session();
     Ok(())
 }
 
