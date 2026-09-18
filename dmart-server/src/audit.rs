@@ -7,15 +7,107 @@
 #![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use sha2::{Digest, Sha256};
+use std::sync::{Mutex, OnceLock};
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use uuid::Uuid;
 
 pub const AUDIT_RETENTION_YEARS: i64 = 6;
 
+/// Hash génesis de la cadena de auditoría (64 ceros = SHA-256 vacío lógico).
+pub const AUDIT_GENESIS_HASH: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+
+/// Máximo de eventos por lote firmado (WORM, SPEC-048/3.8).
+pub const AUDIT_BATCH_MAX: usize = 1000;
+
+type HmacSha256 = Hmac<Sha256>;
+
 static GLOBAL_AUDIT: OnceLock<AuditService> = OnceLock::new();
+static AUDIT_CHAIN: OnceLock<Mutex<ChainState>> = OnceLock::new();
+
+/// Estado en memoria de la cadena de auditoría (se rehidrata en `init_chain`).
+#[derive(Debug, Clone)]
+pub struct ChainState {
+    pub last_hash: String,
+    pub tip_batch_hash: String,
+    pub initialized: bool,
+}
+
+fn chain() -> &'static Mutex<ChainState> {
+    AUDIT_CHAIN.get_or_init(|| {
+        Mutex::new(ChainState {
+            last_hash: AUDIT_GENESIS_HASH.to_string(),
+            tip_batch_hash: AUDIT_GENESIS_HASH.to_string(),
+            initialized: false,
+        })
+    })
+}
+
+fn to_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        let _ = write!(out, "{:02x}", b);
+    }
+    out
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    to_hex(&Sha256::digest(data))
+}
+
+fn audit_signing_key() -> [u8; 32] {
+    let secret = std::env::var("DMART_AUDIT_HMAC_KEY")
+        .or_else(|_| std::env::var("DMART_MASTER_KEY"))
+        .unwrap_or_else(|_| "dmart-dev-audit-hmac-key-000000000000".to_string());
+    Sha256::digest(secret.as_bytes()).into()
+}
+
+fn hmac_sign(message: &str) -> String {
+    let mut mac = HmacSha256::new_from_slice(&audit_signing_key())
+        .expect("HMAC acepta claves de cualquier longitud");
+    mac.update(message.as_bytes());
+    to_hex(&mac.finalize().into_bytes())
+}
+
+fn opt_marker(value: &Option<String>) -> String {
+    value.clone().unwrap_or_else(|| "-".to_string())
+}
+
+/// Representación canónica y determinista de un evento (orden fijo de campos).
+fn canonical_log_payload(log: &AuditLog) -> String {
+    format!(
+        "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+        log.uid,
+        log.timestamp,
+        log.action.as_str(),
+        log.resource,
+        opt_marker(&log.resource_id),
+        opt_marker(&log.user_id),
+        opt_marker(&log.username),
+        opt_marker(&log.details),
+        opt_marker(&log.ip_address),
+        opt_marker(&log.user_agent),
+        log.success,
+        opt_marker(&log.error_message),
+    )
+}
+
+fn compute_content_hash(log: &AuditLog, prev_hash: &str) -> String {
+    sha256_hex(format!("{}|{}", prev_hash, canonical_log_payload(log)).as_bytes())
+}
+
+/// Hash efectivo para sellado (usa el almacenado o lo deriva para registros legados).
+fn effective_content_hash(log: &AuditLog) -> String {
+    match &log.content_hash {
+        Some(h) => h.clone(),
+        None => sha256_hex(canonical_log_payload(log).as_bytes()),
+    }
+}
 
 pub fn init_global_audit(db: Surreal<Db>) {
     let _ = GLOBAL_AUDIT.set(AuditService::new(db));
@@ -25,7 +117,7 @@ pub fn audit() -> Option<&'static AuditService> {
     GLOBAL_AUDIT.get()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct AuditLog {
     pub uid: String,
     pub timestamp: String,
@@ -39,9 +131,56 @@ pub struct AuditLog {
     pub user_agent: Option<String>,
     pub success: bool,
     pub error_message: Option<String>,
+    /// Hash del evento anterior en la cadena (WORM, SPEC-048/3.8).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prev_hash: Option<String>,
+    /// SHA-256 canónico del evento encadenado a `prev_hash`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Lote de eventos de auditoría sellado e inmutable (WORM).
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct AuditBatch {
+    pub batch_id: String,
+    pub sequence: u64,
+    pub first_uid: String,
+    pub last_uid: String,
+    pub count: u64,
+    pub first_ts: String,
+    pub last_ts: String,
+    pub prev_batch_hash: String,
+    pub batch_hash: String,
+    pub signature: String,
+    pub created_at: String,
+}
+
+/// Resultado de la verificación de integridad de la cadena de auditoría.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IntegrityReport {
+    pub logs_total: usize,
+    pub logs_hashed: usize,
+    pub logs_valid: usize,
+    pub logs_unhashed: usize,
+    pub batches_total: usize,
+    pub signatures_valid: usize,
+    pub chain_valid: bool,
+    pub head_batch_hash: String,
+    pub sealable_logs: usize,
+    pub ok: bool,
+}
+
+/// Export de lectura para auditoría externa (logs + lotes firmados).
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct AuditExport {
+    pub generated_at: String,
+    pub retention_years: i64,
+    pub head_batch_hash: String,
+    pub logs: Vec<AuditLog>,
+    pub batches: Vec<AuditBatch>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum AuditAction {
     Login,
     Logout,
@@ -162,7 +301,12 @@ impl AuditService {
         success: bool,
         error_message: Option<&str>,
     ) -> Result<AuditLog, String> {
-        let log = AuditLog {
+        let prev_hash = {
+            let guard = chain().lock().expect("audit chain lock");
+            guard.last_hash.clone()
+        };
+
+        let mut log = AuditLog {
             uid: Uuid::new_v4().to_string(),
             timestamp: Utc::now().to_rfc3339(),
             user_id: user_id.map(String::from),
@@ -175,7 +319,17 @@ impl AuditService {
             user_agent: user_agent.map(String::from),
             success,
             error_message: error_message.map(String::from),
+            prev_hash: Some(prev_hash.clone()),
+            content_hash: None,
         };
+        let content = compute_content_hash(&log, &prev_hash);
+        log.content_hash = Some(content.clone());
+
+        {
+            let mut guard = chain().lock().expect("audit chain lock");
+            guard.last_hash = content.clone();
+            guard.initialized = true;
+        }
 
         let created: Option<AuditLog> = self
             .db
@@ -183,6 +337,10 @@ impl AuditService {
             .content(log)
             .await
             .map_err(|e| {
+                let mut guard = chain().lock().expect("audit chain lock");
+                if guard.last_hash == content {
+                    guard.last_hash = prev_hash.clone();
+                }
                 crate::support::note("audit", false);
                 e.to_string()
             })?;
@@ -501,6 +659,239 @@ impl AuditService {
         }
         Ok(to_delete)
     }
+
+    /// Rehidrata la cadena desde la BD (último evento + último lote sellado).
+    pub async fn init_chain(&self) {
+        let last_logs: Vec<AuditLog> = self
+            .db
+            .query("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 1")
+            .await
+            .ok()
+            .and_then(|mut r| r.take(0).ok())
+            .unwrap_or_default();
+        let last_batches: Vec<AuditBatch> = self
+            .db
+            .query("SELECT * FROM audit_batches ORDER BY sequence DESC LIMIT 1")
+            .await
+            .ok()
+            .and_then(|mut r| r.take(0).ok())
+            .unwrap_or_default();
+
+        let mut guard = chain().lock().expect("audit chain lock");
+        if let Some(h) = last_logs.first().and_then(|l| l.content_hash.clone()) {
+            guard.last_hash = h;
+        }
+        if let Some(b) = last_batches.first() {
+            guard.tip_batch_hash = b.batch_hash.clone();
+        }
+        guard.initialized = true;
+    }
+
+    async fn last_batch(&self) -> Result<Option<AuditBatch>, String> {
+        let batches: Vec<AuditBatch> = self
+            .db
+            .query("SELECT * FROM audit_batches ORDER BY sequence DESC LIMIT 1")
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+        Ok(batches.into_iter().next())
+    }
+
+    /// Sella un lote inmutable con encadenamiento y firma HMAC-SHA256.
+    pub async fn seal_batch(&self, limit: usize) -> Result<Option<AuditBatch>, String> {
+        let limit = limit.clamp(1, AUDIT_BATCH_MAX);
+        let prev = self.last_batch().await?;
+        let (prev_seq, prev_hash, after_ts) = match &prev {
+            Some(b) => (b.sequence, b.batch_hash.clone(), b.last_ts.clone()),
+            None => (0u64, AUDIT_GENESIS_HASH.to_string(), String::new()),
+        };
+
+        let logs: Vec<AuditLog> = if after_ts.is_empty() {
+            self.db
+                .query("SELECT * FROM audit_logs ORDER BY timestamp ASC LIMIT $limit")
+                .bind(("limit", limit as i64))
+                .await
+                .map_err(|e| e.to_string())?
+                .take(0)
+                .map_err(|e| e.to_string())?
+        } else {
+            self.db
+                .query("SELECT * FROM audit_logs WHERE timestamp > $after ORDER BY timestamp ASC LIMIT $limit")
+                .bind(("after", after_ts.clone()))
+                .bind(("limit", limit as i64))
+                .await
+                .map_err(|e| e.to_string())?
+                .take(0)
+                .map_err(|e| e.to_string())?
+        };
+        if logs.is_empty() {
+            return Ok(None);
+        }
+
+        let first = logs.first().expect("no vacío");
+        let last = logs.last().expect("no vacío");
+        let concat: String = logs.iter().map(effective_content_hash).collect();
+        let sequence = prev_seq + 1;
+        let material = format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}",
+            prev_hash,
+            sequence,
+            logs.len(),
+            first.uid,
+            last.uid,
+            first.timestamp,
+            last.timestamp,
+            concat,
+        );
+        let batch_hash = sha256_hex(material.as_bytes());
+        let signature = hmac_sign(&batch_hash);
+        let batch = AuditBatch {
+            batch_id: Uuid::new_v4().to_string(),
+            sequence,
+            first_uid: first.uid.clone(),
+            last_uid: last.uid.clone(),
+            count: logs.len() as u64,
+            first_ts: first.timestamp.clone(),
+            last_ts: last.timestamp.clone(),
+            prev_batch_hash: prev_hash,
+            batch_hash: batch_hash.clone(),
+            signature,
+            created_at: Utc::now().to_rfc3339(),
+        };
+
+        let _: Option<AuditBatch> = self
+            .db
+            .create(("audit_batches", batch.batch_id.clone()))
+            .content(batch.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+
+        {
+            let mut guard = chain().lock().expect("audit chain lock");
+            guard.tip_batch_hash = batch_hash;
+        }
+        crate::support::note("audit", true);
+        Ok(Some(batch))
+    }
+
+    /// Verifica integridad de la cadena de eventos, lotes y firmas.
+    pub async fn verify_integrity(&self) -> Result<IntegrityReport, String> {
+        let logs: Vec<AuditLog> = self
+            .db
+            .query("SELECT * FROM audit_logs ORDER BY timestamp ASC")
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+        let batches: Vec<AuditBatch> = self
+            .db
+            .query("SELECT * FROM audit_batches ORDER BY sequence ASC")
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+
+        let mut logs_hashed = 0usize;
+        let mut logs_valid = 0usize;
+        let mut logs_unhashed = 0usize;
+        let mut expected_prev = AUDIT_GENESIS_HASH.to_string();
+        let mut prev_was_hashed = false;
+        let mut chain_valid = true;
+        for log in &logs {
+            match &log.content_hash {
+                Some(stored) => {
+                    let prev = log.prev_hash.as_deref().unwrap_or(AUDIT_GENESIS_HASH);
+                    let recomputed = compute_content_hash(log, prev);
+                    logs_hashed += 1;
+                    if &recomputed == stored {
+                        logs_valid += 1;
+                    } else {
+                        chain_valid = false;
+                    }
+                    if prev_was_hashed && prev != expected_prev {
+                        chain_valid = false;
+                    }
+                    expected_prev = stored.clone();
+                    prev_was_hashed = true;
+                }
+                None => {
+                    logs_unhashed += 1;
+                    prev_was_hashed = false;
+                }
+            }
+        }
+
+        let mut signatures_valid = 0usize;
+        let mut prev_batch_hash = AUDIT_GENESIS_HASH.to_string();
+        for batch in &batches {
+            if batch.prev_batch_hash == prev_batch_hash
+                && hmac_sign(&batch.batch_hash) == batch.signature
+            {
+                signatures_valid += 1;
+            } else {
+                chain_valid = false;
+            }
+            prev_batch_hash = batch.batch_hash.clone();
+        }
+
+        let sealed: u64 = batches.iter().map(|b| b.count).sum();
+        let sealable_logs = (logs.len() as u64).saturating_sub(sealed) as usize;
+        let head_batch_hash = batches
+            .last()
+            .map(|b| b.batch_hash.clone())
+            .unwrap_or_else(|| AUDIT_GENESIS_HASH.to_string());
+        let ok = chain_valid
+            && logs_valid == logs_total_hashed(&logs)
+            && signatures_valid == batches.len();
+
+        Ok(IntegrityReport {
+            logs_total: logs.len(),
+            logs_hashed,
+            logs_valid,
+            logs_unhashed,
+            batches_total: batches.len(),
+            signatures_valid,
+            chain_valid,
+            head_batch_hash,
+            sealable_logs,
+            ok,
+        })
+    }
+
+    /// Export de lectura (logs + lotes firmados) para verificación externa.
+    pub async fn export(&self, limit: usize) -> Result<AuditExport, String> {
+        let logs: Vec<AuditLog> = self
+            .db
+            .query("SELECT * FROM audit_logs ORDER BY timestamp ASC LIMIT $limit")
+            .bind(("limit", limit as i64))
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+        let batches: Vec<AuditBatch> = self
+            .db
+            .query("SELECT * FROM audit_batches ORDER BY sequence ASC")
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+        let head_batch_hash = batches
+            .last()
+            .map(|b| b.batch_hash.clone())
+            .unwrap_or_else(|| AUDIT_GENESIS_HASH.to_string());
+        Ok(AuditExport {
+            generated_at: Utc::now().to_rfc3339(),
+            retention_years: AUDIT_RETENTION_YEARS,
+            head_batch_hash,
+            logs,
+            batches,
+        })
+    }
+}
+
+fn logs_total_hashed(logs: &[AuditLog]) -> usize {
+    logs.iter().filter(|l| l.content_hash.is_some()).count()
 }
 
 pub mod macros {

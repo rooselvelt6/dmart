@@ -539,6 +539,39 @@ pub async fn run_audit_retention_cleanup() -> ApiResult<RetentionResponse> {
     })))
 }
 
+/// Sella un lote de eventos de auditoría con cadena + firma HMAC (WORM, tarea 3.8).
+pub async fn seal_audit_batch() -> ApiResult<Option<crate::audit::AuditBatch>> {
+    let service = audit_service()?;
+    let batch = service
+        .seal_batch(crate::audit::AUDIT_BATCH_MAX)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(ApiResponse::ok(batch)))
+}
+
+/// Verifica integridad de la cadena de auditoría (firma + encadenamiento).
+pub async fn verify_audit_chain() -> ApiResult<crate::audit::IntegrityReport> {
+    let service = audit_service()?;
+    let report = service
+        .verify_integrity()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(ApiResponse::ok(report)))
+}
+
+/// Export de lectura de auditoría para verificación externa (logs + lotes).
+pub async fn export_audit(
+    Query(params): Query<AuditQueryParams>,
+) -> ApiResult<crate::audit::AuditExport> {
+    let service = audit_service()?;
+    let limit = params.limit.unwrap_or(1000).min(10_000);
+    let export = service
+        .export(limit)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(ApiResponse::ok(export)))
+}
+
 // ─── Asignar paciente a cama (para registro de paciente) ───────────
 
 pub async fn check_camas_disponibles(State(db): State<Database>) -> ApiResult<CheckCamasResponse> {

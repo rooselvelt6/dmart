@@ -222,7 +222,11 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
             };
         }
         if path.starts_with("/admin/audit") {
-            return Some("audit:read");
+            return match m.as_str() {
+                "GET" => Some("audit:read"),
+                "POST" | "PUT" | "DELETE" => Some("audit:act"),
+                _ => None,
+            };
         }
         if path.starts_with("/admin/camas") {
             return match m.as_str() {

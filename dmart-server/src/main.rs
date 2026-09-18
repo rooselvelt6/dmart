@@ -89,6 +89,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize audit service
     audit::init_global_audit((*database).clone());
+    if let Some(audit) = audit::audit() {
+        audit.init_chain().await;
+    }
 
     // Seed default admin user if no users exist
     auth::seed_default_admin(&database).await?;

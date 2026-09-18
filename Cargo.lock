@@ -2036,6 +2036,7 @@ dependencies = [
  "dmart-shared",
  "dotenvy",
  "futures-util",
+ "hmac",
  "http-body-util",
  "image",
  "jsonwebtoken",

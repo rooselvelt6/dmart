@@ -1761,6 +1761,8 @@ async fn test_e2e_audit_retention_cleanup_deletes_old_logs() {
         user_agent: None,
         success: true,
         error_message: None,
+        prev_hash: None,
+        content_hash: None,
     };
     let _: Option<AuditLog> = db
         .create(("audit_logs", old.uid.clone()))
@@ -2561,4 +2563,62 @@ async fn test_e2e_support_model_swap_action() {
     assert_eq!(s, StatusCode::OK, "swap del modelo por defecto");
     assert_eq!(json["data"]["success"], true);
     assert_eq!(json["data"]["details"]["model"], "ews");
+}
+
+#[tokio::test]
+async fn test_audit_worm_chain_seal_and_verify() {
+    use dmart_server::audit::{AUDIT_GENESIS_HASH, AuditAction, AuditService};
+
+    let (db, _dir) = test_db().await;
+    let service = AuditService::new(db.clone());
+
+    for i in 0..5 {
+        service
+            .log(
+                AuditAction::Read,
+                "patients",
+                Some(&format!("p{i}")),
+                Some("u1"),
+                Some("admin"),
+                None,
+                None,
+                None,
+                true,
+                None,
+            )
+            .await
+            .expect("log");
+    }
+
+    let batch = service
+        .seal_batch(1000)
+        .await
+        .expect("seal")
+        .expect("algún lote");
+    assert_eq!(batch.sequence, 1);
+    assert_eq!(batch.count, 5);
+    assert_eq!(batch.prev_batch_hash, AUDIT_GENESIS_HASH);
+    assert_eq!(batch.signature.len(), 64, "firma HMAC-SHA256 en hex");
+
+    let report = service.verify_integrity().await.expect("verify");
+    assert!(report.ok, "cadena válida: {report:?}");
+    assert_eq!(report.logs_total, 5);
+    assert_eq!(report.logs_valid, 5);
+    assert_eq!(report.batches_total, 1);
+    assert_eq!(report.signatures_valid, 1);
+    assert_eq!(report.sealable_logs, 0);
+
+    // Manipular un evento debe romper la verificación (WORM detecta tampering).
+    db.query("UPDATE audit_logs SET success = false WHERE uid = $uid")
+        .bind(("uid", batch.first_uid.clone()))
+        .await
+        .expect("tamper");
+    let tampered = service.verify_integrity().await.expect("verify tampered");
+    assert!(!tampered.ok, "tampering debe detectarse: {tampered:?}");
+
+    // Export de lectura incluye logs + lotes firmados.
+    let export = service.export(100).await.expect("export");
+    assert_eq!(export.logs.len(), 5);
+    assert_eq!(export.batches.len(), 1);
+    assert_eq!(export.head_batch_hash, batch.batch_hash);
 }

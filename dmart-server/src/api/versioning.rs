@@ -34,6 +34,11 @@ use crate::security::{SecurityState, login_throttle_middleware, rate_limit_middl
             crate::api::support::ActionResponse,
             crate::support::SupportEvent,
             crate::support::EventOrigin,
+            crate::audit::AuditLog,
+            crate::audit::AuditAction,
+            crate::audit::AuditBatch,
+            crate::audit::IntegrityReport,
+            crate::audit::AuditExport,
             dmart_shared::models::FeatureFlag,
             dmart_shared::models::CreateFeatureFlagRequest,
             dmart_shared::models::UpdateFeatureFlagRequest,
@@ -246,6 +251,15 @@ pub fn build_v1_router(
             "/admin/audit/cleanup",
             post(crate::api::admin::run_audit_retention_cleanup),
         )
+        .route(
+            "/admin/audit/seal",
+            post(crate::api::admin::seal_audit_batch),
+        )
+        .route(
+            "/admin/audit/verify",
+            get(crate::api::admin::verify_audit_chain),
+        )
+        .route("/admin/audit/export", get(crate::api::admin::export_audit))
         .route(
             "/admin/audit/scores",
             get(crate::api::score_audit::verify_scores),
