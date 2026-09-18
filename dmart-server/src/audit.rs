@@ -182,9 +182,16 @@ impl AuditService {
             .create(("audit_logs", log.uid.clone()))
             .content(log)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                crate::support::note("audit", false);
+                e.to_string()
+            })?;
 
-        created.ok_or_else(|| "Failed to create audit log".to_string())
+        crate::support::note("audit", true);
+        created.ok_or_else(|| {
+            crate::support::note("audit", false);
+            "Failed to create audit log".to_string()
+        })
     }
 
     pub async fn log_login_success(

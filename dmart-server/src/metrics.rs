@@ -183,6 +183,23 @@ pub fn register() {
         "Average ingest error rate (SPEC-031)"
     );
 
+    // SPEC-044: Consola técnica de soporte
+    describe_counter!(
+        "support_actions_total",
+        Unit::Count,
+        "Support console actions by action/result (SPEC-044)"
+    );
+    describe_counter!(
+        "self_healing_total",
+        Unit::Count,
+        "Automatic recovery events by subsystem/result (SPEC-044)"
+    );
+    describe_gauge!(
+        "support_systems_status",
+        Unit::Count,
+        "Live status per subsystem (2=ok,1=degraded,0=error; SPEC-044)"
+    );
+
     // Infra
     describe_gauge!(
         "db_connections_active",
@@ -354,6 +371,33 @@ pub fn ingest_error_avg_set(rate: f64) {
 
 pub fn ingest_rate_limit_current(device: &str, tokens: f64) {
     gauge!("ingest_rate_limit_current", "device" => device.to_string()).set(tokens);
+}
+
+// ─── Soporte (SPEC-044) ──────────────────────────────────────────────────
+
+/// Contador de acciones ejecutadas desde la consola de soporte.
+pub fn support_action(action: &str, result: &str) {
+    counter!(
+        "support_actions_total",
+        "action" => action.to_string(),
+        "result" => result.to_string()
+    )
+    .increment(1);
+}
+
+/// Contador de eventos de auto-recuperación (self-healing) por subsistema.
+pub fn self_healing(subsystem: &str, result: &str) {
+    counter!(
+        "self_healing_total",
+        "subsystem" => subsystem.to_string(),
+        "result" => result.to_string()
+    )
+    .increment(1);
+}
+
+/// Gauge de estado vivo de un subsistema (2=ok, 1=degraded, 0=error).
+pub fn support_system_status(system: &str, status: u8) {
+    gauge!("support_systems_status", "system" => system.to_string()).set(status as f64);
 }
 
 // ─── Sistema (Linux) ─────────────────────────────────────────────────────

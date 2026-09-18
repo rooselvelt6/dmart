@@ -48,6 +48,8 @@ pub mod security;
 pub mod server_ingest;
 #[allow(dead_code)] // SPEC-033: Patient Similarity Engine (ejercitado por test ml_similarity)
 pub mod similarity;
+#[allow(dead_code)] // SPEC-044: Consola Técnica de Soporte (ejercitado por test support_console)
+pub mod support;
 #[allow(dead_code)] // SPEC-020: Tele-ICU (ejercitado por test teleicu)
 pub mod teleicu;
 #[allow(dead_code)] // SPEC-025: Multi-tenancy (ejercitado por test multi_tenant)

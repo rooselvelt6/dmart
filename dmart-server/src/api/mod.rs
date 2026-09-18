@@ -18,6 +18,7 @@ pub mod sandbox;
 pub mod scales;
 pub mod score_audit;
 pub mod stats;
+pub mod support;
 pub mod teleicu;
 pub mod tenant;
 pub mod versioning;
@@ -38,7 +39,7 @@ use crate::db::Database;
 use crate::middleware::auth_mod::{AuthMiddlewareConfig, auth_middleware};
 use crate::security::{SecurityState, login_throttle_middleware, rate_limit_middleware};
 
-pub use versioning::{build_unified_router, VersionState};
+pub use versioning::{VersionState, build_unified_router};
 
 fn start_instant() -> &'static Instant {
     static INSTANT: OnceLock<Instant> = OnceLock::new();
@@ -58,8 +59,6 @@ pub struct HealthResponse {
     pub database: String,
     pub cache: String,
 }
-
-
 
 /// Builds the versioned API router (mounted under `/api/v1` and optionally `/api` legacy)
 /// with all security middleware applied. Shared by the server binary and the E2E security tests.

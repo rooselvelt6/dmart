@@ -972,3 +972,86 @@ pub async fn clear_sandbox_data() -> ApiResult<String> {
         .map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
+
+// ─── Consola Técnica de Soporte (SPEC-044) ─────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SupportSystem {
+    pub key: String,
+    pub name: String,
+    pub status: String,
+    pub latency_ms: Option<f64>,
+    pub error_count: u64,
+    pub ok_count: u64,
+    pub freshness_secs: Option<f64>,
+    pub details: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SliIndicator {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+    pub target: String,
+    pub ok: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Diagnostic {
+    pub system: String,
+    pub indicators: Vec<SliIndicator>,
+    pub suggested_actions: Vec<String>,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SupportEvent {
+    pub uid: String,
+    pub timestamp: String,
+    pub origin: String,
+    pub subsystem: String,
+    pub action: String,
+    pub username: Option<String>,
+    pub ip_address: Option<String>,
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ActionResponse {
+    pub action: String,
+    pub success: bool,
+    pub message: String,
+    pub event: Option<SupportEvent>,
+}
+
+pub async fn get_support_systems() -> ApiResult<Vec<SupportSystem>> {
+    get("/admin/support/systems").await
+}
+
+pub async fn get_support_diagnostics() -> ApiResult<Vec<Diagnostic>> {
+    get("/admin/support/diagnostics").await
+}
+
+pub async fn get_support_history(limit: usize) -> ApiResult<Vec<SupportEvent>> {
+    get(&format!("/admin/support/history?limit={}", limit)).await
+}
+
+/// Ejecuta una acción del runbook. `model`/`version` solo aplican a `model_swap`
+/// (vacíos usan el modelo activo/por defecto).
+pub async fn run_support_action(
+    action: &str,
+    model: &str,
+    version: &str,
+) -> ApiResult<ActionResponse> {
+    #[derive(serde::Serialize)]
+    struct Req<'a> {
+        model: &'a str,
+        version: &'a str,
+    }
+    post(
+        &format!("/admin/support/actions/{}", action),
+        Req { model, version },
+    )
+    .await
+}

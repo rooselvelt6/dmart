@@ -1,4 +1,4 @@
-use crate::time::{now_rfc3339, now_date_string};
+use crate::time::{now_date_string, now_rfc3339};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -811,6 +811,9 @@ pub enum UserRole {
     Medico,
     Enfermero,
     Viewer,
+    /// Soporte técnico (SPEC-044): acceso a la consola técnica sin el resto de
+    /// la administración clínica/operativa.
+    Soporte,
 }
 
 impl std::fmt::Display for UserRole {
@@ -820,6 +823,7 @@ impl std::fmt::Display for UserRole {
             UserRole::Medico => write!(f, "Medico"),
             UserRole::Enfermero => write!(f, "Enfermero"),
             UserRole::Viewer => write!(f, "Viewer"),
+            UserRole::Soporte => write!(f, "Soporte"),
         }
     }
 }
@@ -831,6 +835,7 @@ impl UserRole {
             UserRole::Medico => "Medico",
             UserRole::Enfermero => "Enfermero",
             UserRole::Viewer => "Viewer",
+            UserRole::Soporte => "Soporte",
         }
     }
 
@@ -901,6 +906,13 @@ impl UserRole {
                 "ml:read",
             ],
             UserRole::Viewer => vec!["patients:read", "measurements:read", "scales:read"],
+            UserRole::Soporte => vec![
+                "patients:read",
+                "measurements:read",
+                // SPEC-044: consola técnica de soporte.
+                "support:read",
+                "support:act",
+            ],
         }
     }
 
@@ -1011,19 +1023,19 @@ pub struct MfaStatus {
 /// Predicción de serie temporal (point forecast + cuantiles).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForecastPoint {
-    pub step: usize,              // 1..horizon
-    pub point: f32,               // predicción puntual (mediana)
-    pub quantiles: Vec<f32>,      // q10, q20, ..., q90 (9 valores)
+    pub step: usize,         // 1..horizon
+    pub point: f32,          // predicción puntual (mediana)
+    pub quantiles: Vec<f32>, // q10, q20, ..., q90 (9 valores)
 }
 
 /// Solicitud de forecast para una serie univariada.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForecastRequest {
-    pub series_id: String,        // identifica la serie (p. ej. "vitals:MAP:patient-123")
-    pub values: Vec<f32>,         // serie histórica (p. ej. 512 puntos)
-    pub horizon: usize,           // pasos a predecir
+    pub series_id: String, // identifica la serie (p. ej. "vitals:MAP:patient-123")
+    pub values: Vec<f32>,  // serie histórica (p. ej. 512 puntos)
+    pub horizon: usize,    // pasos a predecir
     #[serde(default = "default_quantiles")]
-    pub quantiles: Vec<f32>,      // lista de cuantiles (default 0.1..0.9)
+    pub quantiles: Vec<f32>, // lista de cuantiles (default 0.1..0.9)
     #[serde(default)]
     pub covariates: Option<Vec<f32>>, // covariables opcionales (past-only)
 }
@@ -1047,7 +1059,7 @@ pub struct ForecastResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForecastStatus {
     pub enabled: bool,
-    pub backend: String,          // "timesfm" | "naive"
+    pub backend: String, // "timesfm" | "naive"
     pub model_version: String,
     pub context_length: usize,
     pub max_horizon: usize,

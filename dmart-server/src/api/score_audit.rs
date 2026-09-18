@@ -69,6 +69,15 @@ fn verify_measurement(m: &Measurement) -> ScoreAuditEntry {
     }
 }
 
+/// Recalcula los fingerprints de todas las mediciones con el algoritmo actual
+/// (compartido por la API y la consola de soporte SPEC-044).
+pub async fn verify_all(db: &Surreal<Db>) -> Vec<ScoreAuditEntry> {
+    match load_measurements(db).await {
+        Ok(measurements) => measurements.iter().map(verify_measurement).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// GET /admin/audit/scores (admin) — lista de verificación de reproducibilidad.
 pub async fn verify_scores(State(db): State<Database>) -> impl IntoResponse {
     match load_measurements(&db).await {

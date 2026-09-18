@@ -7,9 +7,10 @@ pub mod quality;
 pub mod rate_limit;
 
 use std::sync::Arc;
+use std::sync::OnceLock;
 use tokio::sync::RwLock;
 
-use crate::cache::{cache_available, cache_get, cache_set};
+use crate::cache::{cache_available, cache_del, cache_get, cache_set};
 
 /// Configuración global de hardening ingest (desde env vars)
 #[derive(Debug, Clone)]
@@ -236,6 +237,8 @@ impl IngestState {
         ) {
             if state.circuit_breaker.should_attempt_reset() {
                 state.circuit_breaker.transition_to_half_open();
+                // SPEC-044: self-healing — el subsistema se recuperó solo.
+                metrics_update.self_healed = true;
             } else {
                 metrics_update.circuit_open = true;
                 metrics_update.circuit_open_count = 1;
@@ -343,6 +346,63 @@ impl IngestState {
         m.error_avg =
             (m.error_avg * 0.9) + (if parse_ok && validation_ok { 0.0 } else { 1.0 }) * 0.1;
     }
+
+    // ─── SPEC-044: acciones de la consola de soporte ──────────────────────
+
+    /// Resetea a estado inicial (fresh) todos los dispositivos MLLP conocidos:
+    /// rate limiter, circuit breaker y gap detector vuelven a cero y se purga el
+    /// estado persistido en cache. Devuelve cuántos dispositivos se resetearon.
+    pub async fn reset_all_devices(&self) -> usize {
+        let keys: Vec<String> = {
+            let devices = self.devices.read().await;
+            devices.iter().map(|d| d.key().clone()).collect()
+        };
+        let total = keys.len();
+        for key in &keys {
+            self.reset_device(key).await;
+        }
+        total
+    }
+
+    /// Transiciona a half-open todo circuit breaker en `Open` (permite tráfico
+    /// de prueba sin esperar la ventana). Devuelve cuántos fueron reseteados.
+    pub async fn reset_open_circuits(&self) -> usize {
+        let keys: Vec<String> = {
+            let devices = self.devices.read().await;
+            devices.iter().map(|d| d.key().clone()).collect()
+        };
+        let mut count = 0;
+        for key in keys {
+            let devices = self.devices.read().await;
+            if let Some(mut entry) = devices.get_mut(&key)
+                && entry.circuit_breaker.state() == circuit_breaker::CircuitState::Open
+            {
+                entry.circuit_breaker.transition_to_half_open();
+                count += 1;
+                crate::metrics::ingest_circuit_state(&key, entry.circuit_breaker.state().as_u8());
+            }
+        }
+        count
+    }
+
+    /// Reemplaza el estado en memoria y cache de un dispositivo por uno fresco.
+    async fn reset_device(&self, device_id: &str) {
+        {
+            let devices = self.devices.write().await;
+            if let Some(mut entry) = devices.get_mut(device_id) {
+                *entry = DeviceState::new(&self.config);
+                crate::metrics::ingest_circuit_state(
+                    device_id,
+                    entry.circuit_breaker.state().as_u8(),
+                );
+            }
+        }
+        if cache_available() {
+            let _ = cache_del(&format!("ingest:rate_limit:{device_id}")).await;
+            let _ = cache_del(&format!("ingest:circuit_breaker:{device_id}")).await;
+            let _ = cache_del(&format!("ingest:sequence:{device_id}")).await;
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -356,6 +416,21 @@ pub struct MetricsUpdate {
     pub errors: bool,
     pub errors_count: u64,
     pub auto_throttled: bool,
+    /// SPEC-044: el circuit breaker se recuperó solo (Open → HalfOpen) en esta
+    /// llamada; el caller debe registrar el evento de auto-recuperación.
+    pub self_healed: bool,
+}
+
+/// Instancia global del estado de ingest (SPEC-044: consola de soporte y
+/// self-healing). Se inicializa en `main()`; `None` en tests aislados.
+static GLOBAL_INGEST: OnceLock<Arc<IngestState>> = OnceLock::new();
+
+pub fn init_global_ingest(state: Arc<IngestState>) {
+    let _ = GLOBAL_INGEST.set(state);
+}
+
+pub fn global_ingest() -> Option<Arc<IngestState>> {
+    GLOBAL_INGEST.get().cloned()
 }
 
 impl DeviceState {
@@ -432,4 +507,73 @@ pub fn register_ingest_metrics() {
         Unit::Bytes,
         "HL7 message frame size distribution"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ingest::circuit_breaker::CircuitState;
+
+    async fn open_circuit(state: &IngestState, device: &str) {
+        // 10 errores consecutivos abren el breaker (umbral 50%).
+        for _ in 0..10 {
+            let _ = state
+                .process_message(device, 100, None, &Err("parse error".to_string()))
+                .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn reset_open_circuits_transitions_to_half_open() {
+        let config = IngestConfig {
+            cb_error_threshold: 0.5,
+            cb_half_open_seconds: 3600,
+            ..Default::default()
+        };
+        let state = IngestState::new(config);
+        open_circuit(&state, "dev-1").await;
+
+        {
+            let devices = state.devices.read().await;
+            let dev = devices.get("dev-1").expect("device exists");
+            assert_eq!(dev.circuit_breaker.state(), CircuitState::Open);
+        }
+
+        let cleared = state.reset_open_circuits().await;
+        assert_eq!(cleared, 1, "un breaker abierto pasa a half-open");
+
+        {
+            let devices = state.devices.read().await;
+            let dev = devices.get("dev-1").expect("device exists");
+            assert_eq!(dev.circuit_breaker.state(), CircuitState::HalfOpen);
+        }
+
+        // Idempotente: un segundo reset no encuentra breakers abiertos.
+        assert_eq!(state.reset_open_circuits().await, 0);
+    }
+
+    #[tokio::test]
+    async fn reset_all_devices_clears_state() {
+        let config = IngestConfig {
+            cb_error_threshold: 0.5,
+            cb_half_open_seconds: 3600,
+            ..Default::default()
+        };
+        let state = IngestState::new(config);
+        open_circuit(&state, "dev-a").await;
+        open_circuit(&state, "dev-b").await;
+
+        let reset = state.reset_all_devices().await;
+        assert_eq!(reset, 2, "resetea ambos dispositivos");
+
+        let devices = state.devices.read().await;
+        for key in ["dev-a", "dev-b"] {
+            let dev = devices.get(key).expect("device exists");
+            assert_eq!(
+                dev.circuit_breaker.state(),
+                CircuitState::Closed,
+                "{key} vuelve a cerrado"
+            );
+        }
+    }
 }

@@ -150,7 +150,19 @@ async fn handle_stream(
                     crate::metrics::ingest_message(&device_id, "circuit_open");
                     let ack = build_ack(&msg_id, Some("circuit_open"));
                     let _ = stream.write_all(&ack).await;
+                    crate::support::note("ingest", false);
                     continue;
+                }
+
+                // SPEC-044: self-healing — el CB se recuperó solo (Open → HalfOpen).
+                if metrics_update.self_healed {
+                    crate::support::note("ingest", true);
+                    let _ = crate::support::note_auto_recovery(
+                        db.as_ref(),
+                        "ingest",
+                        &format!("circuit_breaker {device_id}: Open → HalfOpen automático"),
+                    )
+                    .await;
                 }
 
                 if metrics_update.gaps {
@@ -176,6 +188,7 @@ async fn handle_stream(
                 // Métricas de throughput
                 crate::metrics::ingest_message(&device_id, "ok");
                 crate::metrics::ingest_message_size(&device_id, frame_size);
+                crate::support::note("ingest", true);
 
                 // Actualizar métricas globales
                 let im = ingest_state.metrics().await;
@@ -205,6 +218,7 @@ async fn handle_stream(
                     Err(e) => {
                         hl7_error(msg.source.label());
                         crate::metrics::ingest_message(&device_id, "parse_error");
+                        crate::support::note("ingest", false);
                         tracing::warn!("[mllp:{peer}] ingestión falló: {e}");
                         let ack = build_ack(&msg_id, Some(&e.to_string()));
                         let _ = stream.write_all(&ack).await;
@@ -213,6 +227,7 @@ async fn handle_stream(
             }
             Err(e) => {
                 hl7_error("unknown");
+                crate::support::note("ingest", false);
                 tracing::warn!("[mllp:{peer}] parseo falló: {e}");
                 let ack = build_ack("", Some(&e.to_string()));
                 let _ = stream.write_all(&ack).await;

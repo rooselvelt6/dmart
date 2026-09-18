@@ -743,6 +743,7 @@ pub fn parse_role(s: &str) -> UserRole {
         "admin" => UserRole::Admin,
         "medico" | "médico" | "doctor" => UserRole::Medico,
         "enfermero" | "enfermera" | "nurse" => UserRole::Enfermero,
+        "soporte" | "support" | "soporte técnico" => UserRole::Soporte,
         _ => UserRole::Viewer,
     }
 }

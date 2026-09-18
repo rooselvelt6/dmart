@@ -82,8 +82,10 @@ impl RealtimeHub {
     /// Publica un evento JSON a todos los suscriptores de este hub.
     pub fn publish(&self, event_type: &str, payload: serde_json::Value) {
         let message = json!({ "type": event_type, "data": payload }).to_string();
-        // Ignorar errores ("no receivers") de forma silenciosa.
+        // Ignorar errores ("no receivers") de forma silenciosa; la telemetría de
+        // SPEC-044 solo cuenta la actividad (publish sin suscriptores es normal).
         let _ = self.tx.send(message);
+        crate::support::note("realtime", true);
     }
 
     /// Suscribe un receptor al canal de este hub.

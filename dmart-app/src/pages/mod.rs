@@ -7,3 +7,4 @@ pub mod patient_edit;
 pub mod patients;
 pub mod perfil;
 pub mod register;
+pub mod support;

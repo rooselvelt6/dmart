@@ -2,7 +2,7 @@ use crate::components::theme_toggle::ThemeToggle;
 use crate::pages::{
     admin::AdminPage, dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
     patient_detail::PatientDetailPage, patient_edit::PatientEditPage, patients::PatientsPage,
-    perfil::PerfilPage, register::RegisterPage,
+    perfil::PerfilPage, register::RegisterPage, support::SupportConsole,
 };
 use leptos::either::Either;
 use leptos::prelude::*;
@@ -142,6 +142,16 @@ pub fn App() -> impl IntoView {
                                 Either::Right(view! { <PerfilPage /> })
                             }
                         } />
+
+                        <Route path=path!("/admin/soporte") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("support:read") {
+                                Either::Left(view! { <Redirect path="/"/> })
+                            } else {
+                                Either::Right(view! { <SupportConsole /> })
+                            }
+                        } />
                     </Routes>
                 </main>
             </div>
@@ -261,11 +271,20 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                 </Show>
 
                 <Show when=move || is_admin()>
-                    <A href="/admin" attr:class=move || format!("nav-link {}", if is_active("/admin") { "active" } else { "" })>
+                    <A href="/admin" attr:class=move || format!("nav-link {}", if is_active("/admin") && !is_active("/admin/soporte") { "active" } else { "" })>
                         <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);">
                             <i class="fa-solid fa-gears w-6 text-center text-lg" style="color:white;"></i>
                         </div>
                         <span style="font-weight:500;">Administración</span>
+                    </A>
+                </Show>
+
+                <Show when=move || user_has("support:read")>
+                    <A href="/admin/soporte" attr:class=move || format!("nav-link {}", if is_active("/admin/soporte") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+                            <i class="fa-solid fa-screwdriver-wrench w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">Soporte Técnico</span>
                     </A>
                 </Show>
 

@@ -7,6 +7,8 @@ pub enum Role {
     Doctor,
     Nurse,
     Viewer,
+    /// Soporte técnico (SPEC-044): consola técnica, sin administración clínica.
+    Support,
 }
 
 impl From<UserRole> for Role {
@@ -16,6 +18,7 @@ impl From<UserRole> for Role {
             UserRole::Medico => Role::Doctor,
             UserRole::Enfermero => Role::Nurse,
             UserRole::Viewer => Role::Viewer,
+            UserRole::Soporte => Role::Support,
         }
     }
 }
@@ -27,6 +30,7 @@ impl From<Role> for UserRole {
             Role::Doctor => UserRole::Medico,
             Role::Nurse => UserRole::Enfermero,
             Role::Viewer => UserRole::Viewer,
+            Role::Support => UserRole::Soporte,
         }
     }
 }
@@ -51,6 +55,7 @@ impl Role {
             Role::Doctor => "Médico",
             Role::Nurse => "Enfermero",
             Role::Viewer => "Visualizador",
+            Role::Support => "Soporte Técnico",
         }
     }
 }
@@ -150,6 +155,16 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
 
     if path.starts_with("/diagnosticos") || path.starts_with("/fhir") {
         return Some("patients:read");
+    }
+
+    // SPEC-044: Consola técnica de soporte. Sin distinguir el action, la
+    // lectura exige `support:read` y la ejecución `support:act`.
+    if path.starts_with("/admin/support") {
+        return match m.as_str() {
+            "GET" => Some("support:read"),
+            "POST" | "PUT" | "DELETE" => Some("support:act"),
+            _ => None,
+        };
     }
 
     if path == "/stats" {
@@ -405,6 +420,52 @@ mod tests {
             permission_for("GET", "/patients/abc/export/pdf"),
             Some("export:pdf")
         );
+    }
+
+    #[test]
+    fn permission_for_support_console() {
+        assert_eq!(
+            permission_for("GET", "/admin/support/systems"),
+            Some("support:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/admin/support/diagnostics"),
+            Some("support:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/admin/support/history"),
+            Some("support:read")
+        );
+        assert_eq!(
+            permission_for("POST", "/admin/support/actions/circuit_reset"),
+            Some("support:act")
+        );
+        assert_eq!(
+            permission_for("POST", "/admin/support/actions/backup"),
+            Some("support:act")
+        );
+        assert_eq!(
+            permission_for("DELETE", "/admin/support/whatever"),
+            Some("support:act")
+        );
+        assert_eq!(
+            permission_for("PUT", "/admin/support/x"),
+            Some("support:act")
+        );
+        assert!(
+            Role::Support.can("support:read"),
+            "Soporte debe poder leer diagnósticos"
+        );
+        assert!(
+            Role::Support.can("support:act"),
+            "Soporte debe poder ejecutar acciones"
+        );
+        assert!(
+            Role::Support.can("patients:read"),
+            "Soporte mantiene contexto clínico de solo lectura"
+        );
+        assert!(!Role::Support.can("users:delete"));
+        assert!(!Role::Support.can("config:write"));
     }
 
     #[test]

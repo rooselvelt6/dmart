@@ -119,6 +119,8 @@ async fn main() -> anyhow::Result<()> {
     // ── Ingest Hardening (SPEC-031) ───────────────────────────────────
     let ingest_config = IngestConfig::default();
     let ingest_state = Arc::new(IngestState::new(ingest_config.clone()));
+    // SPEC-044: la consola de soporte y el self-healing acceden al estado global.
+    dmart_server::ingest::init_global_ingest(ingest_state.clone());
     tracing::info!(
         "🛡️ Ingest hardening enabled: rate_limit={} rps, burst={}, CB threshold={}%",
         ingest_config.rate_limit_rps,

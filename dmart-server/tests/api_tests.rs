@@ -2359,3 +2359,206 @@ async fn test_e2e_tenants_audit_endpoint() {
         "detecta el registro sin tenant"
     );
 }
+
+// ─── SPEC-044: Consola Técnica de Soporte ─────────────────────────────────
+
+const SUPPORT_PWD: &str = "SoporteSecreto_01!";
+
+#[tokio::test]
+async fn test_e2e_support_console_rbac_and_systems() {
+    let (db, _dir) = test_db().await;
+    let http = build_app(&db).await;
+
+    seed_user(
+        &db,
+        "sup_admin",
+        SUPPORT_PWD,
+        dmart_shared::models::UserRole::Admin,
+        "Admin",
+    )
+    .await;
+    seed_user(
+        &db,
+        "sup_soporte",
+        SUPPORT_PWD,
+        dmart_shared::models::UserRole::Soporte,
+        "Soporte",
+    )
+    .await;
+    seed_user(
+        &db,
+        "sup_viewer",
+        SUPPORT_PWD,
+        dmart_shared::models::UserRole::Viewer,
+        "Viewer",
+    )
+    .await;
+
+    let admin = login_token(&http, "sup_admin", SUPPORT_PWD).await;
+    let soporte = login_token(&http, "sup_soporte", SUPPORT_PWD).await;
+    let viewer = login_token(&http, "sup_viewer", SUPPORT_PWD).await;
+
+    // Sin token → 401.
+    let (s, _) = send(&http, Method::GET, "/admin/support/systems", None, None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "consola requiere auth");
+
+    // Viewer sin support:read → 403.
+    let (s, _) = send(
+        &http,
+        Method::GET,
+        "/admin/support/systems",
+        Some(&viewer),
+        None,
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "viewer no tiene support:read");
+
+    // Soporte y Admin → 200.
+    for token in [&soporte, &admin] {
+        let (s, json) = send(
+            &http,
+            Method::GET,
+            "/admin/support/systems",
+            Some(token),
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "systems accesible");
+        let systems = json["data"].as_array().expect("systems array");
+        assert_eq!(systems.len(), 7, "7 subsistemas monitorizados");
+        let keys: Vec<&str> = systems
+            .iter()
+            .map(|s| s["key"].as_str().unwrap_or_default())
+            .collect();
+        assert!(keys.contains(&"db"));
+        assert!(keys.contains(&"ingest"));
+        assert!(keys.contains(&"monitores"));
+        assert!(keys.contains(&"audit"));
+        assert!(keys.contains(&"backup"));
+    }
+
+    // Diagnóstico con SLIs y acciones sugeridas.
+    let (s, json) = send(
+        &http,
+        Method::GET,
+        "/admin/support/diagnostics",
+        Some(&soporte),
+        None,
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let diags = json["data"].as_array().expect("diagnostics array");
+    assert_eq!(diags.len(), 7);
+    assert!(
+        diags.iter().all(|d| d["suggested_actions"].is_array()),
+        "cada subsistema sugiere acciones"
+    );
+}
+
+#[tokio::test]
+async fn test_e2e_support_actions_audited_and_persisted() {
+    let (db, _dir) = test_db().await;
+    let http = build_app(&db).await;
+
+    seed_user(
+        &db,
+        "act_soporte",
+        SUPPORT_PWD,
+        dmart_shared::models::UserRole::Soporte,
+        "Soporte",
+    )
+    .await;
+    seed_user(
+        &db,
+        "act_viewer",
+        SUPPORT_PWD,
+        dmart_shared::models::UserRole::Viewer,
+        "Viewer",
+    )
+    .await;
+
+    let soporte = login_token(&http, "act_soporte", SUPPORT_PWD).await;
+    let viewer = login_token(&http, "act_viewer", SUPPORT_PWD).await;
+
+    // Viewer no puede ejecutar acciones (support:act).
+    let (s, _) = send(
+        &http,
+        Method::POST,
+        "/admin/support/actions/circuit_reset",
+        Some(&viewer),
+        Some(serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "viewer carece de support:act");
+
+    // Acción desconocida → 400.
+    let (s, _) = send(
+        &http,
+        Method::POST,
+        "/admin/support/actions/no_existe",
+        Some(&soporte),
+        Some(serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "acción inválida rechazada");
+
+    // Acción válida → 200, con evento persistido.
+    let (s, json) = send(
+        &http,
+        Method::POST,
+        "/admin/support/actions/circuit_reset",
+        Some(&soporte),
+        Some(serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "circuit_reset ejecutado");
+    assert_eq!(json["data"]["success"], true);
+    assert_eq!(json["data"]["action"], "circuit_reset");
+    assert_eq!(json["data"]["event"]["origin"], "manual");
+    assert_eq!(json["data"]["event"]["action"], "circuit_reset");
+    assert_eq!(json["data"]["event"]["username"], "act_soporte");
+
+    // Historial contiene el evento recién registrado.
+    let (s, json) = send(
+        &http,
+        Method::GET,
+        "/admin/support/history?limit=10",
+        Some(&soporte),
+        None,
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let events = json["data"].as_array().expect("history array");
+    assert_eq!(events.len(), 1, "un evento manual registrado");
+    assert_eq!(events[0]["action"], "circuit_reset");
+    assert_eq!(events[0]["subsystem"], "ingest");
+    assert_eq!(events[0]["success"], true);
+}
+
+#[tokio::test]
+async fn test_e2e_support_model_swap_action() {
+    let (db, _dir) = test_db().await;
+    let http = build_app(&db).await;
+
+    seed_user(
+        &db,
+        "swap_admin",
+        SUPPORT_PWD,
+        dmart_shared::models::UserRole::Admin,
+        "Admin",
+    )
+    .await;
+    let admin = login_token(&http, "swap_admin", SUPPORT_PWD).await;
+
+    let (s, json) = send(
+        &http,
+        Method::POST,
+        "/admin/support/actions/model_swap",
+        Some(&admin),
+        Some(serde_json::json!({ "model": "ews", "version": "" })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "swap del modelo por defecto");
+    assert_eq!(json["data"]["success"], true);
+    assert_eq!(json["data"]["details"]["model"], "ews");
+}

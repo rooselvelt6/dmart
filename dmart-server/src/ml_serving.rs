@@ -107,6 +107,14 @@ impl MlRegistry {
     pub fn all(&self) -> Vec<MlModel> {
         self.models.iter().map(|m| m.value().clone()).collect()
     }
+
+    /// Modelo activo actual (el registrado con `active=true`), si existe.
+    pub fn active_model(&self) -> Option<MlModel> {
+        self.models
+            .iter()
+            .find(|m| m.value().active)
+            .map(|m| m.value().clone())
+    }
 }
 
 impl Default for MlRegistry {
@@ -212,6 +220,7 @@ impl MlServer {
             .get(model)
             .ok_or_else(|| anyhow::anyhow!("model not found: {model}"))?;
         if !m.active {
+            crate::support::note("ml", false);
             return Err(anyhow::anyhow!("model not active: {model}"));
         }
         let raw = self.predictor.predict(features)?;
@@ -243,6 +252,8 @@ impl MlServer {
                 importance: d / total,
             })
             .collect::<Vec<_>>();
+
+        crate::support::note("ml", true);
 
         Ok(PredictResult {
             prediction: raw,

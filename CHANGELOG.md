@@ -27,6 +27,24 @@ y este proyecto se adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ---
 
+## [Unreleased] — SPEC-044: Consola Técnica de Soporte (Support Console) — Fase 3 (2026-09-18)
+
+### Agregado
+- **SPEC-044 — Consola Técnica de Soporte (Support Console)**:
+  - Rol **Soporte** (`UserRole::Soporte` / `Role::Support`) con permisos `support:read` y `support:act` (más contexto clínico de solo lectura `patients:read`/`measurements:read`); guarda en RBAC CRUD y `permission_for`.
+  - API `/admin/support/systems|diagnostics|history` y `POST /admin/support/actions/{action}`, auditadas y registradas en `support_events` (manual y auto).
+  - 6 acciones idempotentes: `ingest_retry`, `circuit_reset`, `backup`, `audit_retention`, `model_swap`, `verify_fingerprints`.
+  - Telemetría por subsistema (`db|ingest|realtime|ml|monitores|audit|backup`) con `note()/freshness/error_count`; gauges/counters Prometheus `support_actions_total`, `self_healing_total`, `support_systems_status`.
+  - Self-healing: transición automática `Open → HalfOpen` del circuit breaker registra un evento auto (`self_heal`).
+  - `IngestState` global accesible (`ingest::global_ingest()`) con `reset_all_devices()`/`reset_open_circuits()`.
+  - OpenAPI tag `support` + schemas.
+
+### Notas
+- SPEC clínico: la consola detecta y corrige problemas (gaps, fault devices, modelo inactivo, backup ausente) sin exponer datos clínicos.
+- Gate: 96 tests lib + 3 E2E SPEC-044 + suite api_tests (39) + hl7_integration (32) en verde. Verificación WASM del frontend pendiente de `trunk build` local.
+
+---
+
 ### Agregado
 - **Specs SDD escritas** (pendientes de implementación, alineadas a acuerdo Fase 8):
   - `specs/021-kubernetes-helm-chart.md` — Helm chart HA: Deployment, StatefulSet, HPA, Ingress, NetworkPolicy, PDB.
