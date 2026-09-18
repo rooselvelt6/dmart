@@ -848,6 +848,7 @@ fn StaffPanel() -> impl IntoView {
                         <option value="Medico">"Médico"</option>
                         <option value="Enfermero">"Enfermero"</option>
                         <option value="Viewer">"Viewer"</option>
+                        <option value="Soporte">"Soporte"</option>
                     </select>
                     <button on:click=move |_| { reset_form(); set_show_form.update(|v| *v = !*v); }
                         class="px-4 py-2 rounded-lg text-sm font-medium text-white"
@@ -894,6 +895,7 @@ fn StaffPanel() -> impl IntoView {
                                 <option value="Medico">"Médico"</option>
                                 <option value="Enfermero">"Enfermero"</option>
                                 <option value="Viewer">"Viewer"</option>
+                                <option value="Soporte">"Soporte"</option>
                             </select>
                         </div>
                     </div>
