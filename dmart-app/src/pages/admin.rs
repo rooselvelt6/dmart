@@ -933,6 +933,7 @@ fn StaffPanel() -> impl IntoView {
                                 UserRole::Medico => "bg-blue-100 text-blue-700",
                                 UserRole::Enfermero => "bg-pink-100 text-pink-700",
                                 UserRole::Viewer => "bg-gray-100 text-gray-700",
+                                UserRole::Soporte => "bg-amber-100 text-amber-700",
                             };
                             let activo = u.activo;
 

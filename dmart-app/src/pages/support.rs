@@ -44,12 +44,12 @@ fn system_label(key: &str) -> &'static str {
     }
 }
 
-fn status_meta(status: &str) -> (&'static str, &'static str) {
+fn status_meta(status: &str) -> (String, String) {
     match status {
-        "ok" => ("#10B981", "OK"),
-        "degraded" => ("#F59E0B", "Degradado"),
-        "error" => ("#EF4444", "Error"),
-        other => ("#6B7280", other),
+        "ok" => ("#10B981".to_string(), "OK".to_string()),
+        "degraded" => ("#F59E0B".to_string(), "Degradado".to_string()),
+        "error" => ("#EF4444".to_string(), "Error".to_string()),
+        other => ("#6B7280".to_string(), other.to_string()),
     }
 }
 
