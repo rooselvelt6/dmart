@@ -24,6 +24,8 @@ pub mod escalation;
 pub mod ews_stream;
 #[allow(dead_code)] // SPEC-013: FHIR R4 Bundle ingestion (ejercitado por test fhir_conformance)
 pub mod fhir_bundle;
+#[allow(dead_code)] // SPEC-045: TimesFM forecasting (sidecar opcional + fallback naive)
+pub mod forecasting;
 #[allow(dead_code)] // SPEC-031/028: superficie HL7 legacy ejercitada por los 38 tests de
 // integración/conformance (SPEC-028, 32+6) y por la API externa del wire-format MLLP/ORU.
 // NO es código muerto: es la superficie de referencia de conformance HL7 (SPEC-028).
@@ -35,8 +37,6 @@ pub mod middleware;
 pub mod migrations;
 #[allow(dead_code)] // SPEC-032: ML Serving (ejercitado por test ml_serving)
 pub mod ml_serving;
-#[allow(dead_code)] // SPEC-045: TimesFM forecasting (sidecar opcional + fallback naive)
-pub mod forecasting;
 pub mod observability;
 #[allow(dead_code)] // SPEC-015: Patient Timeline API (ejercitado por test patient_timeline)
 pub mod patient_timeline;
@@ -48,6 +48,8 @@ pub mod security;
 pub mod server_ingest;
 #[allow(dead_code)] // SPEC-033: Patient Similarity Engine (ejercitado por test ml_similarity)
 pub mod similarity;
+#[allow(dead_code)] // SPEC-050: SLIs/SLOs y error budgets (tarea 3.5)
+pub mod slo;
 #[allow(dead_code)] // SPEC-044: Consola Técnica de Soporte (ejercitado por test support_console)
 pub mod support;
 #[allow(dead_code)] // SPEC-020: Tele-ICU (ejercitado por test teleicu)

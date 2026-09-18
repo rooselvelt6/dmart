@@ -107,7 +107,8 @@ pub async fn metrics_middleware(
 
     let response = next.run(req).await;
     let latency = start.elapsed().as_secs_f64();
-    let status = response.status().as_u16().to_string();
+    let status_code = response.status().as_u16();
+    let status = status_code.to_string();
 
     counter!("http_requests_total", "method" => method.clone(), "status" => status.clone())
         .increment(1);
@@ -117,6 +118,8 @@ pub async fn metrics_middleware(
         "status" => status
     )
     .record(latency);
+
+    crate::slo::record_request(status_code, latency * 1000.0);
 
     if response.status().is_server_error() || response.status().is_client_error() {
         crate::metrics::http_error(path.as_str());
@@ -179,8 +182,14 @@ pub fn observability_router(db: Database, prometheus_handle: PrometheusHandle_) 
         .route("/live", get(live_check))
         .route("/ready", get(ready_check))
         .route("/metrics", get(metrics_handler))
+        .route("/slo", get(slo_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(metrics_middleware))
+}
+
+/// GET /slo — Reporte SLI/SLO y error budget en JSON (SPEC-050).
+async fn slo_handler() -> impl IntoResponse {
+    (StatusCode::OK, axum::Json(crate::slo::snapshot()))
 }
 
 /// GET /metrics — Expone el scrape Prometheus. Antes de renderizar recalcula
@@ -202,6 +211,7 @@ async fn metrics_handler(State(state): State<ObservabilityState>) -> Response {
 
     crate::metrics::touch_zero_counters(extended);
     crate::metrics::survey_db(&state.db, extended).await;
+    crate::slo::export_metrics();
 
     let body = state.prometheus.render();
     (

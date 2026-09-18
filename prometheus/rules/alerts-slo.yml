@@ -1,0 +1,62 @@
+groups:
+- name: slo
+  interval: 30s
+  rules:
+  # ─── SLI/SLO (SPEC-050 / tarea 3.5) ─────────────────────────
+  - alert: SloAvailabilityBreach
+    expr: slo_availability_ratio < 0.995
+    for: 5m
+    labels:
+      severity: warning
+      component: slo
+      slo: availability
+    annotations:
+      summary: "Disponibilidad por debajo del SLO (99.5%)"
+      description: "slo_availability_ratio = {{ $value | humanizePercentage }} durante 5m"
+      runbook_url: "https://github.com/dmart/runbooks#slo-disponibilidad"
+
+  - alert: SloLatencyP95Breach
+    expr: slo_latency_p95_ms > 100
+    for: 5m
+    labels:
+      severity: warning
+      component: slo
+      slo: latency_p95
+    annotations:
+      summary: "Latencia p95 por encima del SLO (<100ms)"
+      description: "slo_latency_p95_ms = {{ $value }}ms durante 5m"
+      runbook_url: "https://github.com/dmart/runbooks#slo-latencia"
+
+  - alert: SseFreshnessBreach
+    expr: slo_sse_freshness_seconds > 5
+    for: 2m
+    labels:
+      severity: warning
+      component: slo
+      slo: sse_freshness
+    annotations:
+      summary: "Stream SSE sin eventos (freshness > 5s)"
+      description: "slo_sse_freshness_seconds = {{ $value }}s durante 2m"
+      runbook_url: "https://github.com/dmart/runbooks#sse-freshness"
+
+  - alert: ErrorBudgetFastBurn
+    expr: slo_error_budget_remaining < 0.25
+    for: 10m
+    labels:
+      severity: critical
+      component: slo
+    annotations:
+      summary: "Fast burn del error budget ({{ $labels.slo }} < 25%)"
+      description: "Error budget restante de {{ $labels.slo }} = {{ $value | humanizePercentage }} durante 10m"
+      runbook_url: "https://github.com/dmart/runbooks#error-budget"
+
+  - alert: ErrorBudgetExhausted
+    expr: slo_error_budget_remaining < 0.05
+    for: 5m
+    labels:
+      severity: critical
+      component: slo
+    annotations:
+      summary: "Error budget agotado ({{ $labels.slo }})"
+      description: "Error budget restante de {{ $labels.slo }} = {{ $value | humanizePercentage }}. Congelar cambios de riesgo hasta recuperar."
+      runbook_url: "https://github.com/dmart/runbooks#error-budget"

@@ -222,6 +222,8 @@ pub fn register() {
         Unit::Bytes,
         "Resident memory (RSS) of this process"
     );
+
+    crate::slo::describe_metrics();
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────

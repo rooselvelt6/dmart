@@ -86,6 +86,7 @@ impl RealtimeHub {
         // SPEC-044 solo cuenta la actividad (publish sin suscriptores es normal).
         let _ = self.tx.send(message);
         crate::support::note("realtime", true);
+        crate::slo::record_sse_publish();
     }
 
     /// Suscribe un receptor al canal de este hub.
