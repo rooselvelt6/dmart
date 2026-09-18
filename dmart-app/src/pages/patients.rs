@@ -41,6 +41,20 @@ pub fn PatientsPage() -> impl IntoView {
         }
     };
 
+    // Mide viewport_h al montar para que el virtual scrolling funcione sin scroll previo
+    Effect::new(move |_| {
+        let _ = patients_resource.get(); // trigger mount
+        if let Some(window) = web_sys::window() {
+            if let Some(doc) = window.document() {
+                if let Some(el) = doc.query_selector("[data-virtual-scroll]").ok().flatten() {
+                    if let Ok(html_el) = el.dyn_into::<web_sys::HtmlElement>() {
+                        viewport_h.set(html_el.client_height() as f64);
+                    }
+                }
+            }
+        }
+    });
+
     // Debounce de 300ms: cada nueva tecla cancela el temporizador anterior
     // (trailing edge: la búsqueda se dispara solo tras 300ms sin escribir).
     let debounce_timer = Rc::new(RefCell::new(None::<TimeoutHandle>));
@@ -91,7 +105,7 @@ pub fn PatientsPage() -> impl IntoView {
             } else {
                 view! {
             <div class="glass-card overflow-hidden">
-                <div style="overflow-y:auto; max-height:65vh;" on:scroll=on_scroll>
+                <div data-virtual-scroll style="overflow-y:auto; max-height:65vh;" on:scroll=on_scroll>
                     {move || {
                         let total = list.len() as f64 * ROW_HEIGHT;
                         let start = (scroll_top.get() / ROW_HEIGHT).floor() as usize;
