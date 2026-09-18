@@ -79,6 +79,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "048_audit_worm",
         include_str!("../migrations/048_audit_worm.surql"),
     ),
+    (
+        "049_web_push",
+        include_str!("../migrations/049_web_push.surql"),
+    ),
 ];
 
 pub async fn applied_versions(db: &Surreal<Db>) -> Result<Vec<u64>> {
@@ -143,7 +147,7 @@ mod tests {
         applied.sort_unstable();
         assert_eq!(
             applied,
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
         );
 
         let second = run_migrations(&db).await.expect("second run");

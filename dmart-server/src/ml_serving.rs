@@ -13,7 +13,6 @@ use std::time::Instant;
 
 use anyhow::Result;
 use dashmap::DashMap;
-use reqwest::Client; // Fuerza enlace de reqwest para forecasting
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 

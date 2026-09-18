@@ -35,6 +35,14 @@ web-sys = { version = "0.3", features = [
     "MediaQueryList",
     "RequestCredentials",
     "console",
+    # SPEC-052: Web Push (suscripción del navegador vía Service Worker).
+    "Navigator",
+    "ServiceWorkerContainer",
+    "ServiceWorkerRegistration",
+    "PushManager",
+    "PushSubscription",
+    "PushSubscriptionOptionsInit",
+    "PushEncryptionKeyName",
 ] }
 js-sys = "0.3"
 wasm-bindgen-futures = "0.4"

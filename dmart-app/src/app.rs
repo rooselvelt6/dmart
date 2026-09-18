@@ -1,8 +1,10 @@
 use crate::components::theme_toggle::ThemeToggle;
 use crate::pages::{
-    admin::AdminPage, dashboard::DashboardPage, login::LoginPage, measurement::MeasurementPage,
-    patient_detail::PatientDetailPage, patient_edit::PatientEditPage, patients::PatientsPage,
-    perfil::PerfilPage, register::RegisterPage, support::SupportConsole,
+    admin::AdminPage, dashboard::DashboardPage, data_quality::DataQualityPage,
+    devices::DevicesPage, escalation::EscalationPage, login::LoginPage,
+    measurement::MeasurementPage, patient_detail::PatientDetailPage,
+    patient_edit::PatientEditPage, patients::PatientsPage, perfil::PerfilPage,
+    register::RegisterPage, support::SupportConsole,
 };
 use leptos::either::Either;
 use leptos::prelude::*;
@@ -152,6 +154,36 @@ pub fn App() -> impl IntoView {
                                 Either::Right(view! { <SupportConsole /> })
                             }
                         } />
+
+                        <Route path=path!("/devices") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("devices:read") {
+                                Either::Left(view! { <Redirect path="/"/> })
+                            } else {
+                                Either::Right(view! { <DevicesPage /> })
+                            }
+                        } />
+
+                        <Route path=path!("/data-quality") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("quality:read") {
+                                Either::Left(view! { <Redirect path="/"/> })
+                            } else {
+                                Either::Right(view! { <DataQualityPage /> })
+                            }
+                        } />
+
+                        <Route path=path!("/escalation") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("escalation:read") {
+                                Either::Left(view! { <Redirect path="/"/> })
+                            } else {
+                                Either::Right(view! { <EscalationPage /> })
+                            }
+                        } />
                     </Routes>
                 </main>
             </div>
@@ -257,6 +289,15 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     <span style="font-weight:500;">Pacientes</span>
                 </A>
 
+                <Show when=move || user_has("escalation:read")>
+                    <A href="/escalation" attr:class=move || format!("nav-link {}", if is_active("/escalation") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);">
+                            <i class="fa-solid fa-bell w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">Escalamiento</span>
+                    </A>
+                </Show>
+
                 <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; padding:20px 10px 8px; font-weight:700;">
                     <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px; font-size:8px;"></i>ACCIONES
                 </div>
@@ -285,6 +326,24 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                             <i class="fa-solid fa-screwdriver-wrench w-6 text-center text-lg" style="color:white;"></i>
                         </div>
                         <span style="font-weight:500;">Soporte Técnico</span>
+                    </A>
+                </Show>
+
+                <Show when=move || user_has("devices:read")>
+                    <A href="/devices" attr:class=move || format!("nav-link {}", if is_active("/devices") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);">
+                            <i class="fa-solid fa-microchip w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">Dispositivos</span>
+                    </A>
+                </Show>
+
+                <Show when=move || user_has("quality:read")>
+                    <A href="/data-quality" attr:class=move || format!("nav-link {}", if is_active("/data-quality") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);">
+                            <i class="fa-solid fa-shield-heart w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">Calidad de Datos</span>
                     </A>
                 </Show>
 

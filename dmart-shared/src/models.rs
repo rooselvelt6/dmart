@@ -880,6 +880,13 @@ impl UserRole {
                 "tenants:manage",
                 "ml:predict",
                 "ml:read",
+                // Fase 3: operación (dispositivos, calidad de datos, escalamiento).
+                "devices:read",
+                "devices:write",
+                "quality:read",
+                "quality:write",
+                "escalation:read",
+                "escalation:act",
             ],
             UserRole::Medico => vec![
                 "patients:create",
@@ -894,6 +901,11 @@ impl UserRole {
                 "export:pdf",
                 "ml:predict",
                 "ml:read",
+                "escalation:read",
+                "escalation:act",
+                // SPEC-052: notificaciones push del navegador (los roles clínicos
+                // solo leen/reciben; nunca gestionan suscripciones de otros).
+                "notifications:read",
             ],
             UserRole::Enfermero => vec![
                 "patients:read",
@@ -904,14 +916,28 @@ impl UserRole {
                 "export:csv",
                 "ml:predict",
                 "ml:read",
+                "escalation:read",
+                "escalation:act",
+                "notifications:read",
             ],
-            UserRole::Viewer => vec!["patients:read", "measurements:read", "scales:read"],
+            UserRole::Viewer => vec![
+                "patients:read",
+                "measurements:read",
+                "scales:read",
+                "escalation:read",
+            ],
             UserRole::Soporte => vec![
                 "patients:read",
                 "measurements:read",
                 // SPEC-044: consola técnica de soporte.
                 "support:read",
                 "support:act",
+                // Fase 3: lectura operativa para diagnóstico de subsistemas.
+                "devices:read",
+                "quality:read",
+                // SPEC-052: soporte gestiona notificaciones (alta/baja y prueba).
+                "notifications:read",
+                "notifications:write",
             ],
         }
     }

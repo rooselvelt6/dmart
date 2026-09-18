@@ -79,3 +79,40 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+/* Web Push (SPEC-052): el backend cifra el payload (RFC 8291); aquí solo se
+ * muestra la notificación. Sin PHI: título genérico + detalles de alerta. */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (_) {
+    // Payload no-JSON: se degrada a una notificación genérica.
+    data = {};
+  }
+  const options = {
+    body: data.body || 'Nueva alerta clínica',
+    tag: data.tag || 'dmart-alert',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
+    data: {
+      url: data.url || '/escalation',
+    },
+  };
+  event.waitUntil(self.registration.showNotification(data.title || 'Alerta UCI', options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if ('focus' in client) {
+          return client.navigate(target).then(() => client.focus()).catch(() => client.focus());
+        }
+      }
+      return clients.openWindow(target);
+    })
+  );
+});

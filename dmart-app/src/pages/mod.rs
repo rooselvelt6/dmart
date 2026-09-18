@@ -1,5 +1,8 @@
 pub mod admin;
 pub mod dashboard;
+pub mod data_quality;
+pub mod devices;
+pub mod escalation;
 pub mod login;
 pub mod measurement;
 pub mod patient_detail;

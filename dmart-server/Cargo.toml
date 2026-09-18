@@ -79,6 +79,7 @@ zeroize = { version = "1.7", features = ["derive"] }
 base64 = "0.22"
 sha2 = "0.10"
 hmac = "0.12"
+ring = "0.17"
 
 # JWT Authentication
 jsonwebtoken = "9"

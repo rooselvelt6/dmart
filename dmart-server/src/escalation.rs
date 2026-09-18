@@ -15,6 +15,17 @@ use serde_json::json;
 use surrealdb::RecordId;
 use uuid::Uuid;
 
+/// Serializa un `RecordId` como su clave plana (p. ej. `"abc-123"`) en las
+/// respuestas JSON, para no filtrar la forma interna de SurrealDB (`tb`/`id`).
+/// La lectura desde la DB no se ve afectada: usa el deserializador propio de
+/// SurrealDB, no este serializador.
+pub fn serialize_record_id<S: serde::Serializer>(
+    id: &RecordId,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&id.key().to_string())
+}
+
 /// Severidad clínica de la alerta. El orden deriva de la declaración de
 /// variantes: `low < medium < high < critical`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -73,6 +84,7 @@ pub struct EscalationPolicy {
 /// Incidente de escalación (activo o resuelto).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Escalation {
+    #[serde(serialize_with = "serialize_record_id")]
     pub id: RecordId,
     pub patient_id: String,
     pub alert_type: String,
@@ -223,6 +235,14 @@ pub async fn create_escalation(
         to_timeline_severity(severity),
     )
     .await;
+
+    // SPEC-052 / 3.9: notificación Web Push best-effort (sin PHI).
+    crate::push::notify_escalation(
+        db.clone(),
+        patient_id.to_string(),
+        alert_type.to_string(),
+        severity,
+    );
 
     Ok(created)
 }

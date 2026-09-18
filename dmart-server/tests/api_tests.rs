@@ -2622,3 +2622,151 @@ async fn test_audit_worm_chain_seal_and_verify() {
     assert_eq!(export.batches.len(), 1);
     assert_eq!(export.head_batch_hash, batch.batch_hash);
 }
+
+// ---------------------------------------------------------------------------
+// SPEC-052 / tarea 3.9: Web Push (VAPID). El envío a un servicio push real no
+// se prueba en CI; se prueba la criptografía y el flujo de suscripciones.
+// ---------------------------------------------------------------------------
+
+fn fake_subscription(endpoint: &str) -> dmart_server::push::NewSubscription {
+    // p256dh = punto público P-256 (65 bytes); auth = secreto de 16 bytes.
+    use base64::Engine;
+    let mut p256dh = vec![0x04u8];
+    p256dh.extend_from_slice(&[7u8; 64]);
+    let auth = vec![9u8; 16];
+    dmart_server::push::NewSubscription {
+        endpoint: endpoint.to_string(),
+        p256dh: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(p256dh),
+        auth: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(auth),
+        user_agent: Some("test-agent".to_string()),
+    }
+}
+
+#[tokio::test]
+async fn test_push_vapid_and_subscribe_flow() {
+    let (db, _dir) = test_db().await;
+    dmart_server::migrations::run_migrations(&db)
+        .await
+        .expect("migraciones push");
+    let service = dmart_server::push::PushService::load_or_generate(db.clone())
+        .await
+        .expect("claves VAPID");
+    let public_key = service.public_key().to_string();
+    assert!(!public_key.is_empty());
+    assert!(!public_key.contains('='), "URL-safe sin padding: {public_key}");
+
+    // Alta nueva -> 201 (Ok(true)).
+    let inserted = service
+        .subscribe(&db, "doctor-1", fake_subscription("https://push.example/ep1"))
+        .await
+        .expect("subscribe");
+    assert!(inserted, "primera suscripción es nueva");
+
+    // Repetir el mismo (user_id, endpoint) no duplica -> Ok(false).
+    let replaced = service
+        .subscribe(&db, "doctor-1", fake_subscription("https://push.example/ep1"))
+        .await
+        .expect("resubscribe");
+    assert!(!replaced, "la repetición reemplaza, no duplica");
+
+    let rows: Vec<dmart_server::push::PushSubscriptionRow> = db
+        .query("SELECT * FROM push_subscription WHERE user_id = 'doctor-1'")
+        .await
+        .expect("query")
+        .take(0)
+        .expect("rows");
+    assert_eq!(rows.len(), 1, "un solo registro por (user_id, endpoint)");
+
+    // Otro usuario puede suscribirse al mismo endpoint sin colisión.
+    let doctor2 = service
+        .subscribe(&db, "doctor-2", fake_subscription("https://push.example/ep1"))
+        .await
+        .expect("subscribe doctor-2");
+    assert!(doctor2);
+
+    // Sin suscripciones el envío es un no-op (nunca rompe el flujo clínico).
+    let sent = service.send_to_user(&db, "doctor-inexistente", "tit", "cuerpo").await;
+    assert_eq!(sent, 0);
+}
+
+#[tokio::test]
+async fn test_push_unsubscribe() {
+    let (db, _dir) = test_db().await;
+    dmart_server::migrations::run_migrations(&db)
+        .await
+        .expect("migraciones push");
+    let service = dmart_server::push::PushService::load_or_generate(db.clone())
+        .await
+        .expect("claves VAPID");
+
+    service
+        .subscribe(&db, "nurse-7", fake_subscription("https://push.example/ep7"))
+        .await
+        .expect("subscribe");
+
+    let removed = service
+        .unsubscribe(&db, "nurse-7", "https://push.example/ep7")
+        .await
+        .expect("unsubscribe");
+    assert_eq!(removed, 1);
+
+    let removed_again = service
+        .unsubscribe(&db, "nurse-7", "https://push.example/ep7")
+        .await
+        .expect("unsubscribe idempotente");
+    assert_eq!(removed_again, 0);
+
+    // Un usuario distinto no puede dar de baja la suscripción ajena.
+    service
+        .subscribe(&db, "nurse-7", fake_subscription("https://push.example/ep8"))
+        .await
+        .expect("subscribe otra");
+    let cross_removed = service
+        .unsubscribe(&db, "otro-user", "https://push.example/ep8")
+        .await
+        .expect("unsubscribe ajeno");
+    assert_eq!(cross_removed, 0);
+}
+
+#[tokio::test]
+async fn test_push_requires_permission() {
+    use dmart_server::rbac::Role;
+    use dmart_server::rbac::permission_for;
+
+    // Mapeo de rutas -> permiso (deny by default).
+    assert_eq!(
+        permission_for("GET", "/push/vapid"),
+        Some("notifications:read")
+    );
+    assert_eq!(
+        permission_for("POST", "/push/subscribe"),
+        Some("notifications:write")
+    );
+    assert_eq!(
+        permission_for("DELETE", "/push/unsubscribe"),
+        Some("notifications:write")
+    );
+    assert_eq!(permission_for("POST", "/push/test"), Some("support:act"));
+
+    // Roles: Soporte gestiona notificaciones; roles clínicos solo leen.
+    assert!(Role::Admin.can("notifications:write"));
+    assert!(Role::Support.can("notifications:read"));
+    assert!(Role::Support.can("notifications:write"));
+    assert!(Role::Support.can("support:act"));
+    assert!(Role::Doctor.can("notifications:read"));
+    assert!(!Role::Doctor.can("notifications:write"));
+    assert!(!Role::Viewer.can("notifications:read"));
+    assert!(!Role::Nurse.can("support:act"));
+
+    // La clave privada nunca se expone en la clave pública entregada.
+    let (db, _dir) = test_db().await;
+    dmart_server::migrations::run_migrations(&db)
+        .await
+        .expect("migraciones push");
+    let service = dmart_server::push::PushService::load_or_generate(db.clone())
+        .await
+        .expect("claves VAPID");
+    let pk = service.public_key();
+    assert_eq!(pk.len(), 87, "clave pública P-256 uncompressed (65 bytes) en URL-safe base64");
+    assert!(!pk.contains('='), "URL-safe sin padding: {pk}");
+}

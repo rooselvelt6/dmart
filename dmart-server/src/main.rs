@@ -26,6 +26,7 @@ use dmart_server::middleware::auth_mod::AuthMiddlewareConfig;
 use dmart_server::observability::{
     connect_with_retry, graceful_shutdown, init_metrics, init_tracing, observability_router,
 };
+use dmart_server::push;
 use dmart_server::security;
 use dmart_server::security::create_security_state;
 use dmart_server::server_ingest;
@@ -92,6 +93,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(audit) = audit::audit() {
         audit.init_chain().await;
     }
+
+    // Initialize Web Push (VAPID) — SPEC-052 / tarea 3.9
+    push::init_global_push((*database).clone()).await;
 
     // Seed default admin user if no users exist
     auth::seed_default_admin(&database).await?;

@@ -11,7 +11,7 @@ use serde_json::json;
 fn test_patient_golden_json() {
     let patient = Patient::new();
     let json = serde_json::to_value(&patient).expect("serialize patient");
-    
+
     // Required fields must be present
     assert!(json.get("patient_id").is_some());
     assert!(json.get("tenant_id").is_some());
@@ -57,7 +57,7 @@ fn test_patient_golden_json() {
     assert!(json.get("mortality_risk").is_some());
     assert!(json.get("created_at").is_some());
     assert!(json.get("updated_at").is_some());
-    
+
     // Check types
     assert!(json["patient_id"].is_string());
     assert!(json["tenant_id"].is_string());
@@ -95,7 +95,7 @@ fn test_measurement_golden_json() {
     let gcs = GcsData::default();
     let measurement = Measurement::new("patient-123", apache, gcs);
     let json = serde_json::to_value(&measurement).expect("serialize measurement");
-    
+
     assert!(json.get("measurement_id").is_some());
     assert!(json.get("patient_id").is_some());
     assert!(json.get("timestamp").is_some());
@@ -115,7 +115,7 @@ fn test_measurement_golden_json() {
     assert!(json.get("fingerprint").is_some());
     assert!(json.get("notas").is_some());
     assert!(json.get("tenant_id").is_some());
-    
+
     assert!(json["measurement_id"].is_string());
     assert!(json["patient_id"].is_string());
     assert!(json["timestamp"].is_string());
@@ -133,20 +133,20 @@ fn test_measurement_golden_json() {
 fn test_api_response_golden_json() {
     let response = ApiResponse::ok("test data");
     let json = serde_json::to_value(&response).expect("serialize ApiResponse");
-    
+
     assert!(json.get("success").is_some());
     assert!(json.get("data").is_some());
     assert!(json.get("error").is_some());
     // timestamp may not be present in all versions
-    
+
     assert_eq!(json["success"], true);
     assert_eq!(json["data"], "test data");
     assert_eq!(json["error"], serde_json::Value::Null);
-    
+
     // Error response
     let error_response = ApiResponse::<String>::err("error message");
     let json = serde_json::to_value(&error_response).expect("serialize error response");
-    
+
     assert_eq!(json["success"], false);
     assert_eq!(json["data"], serde_json::Value::Null);
     assert_eq!(json["error"], "error message");
@@ -163,7 +163,7 @@ fn test_forecast_golden_json() {
         covariates: None,
     };
     let json = serde_json::to_value(&req).expect("serialize forecast request");
-    
+
     assert_eq!(json["series_id"], "vitals:MAP:patient-123");
     assert!(json["values"].is_array());
     assert_eq!(json["values"].as_array().unwrap().len(), 5);
@@ -171,21 +171,29 @@ fn test_forecast_golden_json() {
     assert!(json["quantiles"].is_array());
     assert_eq!(json["quantiles"].as_array().unwrap().len(), 3);
     assert!(json["covariates"].is_null());
-    
+
     // Response
     let resp = ForecastResponse {
         series_id: "vitals:MAP:patient-123".to_string(),
         horizon: 6,
         points: vec![
-            ForecastPoint { step: 1, point: 80.0, quantiles: vec![78.0, 80.0, 82.0] },
-            ForecastPoint { step: 2, point: 80.5, quantiles: vec![78.5, 80.5, 82.5] },
+            ForecastPoint {
+                step: 1,
+                point: 80.0,
+                quantiles: vec![78.0, 80.0, 82.0],
+            },
+            ForecastPoint {
+                step: 2,
+                point: 80.5,
+                quantiles: vec![78.5, 80.5, 82.5],
+            },
         ],
         model: "naive".to_string(),
         model_version: "v1.0.0".to_string(),
         latency_ms: 1.5,
     };
     let json = serde_json::to_value(&resp).expect("serialize forecast response");
-    
+
     assert_eq!(json["series_id"], "vitals:MAP:patient-123");
     assert_eq!(json["horizon"], 6);
     assert!(json["points"].is_array());
@@ -207,14 +215,14 @@ fn test_feature_flag_golden_json() {
         updated_at: "2026-01-01T00:00:00Z".to_string(),
     };
     let json = serde_json::to_value(&flag).expect("serialize feature flag");
-    
+
     assert_eq!(json["key"], "nueva_ui");
     assert_eq!(json["description"], "Nueva interfaz de usuario");
     assert_eq!(json["enabled"], true);
     assert_eq!(json["tenant_id"], "hospital-a");
     assert_eq!(json["created_at"], "2026-01-01T00:00:00Z");
     assert_eq!(json["updated_at"], "2026-01-01T00:00:00Z");
-    
+
     // Test without tenant_id (global flag)
     let global_flag = FeatureFlag {
         tenant_id: None,
@@ -275,10 +283,14 @@ fn test_forward_compatibility() {
         "updated_at": "2026-01-01T00:00:00Z",
         "extra_field_that_does_not_exist": "should_be_ignored"
     });
-    
+
     // Should deserialize successfully ignoring unknown field
     let patient: Result<Patient, _> = serde_json::from_value(json);
-    assert!(patient.is_ok(), "Failed to deserialize with extra field: {:?}", patient.err());
+    assert!(
+        patient.is_ok(),
+        "Failed to deserialize with extra field: {:?}",
+        patient.err()
+    );
 }
 
 /// Test round-trip serialization/deserialization
@@ -288,7 +300,7 @@ fn test_round_trip_serialization() {
     let json = serde_json::to_string(&original).expect("serialize");
     let deserialized: Patient = serde_json::from_str(&json).expect("deserialize");
     let json2 = serde_json::to_string(&deserialized).expect("re-serialize");
-    
+
     // Should be identical (order of fields may differ but content same)
     let v1: serde_json::Value = serde_json::from_str(&json).expect("parse 1");
     let v2: serde_json::Value = serde_json::from_str(&json2).expect("parse 2");
@@ -301,11 +313,11 @@ fn test_enum_serialization() {
     let sexo = Sexo::Masculino;
     let json = serde_json::to_value(sexo).expect("serialize sexo");
     assert_eq!(json, "Masculino");
-    
+
     let gravedad = SeverityLevel::Critico;
     let json = serde_json::to_value(gravedad).expect("serialize gravedad");
     assert_eq!(json, "Critico");
-    
+
     let cama_tipo = TipoCama::General;
     let json = serde_json::to_value(cama_tipo).expect("serialize tipo_cama");
     assert_eq!(json, "General");

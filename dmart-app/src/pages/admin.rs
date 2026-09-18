@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::ui_kit::{ErrorState, LoadingState};
 use dmart_shared::models::*;
 use leptos::either::Either;
 use leptos::prelude::*;
@@ -76,6 +77,9 @@ pub fn AdminPage() -> impl IntoView {
                     <button class=tab_class("institucion") on:click=move |_| set_active_tab.set("institucion".to_string())>
                         <i class="fa-solid fa-hospital mr-2"></i>"Institución"
                     </button>
+                    <button class=tab_class("auditoria") on:click=move |_| set_active_tab.set("auditoria".to_string())>
+                        <i class="fa-solid fa-shield-halved mr-2"></i>"Auditoría"
+                    </button>
                 </div>
 
                 <Show when=move || active_tab.get() == "camas">
@@ -89,6 +93,9 @@ pub fn AdminPage() -> impl IntoView {
                 </Show>
                 <Show when=move || active_tab.get() == "institucion">
                     <InstitucionPanel/>
+                </Show>
+                <Show when=move || active_tab.get() == "auditoria">
+                    <AuditPanel/>
                 </Show>
             </div>
         </div>
@@ -970,6 +977,273 @@ fn StaffPanel() -> impl IntoView {
                     </tbody>
                 </table>
             </div>
+        </div>
+    }
+}
+
+const AUDIT_ACTIONS: &[(&str, &str)] = &[
+    ("", "Todas"),
+    ("LOGIN", "Login"),
+    ("LOGIN_FAILED", "Login fallido"),
+    ("LOGOUT", "Logout"),
+    ("CREATE", "Crear"),
+    ("READ", "Leer"),
+    ("UPDATE", "Actualizar"),
+    ("DELETE", "Eliminar"),
+    ("EXPORT", "Exportar"),
+    ("CONFIG_CHANGE", "Cambio de config"),
+    ("AUTH_CHANGE", "Cambio de auth"),
+    ("ACCESS_DENIED", "Acceso denegado"),
+    ("DATA_ACCESS", "Acceso a datos"),
+    ("DATA_MODIFICATION", "Modificación de datos"),
+];
+
+fn audit_action_class(action: &str) -> &'static str {
+    match action {
+        "LOGIN_FAILED" | "ACCESS_DENIED" | "DELETE" => "bg-red-100 text-red-700",
+        "CONFIG_CHANGE" | "AUTH_CHANGE" => "bg-purple-100 text-purple-700",
+        "EXPORT" => "bg-amber-100 text-amber-700",
+        "CREATE" | "DATA_MODIFICATION" => "bg-emerald-100 text-emerald-700",
+        _ => "bg-gray-100 text-gray-700",
+    }
+}
+
+#[component]
+fn AuditPanel() -> impl IntoView {
+    let (limit, set_limit) = signal(50usize);
+    let (action_filter, set_action_filter) = signal(String::new());
+    let (refresh, set_refresh) = signal(0u32);
+    let (report, set_report) = signal(Option::<api::IntegrityReport>::None);
+    let (busy, set_busy) = signal(false);
+    let (msg, set_msg) = signal(Option::<(bool, String)>::None);
+
+    let logs = LocalResource::new(move || {
+        let action = action_filter.get();
+        let lim = limit.get();
+        let _ = refresh.get();
+        async move {
+            let action = if action.is_empty() {
+                None
+            } else {
+                Some(action.as_str())
+            };
+            api::get_audit_logs(lim, action).await
+        }
+    });
+
+    let uci_stats = LocalResource::new(|| async move { api::get_stats().await.ok() });
+
+    let do_verify = move |_| {
+        set_busy.set(true);
+        set_msg.set(None);
+        spawn_local(async move {
+            match api::verify_audit_chain().await {
+                Ok(r) => set_report.set(Some(r)),
+                Err(e) => set_msg.set(Some((false, e))),
+            }
+            set_busy.set(false);
+        });
+    };
+
+    let do_seal = move |_| {
+        set_busy.set(true);
+        set_msg.set(None);
+        spawn_local(async move {
+            match api::seal_audit_batch().await {
+                Ok(Some(b)) => set_msg.set(Some((
+                    true,
+                    format!("Lote #{} sellado ({} eventos).", b.sequence, b.count),
+                ))),
+                Ok(None) => set_msg.set(Some((
+                    true,
+                    "No hay eventos nuevos para sellar.".to_string(),
+                ))),
+                Err(e) => set_msg.set(Some((false, e))),
+            }
+            set_busy.set(false);
+            set_refresh.update(|n| *n += 1);
+        });
+    };
+
+    view! {
+        <div class="space-y-4">
+            <Suspense fallback=move || view! { <div class="h-16 animate-pulse rounded-xl" style="background:var(--uci-surface);"></div> }>
+                {move || uci_stats.get().map(|s| match s {
+                    Some(stats) => view! {
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {admin_stat_card("Pacientes", &stats.total_pacientes.to_string(), "#6366F1", "fa-users")}
+                            {admin_stat_card("Activos", &stats.pacientes_activos.to_string(), "#10B981", "fa-heart-pulse")}
+                            {admin_stat_card("Críticos", &stats.por_gravedad.criticos.to_string(), "#EF4444", "fa-triangle-exclamation")}
+                            {admin_stat_card("Severos", &stats.por_gravedad.severos.to_string(), "#F59E0B", "fa-circle-exclamation")}
+                            {admin_stat_card("Mortalidad", &format!("{:.1}%", stats.ejecutivo.mortalidad_real_pct), "#8B5CF6", "fa-chart-line")}
+                            {admin_stat_card("LOS", &format!("{:.1}d", stats.ejecutivo.los_dias_promedio), "#3B82F6", "fa-clock")}
+                        </div>
+                    }.into_any(),
+                    None => view! {}.into_any(),
+                })}
+            </Suspense>
+
+            <div class="rounded-xl p-4" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
+                <div class="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label class="block text-xs font-medium mb-1" style="color:var(--uci-muted);">"Acción"</label>
+                        <select
+                            class="px-3 py-2 rounded-lg text-sm"
+                            style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
+                            prop:value=move || action_filter.get()
+                            on:change=move |ev| {
+                                set_action_filter.set(event_target_value(&ev));
+                                set_refresh.update(|n| *n += 1);
+                            }
+                        >
+                            {AUDIT_ACTIONS.iter().map(|(v, l)| view! {
+                                <option value=*v>{*l}</option>
+                            }).collect_view()}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1" style="color:var(--uci-muted);">"Límite"</label>
+                        <select
+                            class="px-3 py-2 rounded-lg text-sm"
+                            style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
+                            on:change=move |ev| {
+                                if let Ok(n) = event_target_value(&ev).parse::<usize>() {
+                                    set_limit.set(n);
+                                }
+                                set_refresh.update(|n| *n += 1);
+                            }
+                        >
+                            <option value="25">"25"</option>
+                            <option value="50" selected>"50"</option>
+                            <option value="100">"100"</option>
+                            <option value="200">"200"</option>
+                        </select>
+                    </div>
+                    <div class="flex-1"></div>
+                    <button
+                        class="px-4 h-10 rounded-lg text-sm font-medium"
+                        style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
+                        disabled=move || busy.get()
+                        on:click=do_verify
+                    >
+                        <i class="fa-solid fa-link mr-2"></i>"Verificar cadena"
+                    </button>
+                    <button
+                        class="btn-primary px-4 h-10 text-sm"
+                        disabled=move || busy.get()
+                        on:click=do_seal
+                    >
+                        <i class="fa-solid fa-lock mr-2"></i>"Sellar lote"
+                    </button>
+                </div>
+
+                {move || msg.get().map(|(ok, text)| view! {
+                    <div class="mt-3 p-3 rounded-lg text-sm"
+                        style=if ok { "background:rgba(16,185,129,0.12); color:#059669;" }
+                        else { "background:rgba(239,68,68,0.12); color:#DC2626;" }>
+                        <i class=format!("fa-solid {} mr-2", if ok { "fa-circle-check" } else { "fa-triangle-exclamation" })></i>
+                        {text}
+                    </div>
+                })}
+
+                {move || report.get().map(|r| {
+                    let color = if r.ok { "#10B981" } else { "#EF4444" };
+                    view! {
+                        <div class="mt-3 p-3 rounded-lg text-sm" style=format!("background:{}1A; color:{};", color, color)>
+                            <div class="font-semibold mb-1">
+                                {if r.ok { "Cadena de auditoría íntegra" } else { "Integridad comprometida" }}
+                            </div>
+                            <div>
+                                {format!(
+                                    "Eventos: {} totales · {} con hash · {} válidos · {} sin hash · {} lotes · {} firmas válidas · {} sellables",
+                                    r.logs_total, r.logs_hashed, r.logs_valid, r.logs_unhashed,
+                                    r.batches_total, r.signatures_valid, r.sealable_logs
+                                )}
+                            </div>
+                        </div>
+                    }
+                })}
+            </div>
+
+            <Suspense fallback=move || view! { <LoadingState label="Cargando auditoría..."/> }>
+                {move || logs.get().map(|res| match res {
+                    Ok(list) if list.is_empty() => view! {
+                        <div class="p-8 text-center rounded-xl text-sm" style="background:var(--uci-surface); color:var(--uci-muted);">
+                            <i class="fa-solid fa-inbox text-2xl mb-2"></i>
+                            <p>"Sin eventos de auditoría para el filtro seleccionado"</p>
+                        </div>
+                    }.into_any(),
+                    Ok(list) => view! {
+                        <AuditLogsTable logs=list />
+                    }.into_any(),
+                    Err(e) => view! {
+                        <ErrorState message=e on_retry=Some(Callback::new(move |_| set_refresh.update(|n| *n += 1))) />
+                    }.into_any(),
+                })}
+            </Suspense>
+        </div>
+    }
+}
+
+#[component]
+fn AuditLogsTable(logs: Vec<api::AuditLog>) -> impl IntoView {
+    let rows = logs
+        .into_iter()
+        .map(|l| {
+            let class = audit_action_class(&l.action).to_string();
+            let success_color = if l.success { "#10B981" } else { "#EF4444" };
+            let success_label = if l.success { "OK" } else { "Fallo" };
+            let usuario = l
+                .username
+                .clone()
+                .or_else(|| l.user_id.clone())
+                .unwrap_or_else(|| "—".to_string());
+            let ip = l.ip_address.clone().unwrap_or_else(|| "—".to_string());
+            let detalle = l
+                .details
+                .clone()
+                .or_else(|| l.error_message.clone())
+                .unwrap_or_default();
+            let resource = match &l.resource_id {
+                Some(id) => format!("{}#{}", l.resource, id),
+                None => l.resource.clone(),
+            };
+            view! {
+                <tr class="hover:bg-black/5">
+                    <td class="px-4 py-3 text-xs whitespace-nowrap" style="color:var(--uci-muted);">{l.timestamp.clone()}</td>
+                    <td class="px-4 py-3 text-sm font-medium" style="color:var(--uci-text);">{usuario}</td>
+                    <td class="px-4 py-3">
+                        <span class=format!("px-2 py-1 rounded-full text-xs font-semibold {}", class)>{l.action.clone()}</span>
+                    </td>
+                    <td class="px-4 py-3 text-sm font-mono text-xs" style="color:var(--uci-muted);">{resource}</td>
+                    <td class="px-4 py-3 text-xs" style="color:var(--uci-muted);">{ip}</td>
+                    <td class="px-4 py-3">
+                        <span class="text-xs font-semibold" style=format!("color:{};", success_color)>{success_label}</span>
+                    </td>
+                    <td class="px-4 py-3 text-xs max-w-xs truncate" style="color:var(--uci-muted);">{detalle}</td>
+                </tr>
+            }
+        })
+        .collect_view();
+
+    view! {
+        <div class="rounded-xl overflow-x-auto" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
+            <table class="w-full">
+                <thead style="background:var(--uci-bg);">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Fecha"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Usuario"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Acción"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Recurso"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"IP"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Resultado"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Detalles"</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y" style="border-color:var(--uci-border);">
+                    {rows}
+                </tbody>
+            </table>
         </div>
     }
 }

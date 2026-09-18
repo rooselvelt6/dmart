@@ -32,3 +32,6 @@ dmart.service
 node_modules/
 playwright-report/
 test-results/
+
+# cargo-deny advisory DB (descargado, no es fuente)
+/advisory-db

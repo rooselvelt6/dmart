@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use linfa::prelude::*;
 use linfa_trees::DecisionTree;
 use ndarray::{Array1, Array2, Axis};
@@ -15,7 +15,7 @@ use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
 use crate::ml::MortalityModel;
-use crate::ml_features::{FeatureSet, Normalizer, build_mortality_v2};
+use crate::ml_features::{FeatureSet, build_mortality_v2};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnsembleConfig {
@@ -64,13 +64,24 @@ impl EnsembleMortalityFeatures {
     }
 
     pub fn to_array(&self, feature_set: &FeatureSet) -> Array1<f32> {
-        Array1::from_vec(feature_set.feature_names().iter().map(|f| self.get(f)).collect())
+        Array1::from_vec(
+            feature_set
+                .feature_names()
+                .iter()
+                .map(|f| self.get(f))
+                .collect(),
+        )
     }
 }
 
 pub trait MortalityPredictor: Send + Sync {
-    fn predict_proba(&self, features: &EnsembleMortalityFeatures, feature_set: &FeatureSet) -> Result<f32>;
-    fn predict(&self, features: &EnsembleMortalityFeatures, feature_set: &FeatureSet) -> Result<u8>;
+    fn predict_proba(
+        &self,
+        features: &EnsembleMortalityFeatures,
+        feature_set: &FeatureSet,
+    ) -> Result<f32>;
+    fn predict(&self, features: &EnsembleMortalityFeatures, feature_set: &FeatureSet)
+    -> Result<u8>;
     fn feature_importance(&self) -> Vec<(String, f32)>;
 }
 
@@ -88,7 +99,11 @@ impl DecisionTreePredictor {
         }
     }
 
-    pub fn train(features: &Array2<f32>, targets: &Array1<usize>, config: &EnsembleConfig) -> Result<Self> {
+    pub fn train(
+        features: &Array2<f32>,
+        targets: &Array1<usize>,
+        config: &EnsembleConfig,
+    ) -> Result<Self> {
         let dataset = Dataset::new(features.clone(), targets.clone());
         let model = DecisionTree::params()
             .max_depth(Some(config.dt_max_depth))
@@ -96,23 +111,38 @@ impl DecisionTreePredictor {
             .min_weight_leaf(config.dt_min_samples_leaf as f32)
             .fit(&dataset)?;
         let feature_names: Vec<String> = (0..features.ncols()).map(|i| format!("f{}", i)).collect();
-        Ok(Self { model, feature_names })
+        Ok(Self {
+            model,
+            feature_names,
+        })
     }
 }
 
 impl MortalityPredictor for DecisionTreePredictor {
-    fn predict_proba(&self, features: &EnsembleMortalityFeatures, feature_set: &FeatureSet) -> Result<f32> {
+    fn predict_proba(
+        &self,
+        features: &EnsembleMortalityFeatures,
+        feature_set: &FeatureSet,
+    ) -> Result<f32> {
         let x = features.to_array(feature_set).insert_axis(Axis(0));
         let pred = self.model.predict(&x);
         Ok(pred[0] as f32)
     }
 
-    fn predict(&self, features: &EnsembleMortalityFeatures, feature_set: &FeatureSet) -> Result<u8> {
-        self.predict_proba(features, feature_set).map(|p| if p > 0.5 { 1 } else { 0 })
+    fn predict(
+        &self,
+        features: &EnsembleMortalityFeatures,
+        feature_set: &FeatureSet,
+    ) -> Result<u8> {
+        self.predict_proba(features, feature_set)
+            .map(|p| if p > 0.5 { 1 } else { 0 })
     }
 
     fn feature_importance(&self) -> Vec<(String, f32)> {
-        self.feature_names.iter().map(|f| (f.clone(), 1.0)).collect()
+        self.feature_names
+            .iter()
+            .map(|f| (f.clone(), 1.0))
+            .collect()
     }
 }
 
@@ -167,7 +197,11 @@ impl CalibrationModel {
     }
 
     pub fn fit_isotonic(&mut self, predictions: &[f32], targets: &[usize]) -> Result<()> {
-        let mut pairs: Vec<(f32, usize)> = predictions.iter().zip(targets).map(|(p, t)| (*p, *t)).collect();
+        let mut pairs: Vec<(f32, usize)> = predictions
+            .iter()
+            .zip(targets)
+            .map(|(p, t)| (*p, *t))
+            .collect();
         pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         let mut x = Vec::new();
@@ -217,17 +251,29 @@ impl CalibrationModel {
             CalibrationMethod::Platt => {
                 if let (Some(a), Some(b)) = (self.platt_a, self.platt_b) {
                     1.0 / (1.0 + (-a * p - b).exp())
-                } else { p }
+                } else {
+                    p
+                }
             }
             CalibrationMethod::Isotonic => {
                 if let (Some(x), Some(y)) = (&self.isotonic_x, &self.isotonic_y) {
-                    if x.is_empty() { return p; }
-                    let idx = x.binary_search_by(|&v| v.partial_cmp(&p).unwrap()).unwrap_or_else(|e| e);
-                    if idx == 0 { return y[0]; }
-                    if idx >= x.len() { return y[y.len() - 1]; }
+                    if x.is_empty() {
+                        return p;
+                    }
+                    let idx = x
+                        .binary_search_by(|&v| v.partial_cmp(&p).unwrap())
+                        .unwrap_or_else(|e| e);
+                    if idx == 0 {
+                        return y[0];
+                    }
+                    if idx >= x.len() {
+                        return y[y.len() - 1];
+                    }
                     let t = (p - x[idx - 1]) / (x[idx] - x[idx - 1]);
                     y[idx - 1] + t * (y[idx] - y[idx - 1])
-                } else { p }
+                } else {
+                    p
+                }
             }
             CalibrationMethod::None => p,
         }
@@ -290,7 +336,10 @@ impl MortalityEnsemble {
 
         let mut val_preds = Vec::new();
         for i in 0..val_features.nrows() {
-            let features = EnsembleMortalityFeatures::from_row(val_features.row(i).to_owned(), &self.feature_set);
+            let features = EnsembleMortalityFeatures::from_row(
+                val_features.row(i).to_owned(),
+                &self.feature_set,
+            );
             if let Some(dt) = &self.dt_predictor {
                 if let Ok(prob) = dt.predict_proba(&features, &self.feature_set) {
                     val_preds.push(prob);
@@ -300,7 +349,8 @@ impl MortalityEnsemble {
             }
         }
 
-        self.calibration.fit(&val_preds, val_targets.as_slice().unwrap())?;
+        self.calibration
+            .fit(&val_preds, val_targets.as_slice().unwrap())?;
         Ok(())
     }
 
@@ -314,7 +364,8 @@ impl MortalityEnsemble {
     }
 
     pub fn predict(&self, features: &EnsembleMortalityFeatures) -> Result<u8> {
-        self.predict_proba(features).map(|p| if p > 0.5 { 1 } else { 0 })
+        self.predict_proba(features)
+            .map(|p| if p > 0.5 { 1 } else { 0 })
     }
 
     pub fn feature_importance(&self) -> Vec<(String, f32)> {
@@ -325,18 +376,26 @@ impl MortalityEnsemble {
         }
     }
 
-    pub fn evaluate(&mut self, test_features: &Array2<f32>, test_targets: &Array1<usize>) -> Result<EnsembleMetrics> {
+    pub fn evaluate(
+        &mut self,
+        test_features: &Array2<f32>,
+        test_targets: &Array1<usize>,
+    ) -> Result<EnsembleMetrics> {
         let mut predictions = Vec::new();
         let mut probs = Vec::new();
 
         for i in 0..test_features.nrows() {
-            let features = EnsembleMortalityFeatures::from_row(test_features.row(i).to_owned(), &self.feature_set);
+            let features = EnsembleMortalityFeatures::from_row(
+                test_features.row(i).to_owned(),
+                &self.feature_set,
+            );
             let prob = self.predict_proba(&features)?;
             probs.push(prob);
             predictions.push(if prob > 0.5 { 1 } else { 0 });
         }
 
-        let metrics = compute_ensemble_metrics(&probs, &predictions, test_targets.as_slice().unwrap());
+        let metrics =
+            compute_ensemble_metrics(&probs, &predictions, test_targets.as_slice().unwrap());
         self.metrics = Some(metrics.clone());
         Ok(metrics)
     }
@@ -345,19 +404,42 @@ impl MortalityEnsemble {
 fn compute_ensemble_metrics(probs: &[f32], preds: &[u8], targets: &[usize]) -> EnsembleMetrics {
     let n = probs.len();
 
-    let tp = preds.iter().zip(targets).filter(|(p, t)| **p == 1 && **t == 1).count() as f32;
-    let fp = preds.iter().zip(targets).filter(|(p, t)| **p == 1 && **t == 0).count() as f32;
-    let tn = preds.iter().zip(targets).filter(|(p, t)| **p == 0 && **t == 0).count() as f32;
-    let fn_ = preds.iter().zip(targets).filter(|(p, t)| **p == 0 && **t == 1).count() as f32;
+    let tp = preds
+        .iter()
+        .zip(targets)
+        .filter(|(p, t)| **p == 1 && **t == 1)
+        .count() as f32;
+    let fp = preds
+        .iter()
+        .zip(targets)
+        .filter(|(p, t)| **p == 1 && **t == 0)
+        .count() as f32;
+    let tn = preds
+        .iter()
+        .zip(targets)
+        .filter(|(p, t)| **p == 0 && **t == 0)
+        .count() as f32;
+    let fn_ = preds
+        .iter()
+        .zip(targets)
+        .filter(|(p, t)| **p == 0 && **t == 1)
+        .count() as f32;
 
     let accuracy = (tp + tn) / n as f32;
     let precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
     let recall = if tp + fn_ > 0.0 { tp / (tp + fn_) } else { 0.0 };
-    let f1 = if precision + recall > 0.0 { 2.0 * precision * recall / (precision + recall) } else { 0.0 };
+    let f1 = if precision + recall > 0.0 {
+        2.0 * precision * recall / (precision + recall)
+    } else {
+        0.0
+    };
 
-    let brier = probs.iter().zip(targets)
+    let brier = probs
+        .iter()
+        .zip(targets)
         .map(|(p, t)| (p - *t as f32).powi(2))
-        .sum::<f32>() / n as f32;
+        .sum::<f32>()
+        / n as f32;
 
     let auroc = compute_auroc(probs, targets);
     let auprc = compute_auprc(probs, targets);
@@ -367,7 +449,11 @@ fn compute_ensemble_metrics(probs: &[f32], preds: &[u8], targets: &[usize]) -> E
     let bootstrap_ci_auroc = bootstrap_ci(probs, targets, |p, t| compute_auroc(p, t));
     let bootstrap_ci_auprc = bootstrap_ci(probs, targets, |p, t| compute_auprc(p, t));
     let bootstrap_ci_brier = bootstrap_ci(probs, targets, |p, t| {
-        p.iter().zip(t).map(|(a,b)| (a - *b as f32).powi(2)).sum::<f32>() / p.len() as f32
+        p.iter()
+            .zip(t)
+            .map(|(a, b)| (a - *b as f32).powi(2))
+            .sum::<f32>()
+            / p.len() as f32
     });
 
     EnsembleMetrics {
@@ -394,7 +480,9 @@ fn compute_auroc(probs: &[f32], targets: &[usize]) -> f32 {
     let mut tp = 0;
     let pos = targets.iter().filter(|&&t| t == 1).count();
     let neg = targets.len() - pos;
-    if pos == 0 || neg == 0 { return 0.5; }
+    if pos == 0 || neg == 0 {
+        return 0.5;
+    }
 
     let mut auroc = 0.0;
 
@@ -413,7 +501,9 @@ fn compute_auprc(probs: &[f32], targets: &[usize]) -> f32 {
     pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
 
     let pos = targets.iter().filter(|&&t| t == 1).count() as f32;
-    if pos == 0.0 { return 0.0; }
+    if pos == 0.0 {
+        return 0.0;
+    }
 
     let mut tp = 0.0;
     let mut fp = 0.0;
@@ -478,7 +568,11 @@ fn hosmer_lemeshow_test(probs: &[f32], targets: &[usize]) -> f32 {
 
         for (p, &t) in probs.iter().zip(targets) {
             if *p >= low && *p < high {
-                if t == 1 { obs_pos += 1; } else { obs_neg += 1; }
+                if t == 1 {
+                    obs_pos += 1;
+                } else {
+                    obs_neg += 1;
+                }
                 exp_pos += *p;
                 exp_neg += 1.0 - *p;
             }
@@ -495,8 +589,12 @@ fn hosmer_lemeshow_test(probs: &[f32], targets: &[usize]) -> f32 {
     if df > 0.0 {
         if let Ok(dist) = ChiSquared::new(df) {
             1.0 - dist.cdf(chi2 as f64) as f32
-        } else { 1.0 }
-    } else { 1.0 }
+        } else {
+            1.0
+        }
+    } else {
+        1.0
+    }
 }
 
 fn bootstrap_ci<F>(probs: &[f32], targets: &[usize], metric_fn: F) -> (f32, f32)
@@ -509,7 +607,8 @@ where
     let mut rng = StdRng::seed_from_u64(42);
 
     for _ in 0..n_boot {
-        let indices: Vec<usize> = (0..n).collect::<Vec<_>>()
+        let indices: Vec<usize> = (0..n)
+            .collect::<Vec<_>>()
             .choose_multiple(&mut rng, n)
             .cloned()
             .collect();

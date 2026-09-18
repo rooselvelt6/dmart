@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -172,7 +171,12 @@ impl Forecaster for TimesFmClient {
 pub struct NaiveForecaster;
 
 impl NaiveForecaster {
-    fn simple_forecast(&self, values: &[f32], horizon: usize, quantiles: &[f32]) -> Vec<ForecastPoint> {
+    fn simple_forecast(
+        &self,
+        values: &[f32],
+        horizon: usize,
+        quantiles: &[f32],
+    ) -> Vec<ForecastPoint> {
         if values.is_empty() {
             return vec![];
         }
@@ -310,7 +314,8 @@ impl ForecastService {
         }
 
         // Backend activo por env var, default naive
-        let active_backend = std::env::var("DMART_FORECASTER").unwrap_or_else(|_| "naive".to_string());
+        let active_backend =
+            std::env::var("DMART_FORECASTER").unwrap_or_else(|_| "naive".to_string());
         registry.set_active(&active_backend);
 
         Self { registry }
@@ -368,7 +373,9 @@ mod tests {
     fn dummy_req() -> ForecastRequest {
         ForecastRequest {
             series_id: "test:MAP".to_string(),
-            values: (0..100).map(|i| (i as f32 * 0.1).sin() * 10.0 + 80.0).collect(),
+            values: (0..100)
+                .map(|i| (i as f32 * 0.1).sin() * 10.0 + 80.0)
+                .collect(),
             horizon: 6,
             quantiles: vec![0.1, 0.5, 0.9],
             covariates: None,

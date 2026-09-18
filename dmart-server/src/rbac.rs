@@ -171,6 +171,54 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
         return Some("patients:read");
     }
 
+    // Fase 3 (3.10-3.12): operación. Los dispositivos y la calidad de datos son
+    // de administración/operación (lectura para Soporte); el escalamiento es
+    // clínico: cualquier rol clínico lo lee y lo acusa.
+    if path.starts_with("/devices") {
+        return match m.as_str() {
+            "GET" => Some("devices:read"),
+            "POST" | "PUT" | "DELETE" => Some("devices:write"),
+            _ => None,
+        };
+    }
+
+    if path.starts_with("/data-quality") {
+        return match m.as_str() {
+            "GET" => Some("quality:read"),
+            "POST" | "PUT" | "DELETE" => Some("quality:write"),
+            _ => None,
+        };
+    }
+
+    if path.starts_with("/escalation") {
+        // La configuración de políticas es administrativa; el ciclo de vida de
+        // una alerta (ack/escalate) es una acción clínica.
+        if path.starts_with("/escalation/policies") {
+            return match m.as_str() {
+                "GET" => Some("escalation:read"),
+                "POST" | "PUT" | "DELETE" => Some("config:write"),
+                _ => None,
+            };
+        }
+        return match m.as_str() {
+            "GET" => Some("escalation:read"),
+            "POST" | "PUT" | "DELETE" => Some("escalation:act"),
+            _ => None,
+        };
+    }
+
+    // SPEC-052 / 3.9: Web Push. La clave pública la leen los roles clínicos;
+    // suscribirse exige `notifications:write`; el envío de prueba es de Soporte.
+    if path.starts_with("/push") {
+        return match m.as_str() {
+            "GET" => Some("notifications:read"),
+            "DELETE" => Some("notifications:write"),
+            "POST" if path.ends_with("/test") => Some("support:act"),
+            "POST" | "PUT" => Some("notifications:write"),
+            _ => None,
+        };
+    }
+
     // Rutas de cuidado clínico: accesibles para cualquier rol clínico autenticado.
     if path.starts_with("/admin/check-camas")
         || path.starts_with("/admin/camas/disponibles")
@@ -470,6 +518,94 @@ mod tests {
         );
         assert!(!Role::Support.can("users:delete"));
         assert!(!Role::Support.can("config:write"));
+    }
+
+    #[test]
+    fn permission_for_operational_routes() {
+        // 3.10 Dispositivos.
+        assert_eq!(permission_for("GET", "/devices"), Some("devices:read"));
+        assert_eq!(
+            permission_for("GET", "/devices/status"),
+            Some("devices:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/devices/abc"),
+            Some("devices:read")
+        );
+        assert_eq!(permission_for("POST", "/devices"), Some("devices:write"));
+        assert_eq!(
+            permission_for("POST", "/devices/abc/heartbeat"),
+            Some("devices:write")
+        );
+        // 3.11 Calidad de datos.
+        assert_eq!(
+            permission_for("GET", "/data-quality/report"),
+            Some("quality:read")
+        );
+        assert_eq!(
+            permission_for("GET", "/data-quality/summary"),
+            Some("quality:read")
+        );
+        assert_eq!(
+            permission_for("POST", "/data-quality/validate"),
+            Some("quality:write")
+        );
+        // 3.12 Escalamiento.
+        assert_eq!(
+            permission_for("GET", "/escalation/policies"),
+            Some("escalation:read")
+        );
+        assert_eq!(
+            permission_for("POST", "/escalation/policies"),
+            Some("config:write")
+        );
+        assert_eq!(
+            permission_for("GET", "/escalation/active"),
+            Some("escalation:read")
+        );
+        assert_eq!(
+            permission_for("POST", "/escalation/abc/ack"),
+            Some("escalation:act")
+        );
+        assert_eq!(
+            permission_for("POST", "/escalation/abc/escalate"),
+            Some("escalation:act")
+        );
+        // Los roles clínicos operan el escalamiento; solo Admin lo configura.
+        assert!(Role::Doctor.can("escalation:act"));
+        assert!(Role::Nurse.can("escalation:act"));
+        assert!(Role::Viewer.can("escalation:read"));
+        assert!(!Role::Viewer.can("escalation:act"));
+        assert!(!Role::Doctor.can("config:write"));
+        assert!(!Role::Nurse.can("devices:write"));
+        assert!(Role::Support.can("devices:read"));
+        assert!(Role::Support.can("quality:read"));
+        assert!(!Role::Support.can("devices:write"));
+        assert!(!Role::Support.can("escalation:act"));
+        // SPEC-052: Web Push.
+        assert_eq!(
+            permission_for("GET", "/push/vapid"),
+            Some("notifications:read")
+        );
+        assert_eq!(
+            permission_for("POST", "/push/subscribe"),
+            Some("notifications:write")
+        );
+        assert_eq!(
+            permission_for("DELETE", "/push/unsubscribe"),
+            Some("notifications:write")
+        );
+        assert_eq!(
+            permission_for("POST", "/push/test"),
+            Some("support:act")
+        );
+        assert!(Role::Doctor.can("notifications:read"));
+        assert!(Role::Nurse.can("notifications:read"));
+        assert!(!Role::Viewer.can("notifications:read"));
+        assert!(Role::Support.can("notifications:read"));
+        assert!(Role::Support.can("notifications:write"));
+        assert!(Role::Support.can("support:act"));
+        assert!(!Role::Nurse.can("notifications:write"));
     }
 
     #[test]

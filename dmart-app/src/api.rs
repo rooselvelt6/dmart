@@ -194,6 +194,56 @@ pub async fn mfa_disable(code: &str) -> ApiResult<()> {
     ensure_success(resp)
 }
 
+// ─── Web Push (SPEC-052) ────────────────────────────────────────────────────
+
+/// Clave pública VAPID (base64url) para suscribirse desde el navegador.
+pub async fn push_public_key() -> ApiResult<String> {
+    let resp: ApiResponse<Value> = authed_get(&format!("{}/push/vapid", API_BASE))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data
+        .and_then(|d| d.get("public_key").and_then(|k| k.as_str()).map(String::from))
+        .ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+/// Registra la suscripción del navegador en el backend.
+pub async fn push_subscribe(endpoint: &str, p256dh: &str, auth: &str) -> ApiResult<()> {
+    let body = serde_json::json!({
+        "endpoint": endpoint,
+        "p256dh": p256dh,
+        "auth": auth,
+    });
+    let resp: ApiResponse<()> = authed_post(&format!("{}/push/subscribe", API_BASE))
+        .json(&body)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_success(resp)
+}
+
+/// Da de baja la suscripción del navegador en el backend.
+pub async fn push_unsubscribe(endpoint: &str) -> ApiResult<()> {
+    let body = serde_json::json!({ "endpoint": endpoint });
+    let resp: ApiResponse<()> = authed_delete(&format!("{}/push/unsubscribe", API_BASE))
+        .json(&body)
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_success(resp)
+}
+
 /// Completa el login MFA enviando el token de reto obtenido en `login` junto
 /// con el código TOTP o un código de respaldo. Devuelve la sesión completa.
 pub async fn mfa_verify(
@@ -559,6 +609,89 @@ pub async fn get_admin_stats() -> ApiResult<AdminStats> {
         .json()
         .await
         .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+// ─── Auditoría HIPAA ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuditLog {
+    pub uid: String,
+    pub timestamp: String,
+    pub user_id: Option<String>,
+    pub username: Option<String>,
+    pub action: String,
+    pub resource: String,
+    pub resource_id: Option<String>,
+    pub details: Option<String>,
+    pub ip_address: Option<String>,
+    pub success: bool,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IntegrityReport {
+    pub logs_total: usize,
+    pub logs_hashed: usize,
+    pub logs_valid: usize,
+    pub logs_unhashed: usize,
+    pub batches_total: usize,
+    pub signatures_valid: usize,
+    pub chain_valid: bool,
+    pub head_batch_hash: String,
+    pub sealable_logs: usize,
+    pub ok: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AuditBatch {
+    pub batch_id: String,
+    pub sequence: u64,
+    pub first_uid: String,
+    pub last_uid: String,
+    pub count: u64,
+    pub first_ts: String,
+    pub last_ts: String,
+    pub batch_hash: String,
+    pub signature: String,
+    pub created_at: String,
+}
+
+pub async fn get_audit_logs(limit: usize, action: Option<&str>) -> ApiResult<Vec<AuditLog>> {
+    let mut url = format!("{}/admin/audit?limit={}", API_BASE, limit);
+    if let Some(a) = action.filter(|a| !a.is_empty()) {
+        url.push_str(&format!("&action={a}"));
+    }
+    let resp: ApiResponse<Vec<AuditLog>> = authed_get(&url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn verify_audit_chain() -> ApiResult<IntegrityReport> {
+    let resp: ApiResponse<IntegrityReport> = authed_post(&format!("{}/admin/audit/verify", API_BASE))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json()
+        .await
+        .map_err(|e| e.to_string())?;
+    resp.data.ok_or_else(|| resp.error.unwrap_or_default())
+}
+
+pub async fn seal_audit_batch() -> ApiResult<Option<AuditBatch>> {
+    let resp: ApiResponse<Option<AuditBatch>> =
+        authed_post(&format!("{}/admin/audit/seal", API_BASE))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 
@@ -1054,4 +1187,174 @@ pub async fn run_support_action(
         Req { model, version },
     )
     .await
+}
+
+// ─── Fase 3: Dispositivos (SPEC-017) ───────────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeviceStateCount {
+    pub estado: String,
+    pub total: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeviceTypeCount {
+    pub device_type: String,
+    pub total: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeviceStatusSummary {
+    pub total: u64,
+    pub por_estado: Vec<DeviceStateCount>,
+    pub por_tipo: Vec<DeviceTypeCount>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClinicalDevice {
+    pub id: String,
+    pub device_type: String,
+    pub fabricante: String,
+    pub modelo: String,
+    pub firmware: String,
+    pub serial: String,
+    pub cama_id: Option<String>,
+    pub ubicacion: Option<String>,
+    pub estado: String,
+    pub registered_at: i64,
+    pub last_seen_at: Option<i64>,
+    pub heartbeat_interval_secs: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RegisterDeviceRequest {
+    pub device_type: String,
+    pub fabricante: String,
+    pub modelo: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub firmware: String,
+    pub serial: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cama_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ubicacion: Option<String>,
+    pub estado: String,
+}
+
+pub async fn list_devices(estado: Option<String>) -> ApiResult<Vec<ClinicalDevice>> {
+    match estado.filter(|e| !e.is_empty()) {
+        Some(e) => get(&format!("/devices?estado={}", e)).await,
+        None => get("/devices").await,
+    }
+}
+
+pub async fn get_device_status() -> ApiResult<DeviceStatusSummary> {
+    get("/devices/status").await
+}
+
+pub async fn register_device(req: RegisterDeviceRequest) -> ApiResult<ClinicalDevice> {
+    post("/devices", req).await
+}
+
+pub async fn heartbeat_device(id: &str) -> ApiResult<ClinicalDevice> {
+    post(&format!("/devices/{}/heartbeat", id), serde_json::json!({})).await
+}
+
+// ─── Fase 3: Calidad de datos (SPEC-018) ───────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct QualityIssue {
+    pub id: String,
+    pub message_id: String,
+    pub patient_ref: String,
+    pub severity: String,
+    pub code: String,
+    pub detail: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct QualitySeverityCount {
+    pub severity: String,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct QualityCodeCount {
+    pub code: String,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct QualitySummary {
+    pub total: u64,
+    pub by_severity: Vec<QualitySeverityCount>,
+    pub by_code: Vec<QualityCodeCount>,
+}
+
+pub async fn get_quality_report() -> ApiResult<Vec<QualityIssue>> {
+    get("/data-quality/report").await
+}
+
+pub async fn get_quality_summary() -> ApiResult<QualitySummary> {
+    get("/data-quality/summary").await
+}
+
+// ─── Fase 3: Escalamiento de alertas (SPEC-019) ────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EscalationPolicy {
+    pub severity: String,
+    pub max_response_minutes: u32,
+    pub timeout_minutes: u32,
+    pub target_role: String,
+    pub enabled: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Escalation {
+    pub id: String,
+    pub patient_id: String,
+    pub alert_type: String,
+    pub severity: String,
+    pub level: u32,
+    pub status: String,
+    pub policy_severity: String,
+    pub created_at: String,
+    pub acknowledged_at: Option<String>,
+    pub escalated_at: Option<String>,
+    pub resolved_at: Option<String>,
+    pub acknowledged_by: Option<String>,
+    pub escalated_to: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SetPolicyRequest {
+    pub severity: String,
+    pub max_response_minutes: Option<u32>,
+    pub timeout_minutes: Option<u32>,
+    pub target_role: Option<String>,
+    pub enabled: Option<bool>,
+}
+
+pub async fn list_active_escalations() -> ApiResult<Vec<Escalation>> {
+    get("/escalation/active").await
+}
+
+pub async fn list_escalation_policies() -> ApiResult<Vec<EscalationPolicy>> {
+    get("/escalation/policies").await
+}
+
+pub async fn set_escalation_policy(req: SetPolicyRequest) -> ApiResult<EscalationPolicy> {
+    post("/escalation/policies", req).await
+}
+
+pub async fn ack_escalation(id: &str) -> ApiResult<Escalation> {
+    post(&format!("/escalation/{}/ack", id), serde_json::json!({})).await
+}
+
+pub async fn escalate_escalation(id: &str) -> ApiResult<Escalation> {
+    post(&format!("/escalation/{}/escalate", id), serde_json::json!({})).await
 }

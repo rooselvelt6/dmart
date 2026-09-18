@@ -3,6 +3,57 @@ use crate::stores::current_user;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::*;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
+
+const B64URL_TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+fn b64url_encode_bytes(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    for chunk in bytes.chunks(3) {
+        let n = ((chunk[0] as u32) << 16)
+            | ((*chunk.get(1).unwrap_or(&0) as u32) << 8)
+            | (*chunk.get(2).unwrap_or(&0) as u32);
+        out.push(B64URL_TABLE[((n >> 18) & 63) as usize] as char);
+        out.push(B64URL_TABLE[((n >> 12) & 63) as usize] as char);
+        if chunk.len() > 1 {
+            out.push(B64URL_TABLE[((n >> 6) & 63) as usize] as char);
+        }
+        if chunk.len() > 2 {
+            out.push(B64URL_TABLE[(n & 63) as usize] as char);
+        }
+    }
+    out
+}
+
+fn b64url_decode_bytes(input: &str) -> Result<Vec<u8>, String> {
+    let cleaned: String = input.trim().chars().filter(|c| *c != '=').collect();
+    let mut out = Vec::with_capacity(cleaned.len() * 3 / 4);
+    let mut acc = 0u32;
+    let mut acc_bits = 0u8;
+    for c in cleaned.bytes() {
+        let v = B64URL_TABLE
+            .iter()
+            .position(|b| *b == c)
+            .ok_or("base64url inválido")? as u32;
+        acc = (acc << 6) | v;
+        acc_bits += 6;
+        if acc_bits >= 8 {
+            acc_bits -= 8;
+            out.push((acc >> acc_bits) as u8);
+        }
+    }
+    Ok(out)
+}
+
+/// Navegador con soporte Web Push y registration del Service Worker lista.
+async fn push_registration() -> Result<web_sys::ServiceWorkerRegistration, String> {
+    let window = web_sys::window().ok_or_else(|| "sin ventana".to_string())?;
+    let container = window.navigator().service_worker();
+    let promise = container.ready().map_err(|e| format!("{e:?}"))?;
+    let value = JsFuture::from(promise).await.map_err(|e| format!("{e:?}"))?;
+    value.dyn_into().map_err(|e| format!("{e:?}"))
+}
 
 /// Página "Mi Perfil": identidad activa + cambio de contraseña.
 ///
@@ -39,6 +90,11 @@ pub fn PerfilPage() -> impl IntoView {
     let (mfa_error, set_mfa_error) = signal::<Option<String>>(None);
     let (mfa_info, set_mfa_info) = signal::<Option<String>>(None);
     let (mfa_busy, set_mfa_busy) = signal(false);
+
+    // Web Push (SPEC-052): activación/desactivación de notificaciones del navegador.
+    let (push_enabled, set_push_enabled) = signal(false);
+    let (push_busy, set_push_busy) = signal(false);
+    let (push_msg, set_push_msg) = signal::<Option<(String, String)>>(None);
 
     spawn_local(async move {
         if let Ok(enabled) = api::mfa_status().await {
@@ -117,6 +173,98 @@ pub fn PerfilPage() -> impl IntoView {
 
     let navigate = use_navigate();
     let set_is_auth = use_context::<WriteSignal<bool>>();
+
+    let on_enable_push = move |_| {
+        set_push_msg.set(None);
+        set_push_busy.set(true);
+        spawn_local(async move {
+            let result: Result<(), String> = async {
+                let reg = push_registration().await?;
+                let pub_key_b64 = api::push_public_key().await?;
+                let key_bytes = b64url_decode_bytes(&pub_key_b64)?;
+                let key_arr = js_sys::Uint8Array::from(&key_bytes[..]);
+                let options = web_sys::PushSubscriptionOptionsInit::new();
+                options.set_user_visible_only(true);
+                options.set_application_server_key(&key_arr.into());
+                let promise = reg.push_manager().map_err(|e| format!("{e:?}"))?
+                    .subscribe_with_options(&options)
+                    .map_err(|e| format!("{e:?}"))?;
+                let value = JsFuture::from(promise).await.map_err(|e| format!("{e:?}"))?;
+                let sub: web_sys::PushSubscription = value.dyn_into().map_err(|e| format!("{e:?}"))?;
+                let endpoint = sub.endpoint();
+                let p256dh = sub
+                    .get_key(web_sys::PushEncryptionKeyName::P256dh)
+                    .map_err(|e| format!("{e:?}"))?
+                    .map(|buf| js_sys::Uint8Array::new(&buf).to_vec())
+                    .map(|b| b64url_encode_bytes(&b))
+                    .unwrap_or_default();
+                let auth = sub
+                    .get_key(web_sys::PushEncryptionKeyName::Auth)
+                    .map_err(|e| format!("{e:?}"))?
+                    .map(|buf| js_sys::Uint8Array::new(&buf).to_vec())
+                    .map(|b| b64url_encode_bytes(&b))
+                    .unwrap_or_default();
+                if endpoint.is_empty() || p256dh.is_empty() || auth.is_empty() {
+                    return Err("claves de suscripción incompletas".to_string());
+                }
+                api::push_subscribe(&endpoint, &p256dh, &auth).await?;
+                Ok(())
+            }
+            .await;
+            set_push_busy.set(false);
+            match result {
+                Ok(()) => {
+                    set_push_enabled.set(true);
+                    set_push_msg.set(Some((
+                        "success".to_string(),
+                        "Notificaciones del navegador activadas. Recibirás alertas de escalamiento aunque la app esté en segundo plano.".to_string(),
+                    )));
+                }
+                Err(e) => {
+                    set_push_msg.set(Some((
+                        "error".to_string(),
+                        format!("No se pudo activar: {e}"),
+                    )));
+                }
+            }
+        });
+    };
+
+    let on_disable_push = move |_| {
+        set_push_msg.set(None);
+        set_push_busy.set(true);
+        spawn_local(async move {
+            let result: Result<(), String> = async {
+                let reg = push_registration().await?;
+                let pm = reg.push_manager().map_err(|e| format!("{e:?}"))?;
+                let value = JsFuture::from(pm.get_subscription().map_err(|e| format!("{e:?}"))?).await.map_err(|e| format!("{e:?}"))?;
+                if !value.is_null() && !value.is_undefined() {
+                    let sub: web_sys::PushSubscription = value.dyn_into().map_err(|e| format!("{e:?}"))?;
+                    let endpoint = sub.endpoint();
+                    JsFuture::from(sub.unsubscribe().map_err(|e| format!("{e:?}"))?).await.map_err(|e| format!("{e:?}"))?;
+                    api::push_unsubscribe(&endpoint).await?;
+                }
+                Ok(())
+            }
+            .await;
+            set_push_busy.set(false);
+            match result {
+                Ok(()) => {
+                    set_push_enabled.set(false);
+                    set_push_msg.set(Some((
+                        "success".to_string(),
+                        "Notificaciones del navegador desactivadas.".to_string(),
+                    )));
+                }
+                Err(e) => {
+                    set_push_msg.set(Some((
+                        "error".to_string(),
+                        format!("No se pudo desactivar: {e}"),
+                    )));
+                }
+            }
+        });
+    };
 
     let on_submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();
@@ -351,6 +499,50 @@ pub fn PerfilPage() -> impl IntoView {
                         {move || if mfa_busy.get() { "Desactivando..." } else { "Desactivar verificación en dos pasos" }}
                     </button>
                 </div>
+            </div>
+        <div class="rounded-xl p-5 mt-6" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
+                <h2 class="text-base font-bold mb-1" style="color:var(--uci-text);">
+                    <i class="fa-solid fa-bell mr-2" style="color:var(--uci-accent);"></i>"Notificaciones del navegador"
+                </h2>
+                <p class="text-xs mb-4" style="color:var(--uci-muted);">
+                    "Recibe alertas de escalamiento clínico aunque no tengas la app abierta. Las notificaciones no incluyen datos del paciente (solo tipo y nivel)."
+                </p>
+
+                {move || push_msg.get().map(|(kind, text)| view! {
+                    <div class="p-3 rounded-lg mb-4 text-sm font-semibold flex items-center gap-2"
+                        style=match kind.as_str() {
+                            "success" => "background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#059669;",
+                            _ => "background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#DC2626;",
+                        }>
+                        <i class=match kind.as_str() {
+                            "success" => "fa-solid fa-circle-check",
+                            _ => "fa-solid fa-triangle-exclamation",
+                        }></i>{text}
+                    </div>
+                })}
+
+                <div class="flex items-center gap-3">
+                    <button type="button"
+                        class=move || if push_enabled.get() { "hidden" } else { "btn-primary flex-1 py-3 text-sm font-bold" }
+                        disabled=push_busy
+                        on:click=on_enable_push>
+                        {move || if push_busy.get() { "Configurando..." } else { "Activar notificaciones" }}
+                    </button>
+                    <button type="button"
+                        class=move || if push_enabled.get() { "flex-1 py-3 text-sm font-bold rounded-lg" } else { "hidden" }
+                        style="background:rgba(239,68,68,0.12); color:#DC2626; border:1px solid rgba(239,68,68,0.3);"
+                        disabled=push_busy
+                        on:click=on_disable_push>
+                        {move || if push_busy.get() { "Desactivando..." } else { "Desactivar notificaciones" }}
+                    </button>
+                </div>
+                <p class="mt-3 text-xs" style="color:var(--uci-muted);">
+                    {move || if push_enabled.get() {
+                        "Estado: activadas. Debes permitir las notificaciones en el navegador la primera vez."
+                    } else {
+                        "¿No ves el botón? Asegúrate de estar en una conexión segura (https) y de que el servidor tenga Web Push habilitado."
+                    }}
+                </p>
             </div>
         </div>
     }

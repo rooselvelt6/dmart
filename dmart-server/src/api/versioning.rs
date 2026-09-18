@@ -426,6 +426,19 @@ pub fn build_v1_router(
             post(crate::api::escalation::escalate_alert),
         )
         .route(
+            "/push/vapid",
+            get(crate::api::push::vapid_public_key),
+        )
+        .route(
+            "/push/subscribe",
+            post(crate::api::push::subscribe),
+        )
+        .route(
+            "/push/unsubscribe",
+            axum::routing::delete(crate::api::push::unsubscribe),
+        )
+        .route("/push/test", post(crate::api::push::send_test))
+        .route(
             "/teleicu/sessions",
             get(crate::api::teleicu::list_sessions).post(crate::api::teleicu::start_session),
         )

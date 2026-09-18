@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::Claims;
 use crate::db::Database;
 
-use dmart_shared::models::{ApiResponse, ForecastRequest, ForecastResponse, ForecastStatus};
+use dmart_shared::models::ApiResponse;
 
 #[derive(Deserialize)]
 pub struct PredictRequest {

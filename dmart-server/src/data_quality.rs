@@ -17,6 +17,16 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, Ordering};
 use uuid::Uuid;
 
+/// Serializa un `RecordId` como su clave plana en las respuestas JSON, sin
+/// exponer la forma interna de SurrealDB. La lectura desde la DB usa el
+/// deserializador propio de SurrealDB y no se ve afectada.
+pub fn serialize_record_id<S: serde::Serializer>(
+    id: &surrealdb::RecordId,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&id.key().to_string())
+}
+
 /// Severidad de un issue de calidad.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -49,6 +59,7 @@ pub mod codes {
 /// Issue de calidad persistido en `quality_events`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QualityIssue {
+    #[serde(serialize_with = "serialize_record_id")]
     pub id: surrealdb::RecordId,
     pub message_id: String,
     pub patient_ref: String,

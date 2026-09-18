@@ -11,8 +11,6 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::models::Patient;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FeatureDtype {
     Float32,
@@ -36,7 +34,12 @@ impl FeatureStats {
         let std = variance.sqrt().max(1e-6);
         let min = values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
         let max = values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-        Self { mean, std, min, max }
+        Self {
+            mean,
+            std,
+            min,
+            max,
+        }
     }
 
     pub fn normalize(&self, value: f32) -> f32 {
@@ -90,7 +93,12 @@ impl FeatureSet {
             self.version,
             self.features
                 .iter()
-                .map(|f| format!("{}:{:?}:{}", f.name, f.dtype, f.transformation.as_deref().unwrap_or("")))
+                .map(|f| format!(
+                    "{}:{:?}:{}",
+                    f.name,
+                    f.dtype,
+                    f.transformation.as_deref().unwrap_or("")
+                ))
                 .collect::<Vec<_>>()
                 .join("|")
         );
@@ -111,7 +119,10 @@ impl FeatureSet {
     }
 
     pub fn get_stats(&self, name: &str) -> Option<&FeatureStats> {
-        self.features.iter().find(|f| f.name == name).and_then(|f| f.stats.as_ref())
+        self.features
+            .iter()
+            .find(|f| f.name == name)
+            .and_then(|f| f.stats.as_ref())
     }
 }
 
@@ -134,7 +145,8 @@ impl Normalizer {
         for (i, name) in feature_names.iter().enumerate() {
             let col = data.column(i);
             let values: Vec<f32> = col.iter().cloned().collect();
-            self.feature_stats.insert(name.clone(), FeatureStats::from_slice(&values));
+            self.feature_stats
+                .insert(name.clone(), FeatureStats::from_slice(&values));
         }
     }
 
@@ -199,8 +211,16 @@ impl TimeWindow {
 
 pub trait FeatureExtractor: Send + Sync {
     fn feature_set(&self) -> &FeatureSet;
-    fn extract(&self, patient_id: &str, window: TimeWindow) -> Result<MlFeatures, Box<dyn std::error::Error>>;
-    fn extract_batch(&self, patient_ids: &[&str], window: TimeWindow) -> Result<Vec<MlFeatures>, Box<dyn std::error::Error>>;
+    fn extract(
+        &self,
+        patient_id: &str,
+        window: TimeWindow,
+    ) -> Result<MlFeatures, Box<dyn std::error::Error>>;
+    fn extract_batch(
+        &self,
+        patient_ids: &[&str],
+        window: TimeWindow,
+    ) -> Result<Vec<MlFeatures>, Box<dyn std::error::Error>>;
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -230,7 +250,10 @@ impl MlFeatures {
     pub fn validate_against(&self, feature_set: &FeatureSet) -> Result<(), String> {
         if let Some(hash) = &self.feature_set_hash {
             if hash != &feature_set.hash {
-                return Err(format!("Feature set hash mismatch: expected {}, got {}", feature_set.hash, hash));
+                return Err(format!(
+                    "Feature set hash mismatch: expected {}, got {}",
+                    feature_set.hash, hash
+                ));
             }
         }
         for fdef in &feature_set.features {
@@ -246,12 +269,33 @@ pub fn build_los_nn_v1() -> FeatureSet {
     let mut features = Vec::new();
 
     let base_vitals = [
-        "heart_rate", "respiratory_rate", "spo2", "temperature",
-        "systolic_bp", "diastolic_bp", "mean_arterial_pressure",
-        "gcs_total", "fio2", "ph", "lactate", "creatinine",
-        "bun", "sodium", "potassium", "chloride", "bicarbonate",
-        "hemoglobin", "wbc", "platelets", "glucose", "bilirubin",
-        "albumin", "inr", "pt", "ptt", "urine_output",
+        "heart_rate",
+        "respiratory_rate",
+        "spo2",
+        "temperature",
+        "systolic_bp",
+        "diastolic_bp",
+        "mean_arterial_pressure",
+        "gcs_total",
+        "fio2",
+        "ph",
+        "lactate",
+        "creatinine",
+        "bun",
+        "sodium",
+        "potassium",
+        "chloride",
+        "bicarbonate",
+        "hemoglobin",
+        "wbc",
+        "platelets",
+        "glucose",
+        "bilirubin",
+        "albumin",
+        "inr",
+        "pt",
+        "ptt",
+        "urine_output",
     ];
 
     for vital in base_vitals {
@@ -459,8 +503,13 @@ pub fn build_ews_v1() -> FeatureSet {
     let mut features = Vec::new();
 
     let vitals = [
-        "heart_rate", "respiratory_rate", "spo2", "temperature",
-        "systolic_bp", "diastolic_bp", "gcs_total",
+        "heart_rate",
+        "respiratory_rate",
+        "spo2",
+        "temperature",
+        "systolic_bp",
+        "diastolic_bp",
+        "gcs_total",
     ];
 
     for vital in vitals {
@@ -522,17 +571,29 @@ mod tests {
         let mut fs2 = fs1.clone();
         fs2.version = Version::parse("1.0.1").unwrap();
         fs2.hash = fs2.compute_hash();
-        assert_ne!(fs1.hash, fs2.hash, "Different version must produce different hash");
+        assert_ne!(
+            fs1.hash, fs2.hash,
+            "Different version must produce different hash"
+        );
     }
 
     #[test]
     fn test_feature_set_feature_count() {
         let fs = build_los_nn_v1();
-        assert!(fs.feature_count() > 100, "LOS-NN v1 should have >100 features");
+        assert!(
+            fs.feature_count() > 100,
+            "LOS-NN v1 should have >100 features"
+        );
         let fs2 = build_mortality_v2();
-        assert!(fs2.feature_count() > 20, "Mortality v2 should have >20 features");
+        assert!(
+            fs2.feature_count() > 20,
+            "Mortality v2 should have >20 features"
+        );
         let fs3 = build_ews_v1();
-        assert!(fs3.feature_count() >= 10, "EWS v1 should have >=10 features");
+        assert!(
+            fs3.feature_count() >= 10,
+            "EWS v1 should have >=10 features"
+        );
     }
 
     #[test]
@@ -541,18 +602,11 @@ mod tests {
         let data = Array2::from_shape_vec(
             (10, 3),
             vec![
-                1.0, 2.0, 3.0,
-                2.0, 3.0, 4.0,
-                3.0, 4.0, 5.0,
-                4.0, 5.0, 6.0,
-                5.0, 6.0, 7.0,
-                6.0, 7.0, 8.0,
-                7.0, 8.0, 9.0,
-                8.0, 9.0, 10.0,
-                9.0, 10.0, 11.0,
-                10.0, 11.0, 12.0,
+                1.0, 2.0, 3.0, 2.0, 3.0, 4.0, 3.0, 4.0, 5.0, 4.0, 5.0, 6.0, 5.0, 6.0, 7.0, 6.0,
+                7.0, 8.0, 7.0, 8.0, 9.0, 8.0, 9.0, 10.0, 9.0, 10.0, 11.0, 10.0, 11.0, 12.0,
             ],
-        ).unwrap();
+        )
+        .unwrap();
         let feature_names = vec!["a".to_string(), "b".to_string(), "c".to_string()];
         normalizer.fit(&data, &feature_names);
 
@@ -564,7 +618,10 @@ mod tests {
             let mean: f32 = col.iter().sum::<f32>() / 10.0;
             let std: f32 = (col.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / 10.0).sqrt();
             assert!(mean.abs() < 1e-5, "Mean should be ~0 after normalization");
-            assert!((std - 1.0).abs() < 1e-5, "Std should be ~1 after normalization");
+            assert!(
+                (std - 1.0).abs() < 1e-5,
+                "Std should be ~1 after normalization"
+            );
         }
     }
 

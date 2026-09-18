@@ -5,7 +5,8 @@
 
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Context, Result};
+#[cfg(feature = "ml-nn")]
+use anyhow::{Context, Result, anyhow};
 use ndarray::{Array1, Array2};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -13,11 +14,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 #[cfg(feature = "ml-nn")]
-use candle_core::{Device, Tensor, DType};
+use candle_core::{DType, Device, Tensor};
 #[cfg(feature = "ml-nn")]
-use candle_nn::{linear, Linear, Module, VarBuilder, VarMap, ops::softmax};
+use candle_nn::{Linear, Module, VarBuilder, VarMap, linear, ops::softmax};
 
-use crate::ml_features::{FeatureSet, MlFeatures, Normalizer, build_los_nn_v1};
+use crate::ml_features::{FeatureSet, Normalizer, build_los_nn_v1};
+#[cfg(feature = "ml-nn")]
+use crate::ml_features::MlFeatures;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LosNnConfig {
@@ -84,8 +87,11 @@ pub struct LosNnMetrics {
 impl LosNnModel {
     pub fn new(config: LosNnConfig) -> Self {
         let feature_set = build_los_nn_v1();
-        assert_eq!(config.input_size, feature_set.feature_count(),
-            "Config input_size must match feature set count");
+        assert_eq!(
+            config.input_size,
+            feature_set.feature_count(),
+            "Config input_size must match feature set count"
+        );
         Self {
             config,
             feature_set,
@@ -142,12 +148,13 @@ impl LosNnModel {
         } else {
             Ok(Box::new(MlpLosPredictor::new(vb, &self.config)?))
         }
-}
+    }
 
     pub fn save(&self, path: &str) -> Result<()> {
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(path, json)?;
-        self.normalizer.save_json(&format!("{}.normalizer.json", path))?;
+        self.normalizer
+            .save_json(&format!("{}.normalizer.json", path))?;
         Ok(())
     }
 
@@ -181,7 +188,8 @@ impl LosNnModel {
     ) -> Result<()> {
         let device = Device::Cpu;
         self.init_model(&device)?;
-        self.normalizer.fit(train_features, &self.feature_set.feature_names());
+        self.normalizer
+            .fit(train_features, &self.feature_set.feature_names());
 
         let mut train_features_norm = train_features.clone();
         self.normalizer.transform(&mut train_features_norm);
@@ -230,7 +238,11 @@ impl LosNnModel {
         features.iter().map(|f| self.predict(f)).collect()
     }
 
-    pub fn evaluate(&mut self, test_features: &Array2<f32>, test_targets: &Array1<f32>) -> Result<LosNnMetrics> {
+    pub fn evaluate(
+        &mut self,
+        test_features: &Array2<f32>,
+        test_targets: &Array1<f32>,
+    ) -> Result<LosNnMetrics> {
         let mut test_features_norm = test_features.clone();
         self.normalizer.transform(&mut test_features_norm);
 
@@ -281,8 +293,8 @@ pub struct LosPrediction {
 #[cfg(feature = "ml-nn")]
 mod nn_impl {
     use super::*;
-    use candle_nn::{LSTM, LSTMConfig, Dropout, linear_no_bias, Linear, Module, VarBuilder};
-    use candle_core::{Tensor, DType, Device};
+    use candle_core::{DType, Device, Tensor};
+    use candle_nn::{Dropout, LSTM, LSTMConfig, Linear, Module, VarBuilder, linear_no_bias};
 
     pub struct MlpLosPredictor {
         layers: Vec<Linear>,
@@ -347,11 +359,8 @@ mod nn_impl {
                 (n_samples, n_features),
                 device,
             )?;
-            let train_y = Tensor::from_slice(
-                train_targets.as_slice().unwrap(),
-                (n_samples, 1),
-                device,
-            )?;
+            let train_y =
+                Tensor::from_slice(train_targets.as_slice().unwrap(), (n_samples, 1), device)?;
 
             let val_x = Tensor::from_slice(
                 val_features.as_slice().unwrap(),
@@ -380,16 +389,14 @@ mod nn_impl {
                     let batch_indices = &indices[batch_start..batch_end];
                     let batch_size_actual = batch_indices.len();
 
-                    let batch_x = train_x.index_select(&Tensor::from_slice(
-                        batch_indices,
-                        batch_size_actual,
-                        device,
-                    )?, 0)?;
-                    let batch_y = train_y.index_select(&Tensor::from_slice(
-                        batch_indices,
-                        batch_size_actual,
-                        device,
-                    )?, 0)?;
+                    let batch_x = train_x.index_select(
+                        &Tensor::from_slice(batch_indices, batch_size_actual, device)?,
+                        0,
+                    )?;
+                    let batch_y = train_y.index_select(
+                        &Tensor::from_slice(batch_indices, batch_size_actual, device)?,
+                        0,
+                    )?;
 
                     let preds = model.forward(&batch_x)?;
                     let loss = mse(&preds.narrow(1, 0, 1)?, &batch_y)?;
@@ -400,7 +407,12 @@ mod nn_impl {
                 if epoch % 10 == 0 {
                     let val_preds = model.forward(&val_x)?;
                     let val_loss = mse(&val_preds.narrow(1, 0, 1)?, &val_y)?;
-                    println!("Epoch {}: train_loss={:.4}, val_loss={:.4}", epoch, loss.to_scalar::<f32>()?, val_loss.to_scalar::<f32>()?);
+                    println!(
+                        "Epoch {}: train_loss={:.4}, val_loss={:.4}",
+                        epoch,
+                        loss.to_scalar::<f32>()?,
+                        val_loss.to_scalar::<f32>()?
+                    );
                 }
             }
 
@@ -485,18 +497,21 @@ mod nn_impl {
 }
 
 #[cfg(feature = "ml-nn")]
-use nn_impl::{MlpLosPredictor, LstmLosPredictor};
+use nn_impl::{LstmLosPredictor, MlpLosPredictor};
 
 #[cfg(not(feature = "ml-nn"))]
+#[allow(unused_imports, unused, dead_code, non_snake_case)]
 mod nn_stub {
     use super::*;
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use ndarray::Array1;
 
     // Mock Device type when candle is not available
     pub struct Device;
     impl Device {
-        pub fn Cpu() -> Self { Device }
+        pub fn Cpu() -> Self {
+            Device
+        }
     }
 
     pub trait LosPredictor: Send + Sync {
@@ -537,8 +552,10 @@ mod nn_stub {
 }
 
 #[cfg(not(feature = "ml-nn"))]
-use nn_stub::{MlpLosPredictor, LstmLosPredictor};
+#[allow(unused_imports)]
+use nn_stub::{LstmLosPredictor, MlpLosPredictor};
 
+#[cfg(feature = "ml-nn")]
 fn compute_metrics(predictions: &[f32], targets: &[f32]) -> LosNnMetrics {
     let n = predictions.len() as f32;
     let mut mae = 0.0;
@@ -554,8 +571,12 @@ fn compute_metrics(predictions: &[f32], targets: &[f32]) -> LosNnMetrics {
         if *target > 1.0 {
             mape += err / target;
         }
-        if err <= 24.0 { binned_24 += 1; }
-        if err <= 48.0 { binned_48 += 1; }
+        if err <= 24.0 {
+            binned_24 += 1;
+        }
+        if err <= 48.0 {
+            binned_48 += 1;
+        }
     }
 
     mae /= n;
@@ -563,16 +584,27 @@ fn compute_metrics(predictions: &[f32], targets: &[f32]) -> LosNnMetrics {
     mape /= n.max(1.0);
 
     let bootstrap_ci_mae = bootstrap_ci(predictions, targets, |p, t| {
-        p.iter().zip(t.iter()).map(|(a,b)| (a-b).abs()).sum::<f32>() / p.len() as f32
+        p.iter()
+            .zip(t.iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum::<f32>()
+            / p.len() as f32
     });
     let bootstrap_ci_rmse = bootstrap_ci(predictions, targets, |p, t| {
-        (p.iter().zip(t.iter()).map(|(a,b)| (a-b).powi(2)).sum::<f32>() / p.len() as f32).sqrt()
+        (p.iter()
+            .zip(t.iter())
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f32>()
+            / p.len() as f32)
+            .sqrt()
     });
     let bootstrap_ci_mape = bootstrap_ci(predictions, targets, |p, t| {
-        p.iter().zip(t.iter())
-            .filter(|(_,b)| **b > 1.0)
-            .map(|(a,b)| (a-b).abs()/b)
-            .sum::<f32>() / p.len() as f32
+        p.iter()
+            .zip(t.iter())
+            .filter(|(_, b)| **b > 1.0)
+            .map(|(a, b)| (a - b).abs() / b)
+            .sum::<f32>()
+            / p.len() as f32
     });
 
     LosNnMetrics {
@@ -591,13 +623,14 @@ fn compute_metrics(predictions: &[f32], targets: &[f32]) -> LosNnMetrics {
     }
 }
 
+#[cfg(feature = "ml-nn")]
 fn bootstrap_ci<F>(predictions: &[f32], targets: &[f32], metric_fn: F) -> (f32, f32)
 where
     F: Fn(&[f32], &[f32]) -> f32,
 {
-    use rand::seq::SliceRandom;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::seq::SliceRandom;
 
     let n = predictions.len();
     let n_boot = 1000;
@@ -605,7 +638,8 @@ where
     let mut rng = StdRng::seed_from_u64(42);
 
     for _ in 0..n_boot {
-        let indices: Vec<usize> = (0..n).collect::<Vec<_>>()
+        let indices: Vec<usize> = (0..n)
+            .collect::<Vec<_>>()
             .choose_multiple(&mut rng, n)
             .cloned()
             .collect();

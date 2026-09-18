@@ -89,6 +89,9 @@ pub fn DashboardPage() -> impl IntoView {
                                 <EjecutivoKpiSection ejecutivo=s.ejecutivo.clone() />
                                 <StatsSection stats=s.clone() />
                                 <AdminStatsSection admin=admin.clone() />
+                                <Show when=move || crate::stores::user_has("support:read")>
+                                    <SystemHealthSection refresh=refresh />
+                                </Show>
                                 <ActivePatientsSection patients=pacientes.clone() />
                                 <RecentPatientsSection reciente=s.reciente.clone() />
                             </div>
@@ -103,11 +106,13 @@ pub fn DashboardPage() -> impl IntoView {
 #[component]
 fn SummaryCards(stats: UciStatsResponse) -> impl IntoView {
     view! {
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-7">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 mb-6 md:mb-7">
             {stat_card("Total Pacientes", &stats.total_pacientes.to_string(), "#3B82F6", "fa-users")}
+            {stat_card("Activos", &stats.pacientes_activos.to_string(), "#6366F1", "fa-heart-pulse")}
             {stat_card("Criticos", &stats.por_gravedad.criticos.to_string(), "#EF4444", "fa-skull")}
             {stat_card("Severos", &stats.por_gravedad.severos.to_string(), "#F97316", "fa-triangle-exclamation")}
-            {stat_card("Estables", &format!("{}", stats.por_gravedad.moderados + stats.por_gravedad.bajos), "#10B981", "fa-check-circle")}
+            {stat_card("Moderados", &stats.por_gravedad.moderados.to_string(), "#F59E0B", "fa-circle-exclamation")}
+            {stat_card("Estables", &stats.por_gravedad.bajos.to_string(), "#10B981", "fa-check-circle")}
         </div>
     }
 }
@@ -488,6 +493,115 @@ fn resource_card(title: &str, value: &str, color: &str, icon: &str) -> impl Into
                 <span class="text-[10px] uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
             </div>
             <div class="text-xl md:text-2xl font-extrabold" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
+        </div>
+    }
+}
+
+fn system_status_meta(status: &str) -> (&'static str, &'static str, &'static str) {
+    match status {
+        "ok" => ("#10B981", "OK", "fa-circle-check"),
+        "degraded" => ("#F59E0B", "Degradado", "fa-triangle-exclamation"),
+        "error" => ("#EF4444", "Error", "fa-circle-xmark"),
+        _ => ("#6B7280", "Desconocido", "fa-circle-question"),
+    }
+}
+
+fn system_label(key: &str) -> &'static str {
+    match key {
+        "db" => "Base de datos",
+        "ingest" => "Ingest MLLP/HL7",
+        "realtime" => "Realtime SSE",
+        "ml" => "Serving ML",
+        "monitores" => "Monitores",
+        "audit" => "Auditoría",
+        "backup" => "Backup",
+        _ => "Subsistema",
+    }
+}
+
+fn fmt_latency(ms: Option<f64>) -> String {
+    match ms {
+        Some(v) if v < 1000.0 => format!("{v:.0} ms"),
+        Some(v) => format!("{:.2} s", v / 1000.0),
+        None => "—".to_string(),
+    }
+}
+
+fn fmt_freshness(secs: Option<f64>) -> String {
+    match secs {
+        Some(s) if s < 60.0 => format!("hace {s:.0} s"),
+        Some(s) if s < 3600.0 => format!("hace {:.0} min", s / 60.0),
+        Some(s) => format!("hace {:.1} h", s / 3600.0),
+        None => "—".to_string(),
+    }
+}
+
+#[component]
+fn SystemHealthSection(refresh: RwSignal<u32>) -> impl IntoView {
+    let systems = LocalResource::new(move || {
+        let _ = refresh.get();
+        async move { api::get_support_systems().await }
+    });
+
+    view! {
+        <div class="mb-6 md:mb-7">
+            <h3 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-muted);">
+                <i class="fa-solid fa-heart-pulse mr-2"></i>"Salud del Sistema"
+            </h3>
+            <Suspense fallback=move || view! {
+                <div class="h-24 animate-pulse rounded-xl" style="background:var(--uci-surface);"></div>
+            }>
+                {move || systems.get().map(|res| match res {
+                    Ok(list) => {
+                        let ml = list.iter().find(|s| s.key == "ml").cloned();
+                        let cards = list.into_iter().map(|s| {
+                            let (color, label, icon) = system_status_meta(&s.status);
+                            let name = system_label(&s.key);
+                            let latency = fmt_latency(s.latency_ms);
+                            let freshness = fmt_freshness(s.freshness_secs);
+                            view! {
+                                <div class="glass-card p-3" style=format!("border-top:2px solid {}; border-radius:12px;", color)>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="text-[11px] uppercase font-bold" style="color:var(--uci-muted);">{name}</span>
+                                        <i class=format!("fa-solid {} text-xs", icon) style=format!("color:{};", color)></i>
+                                    </div>
+                                    <div class="text-sm font-bold" style=format!("color:{};", color)>{label}</div>
+                                    <div class="text-[10px] mt-1" style="color:var(--uci-muted);">
+                                        {format!("Latencia {}", latency)}
+                                    </div>
+                                    <div class="text-[10px]" style="color:var(--uci-muted);">
+                                        {format!("Freshness {}", freshness)}
+                                    </div>
+                                </div>
+                            }
+                        }).collect_view();
+                        view! {
+                            <div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                                    {cards}
+                                </div>
+                                {ml.map(|m| {
+                                    let (color, _, _) = system_status_meta(&m.status);
+                                    view! {
+                                        <div class="mt-3 p-3 rounded-xl text-xs"
+                                            style=format!("background:var(--uci-surface); border-left:3px solid {};", color)>
+                                            <span class="font-semibold" style="color:var(--uci-text);">
+                                                <i class="fa-solid fa-microchip mr-1"></i>"Serving ML: "
+                                            </span>
+                                            <span style="color:var(--uci-muted);">{m.details}</span>
+                                        </div>
+                                    }
+                                })}
+                            </div>
+                        }.into_any()
+                    }
+                    Err(e) => view! {
+                        <div class="p-4 rounded-xl text-sm" style="background:rgba(239,68,68,0.1); color:#DC2626;">
+                            <i class="fa-solid fa-triangle-exclamation mr-2"></i>{e}
+                        </div>
+                    }.into_any(),
+                })}
+            </Suspense>
         </div>
     }
 }
