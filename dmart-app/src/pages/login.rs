@@ -107,10 +107,10 @@ pub fn LoginPage() -> impl IntoView {
 
                 {move || error.get().then(|| view! {
                     <div role="alert" class="bg-uci-critical/10 border border-uci-critical/30 p-4 rounded-xl mb-6 text-uci-critical text-xs font-semibold">
-                        {move || if challenge.get().is_empty() {
-                            "⚠ Credenciales inválidas. Por favor intente de nuevo."
+{move || if challenge.get().is_empty() {
+                            crate::i18n::tr("login-invalid", None)
                         } else {
-                            "⚠ Código inválido. Verifique e intente de nuevo."
+                            crate::i18n::tr("login-invalid-mfa", None)
                         }}
                     </div>
                 })}
@@ -121,7 +121,7 @@ pub fn LoginPage() -> impl IntoView {
                     class=move || if challenge.get().is_empty() { "space-y-6" } else { "hidden" }
                 >
                     <div>
-                        <label for="login-username" class="form-label">"Usuario / Identificación"</label>
+                        <label for="login-username" class="form-label">{crate::i18n::tr("login-username", None)}</label>
                         <input
                             id="login-username"
                             type="text"
@@ -135,8 +135,8 @@ pub fn LoginPage() -> impl IntoView {
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-2">
-                            <label for="login-password" class="form-label mb-0">"Contraseña"</label>
-                            <a href="#" class="text-[10px] text-uci-accent hover:underline">"¿Olvido su clave?"</a>
+                            <label for="login-password" class="form-label mb-0">{crate::i18n::tr("login-password", None)}</label>
+                            <a href="#" class="text-[10px] text-uci-accent hover:underline">{crate::i18n::tr("login-forgot", None)}</a>
                         </div>
                         <input
                             id="login-password"
@@ -157,7 +157,7 @@ pub fn LoginPage() -> impl IntoView {
                         aria-busy=loading
                     >
                         <span class=move || if loading.get() { "opacity-0" } else { "opacity-100" }>
-                            "Iniciar Sesión"
+                            {crate::i18n::tr("login-submit", None)}
                         </span>
                         {move || loading.get().then(|| view! {
                             <div class="absolute inset-0 flex items-center justify-center">
@@ -173,18 +173,18 @@ pub fn LoginPage() -> impl IntoView {
                     class=move || if challenge.get().is_empty() { "hidden" } else { "space-y-6" }
                 >
                     <div class="text-center">
-                        <h2 class="text-lg font-bold text-white">"Verificación en dos pasos"</h2>
+                        <h2 class="text-lg font-bold text-white">{crate::i18n::tr("login-mfa-title", None)}</h2>
                         <p class="text-xs text-uci-muted mt-1">
-                            {move || if use_backup.get() {
-                                "Ingresa uno de tus códigos de respaldo."
+{move || if use_backup.get() {
+                                crate::i18n::tr("login-mfa-backup-hint", None)
                             } else {
-                                "Ingresa el código de 6 dígitos de tu aplicación autenticadora."
+                                crate::i18n::tr("login-mfa-hint", None)
                             }}
                         </p>
                     </div>
                     <div>
                         <label for="login-mfa-code" class="form-label">
-                            {move || if use_backup.get() { "Código de respaldo" } else { "Código de verificación" }}
+                            {move || if use_backup.get() { crate::i18n::tr("login-mfa-backup-code", None) } else { crate::i18n::tr("login-mfa-code", None) }}
                         </label>
                         <input
                             id="login-mfa-code"
@@ -206,7 +206,7 @@ pub fn LoginPage() -> impl IntoView {
                         aria-busy=loading
                     >
                         <span class=move || if loading.get() { "opacity-0" } else { "opacity-100" }>
-                            "Verificar"
+                            {crate::i18n::tr("login-mfa-verify", None)}
                         </span>
                         {move || loading.get().then(|| view! {
                             <div class="absolute inset-0 flex items-center justify-center">
@@ -221,7 +221,7 @@ pub fn LoginPage() -> impl IntoView {
                             class="text-uci-accent hover:underline"
                             on:click=move |_| set_use_backup.update(|b| *b = !*b)
                         >
-                            {move || if use_backup.get() { "Usar código TOTP" } else { "Usar código de respaldo" }}
+                            {move || if use_backup.get() { crate::i18n::tr("login-mfa-use-totp", None) } else { crate::i18n::tr("login-mfa-use-backup", None) }}
                         </button>
                         <button
                             type="button"
@@ -231,14 +231,14 @@ pub fn LoginPage() -> impl IntoView {
                                 set_error.set(false);
                             }
                         >
-                            "Volver"
+                            {crate::i18n::tr("action-back", None)}
                         </button>
                     </div>
                 </form>
 
                 <div class="mt-8 pt-8 border-t border-uci-border/50 text-center">
                     <p class="text-[10px] text-uci-muted uppercase tracking-widest font-bold">
-                        "V.1.9 — Acceso Restringido"
+                        {crate::i18n::tr("login-version", None)}
                     </p>
                 </div>
             </div>

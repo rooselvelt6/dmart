@@ -3,12 +3,39 @@
 
 use std::sync::OnceLock;
 use std::collections::HashMap;
+use leptos::prelude::*;
 
 /// Supported languages in order of preference
 const LOCALES: &[&str] = &["es", "en", "pt", "fr"];
 
 /// Bundle for each locale - simple HashMap of key -> translation
 static BUNDLES: OnceLock<Vec<HashMap<String, String>>> = OnceLock::new();
+
+/// Idioma actual, reactivo: cambiar idioma re-renderiza las vistas sin recarga.
+static CURRENT_LANG: OnceLock<RwSignal<String>> = OnceLock::new();
+
+/// Devuelve el signal global del idioma (reactivo).
+pub fn lang_signal() -> RwSignal<String> {
+    *CURRENT_LANG.get_or_init(|| {
+        let initial = detect_lang();
+        RwSignal::new(initial)
+    })
+}
+
+/// Detecta el idioma desde localStorage o el navegador (syna).
+fn detect_lang() -> String {
+    use gloo_storage::{LocalStorage, Storage};
+    match LocalStorage::get::<String>("dmart_lang") {
+        Ok(stored) if LOCALES.contains(&stored.as_str()) => stored,
+        _ => web_sys::window()
+            .and_then(|w| w.navigator().language())
+            .unwrap_or_else(|| "es".into())
+            .split('-')
+            .next()
+            .unwrap_or("es")
+            .to_string(),
+    }
+}
 
 /// Initialize i18n bundles from embedded .ftl files (simple key=value format)
 pub fn init_i18n() {
@@ -29,7 +56,14 @@ pub fn init_i18n() {
                 continue;
             }
             if let Some((key, value)) = line.split_once('=') {
-                map.insert(key.trim().to_string(), value.trim().to_string());
+                let value = value.trim();
+                // Las .ftl usan comillas alrededor del valor: `key = "texto"`.
+                let value = if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+                    &value[1..value.len() - 1]
+                } else {
+                    value
+                };
+                map.insert(key.trim().to_string(), value.to_string());
             }
         }
         map
@@ -40,22 +74,23 @@ pub fn init_i18n() {
 
 /// Get current language from localStorage or browser
 pub fn get_current_lang() -> String {
-    use gloo_storage::{LocalStorage, Storage};
-    LocalStorage::get("dmart_lang").unwrap_or_else(|_| {
-        web_sys::window()
-            .and_then(|w| w.navigator().language())
-            .unwrap_or_else(|| "es".into())
-            .split('-')
-            .next()
-            .unwrap_or("es")
-            .to_string()
-    })
+    lang_signal().get_untracked()
 }
 
-/// Set language preference in localStorage
+/// Igual que `get_current_lang()`, pero suscribe al cambio de idioma (reactivo):
+/// cualquier `move || tr(...)` re-renderiza al cambiar idioma.
+fn lang_tracked() -> String {
+    lang_signal().get()
+}
+
+/// Set language preference in localStorage (reactivo: actualiza la UI al instante)
 pub fn set_lang(lang: &str) {
     use gloo_storage::{LocalStorage, Storage};
+    if !LOCALES.contains(&lang) {
+        return;
+    }
     LocalStorage::set("dmart_lang", lang).ok();
+    lang_signal().set(lang.to_string());
 }
 
 /// Translate a key with optional arguments
@@ -65,7 +100,7 @@ pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -
         init_i18n();
     }
     
-    let lang = get_current_lang();
+    let lang = lang_tracked();
     let lang_idx = LOCALES.iter().position(|&l| l == lang).unwrap_or(0);
     
     let bundles = BUNDLES.get().expect("i18n not initialized");
@@ -97,6 +132,11 @@ pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -
     
     // Ultimate fallback: return the key itself
     key.to_string()
+}
+
+/// Hook reactivo: devuelve el idioma actual como Signal (re-renderiza al cambiar)
+pub fn use_lang() -> ReadSignal<String> {
+    lang_signal().read_only()
 }
 
 /// Helper to create args HashMap from key-value pairs

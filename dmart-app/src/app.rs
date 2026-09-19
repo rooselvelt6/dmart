@@ -32,7 +32,6 @@ pub fn App() -> impl IntoView {
     let (is_auth, set_is_auth) = signal(has_token());
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
-    let _ = crate::stores::create_theme_store();
     
     // Use create_effect to ensure Leptos runtime is initialized before spawning tasks
     create_effect(move |_| {
@@ -286,21 +285,21 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
 
             <div style="padding:16px 12px; flex:1; overflow-y:auto;">
                 <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; padding:8px 10px 8px; font-weight:700;">
-                    <i class="fa-solid fa-layer-group" style="margin-right:6px; font-size:8px;"></i>PRINCIPAL
+                    <i class="fa-solid fa-layer-group" style="margin-right:6px; font-size:8px;"></i>{move || crate::i18n::tr("nav-section-main", None)}
                 </div>
 
                 <A href="/" attr:class=move || format!("nav-link {}", if is_active_exact("/") { "active" } else { "" })>
                     <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
                         <i class="fa-solid fa-house w-6 text-center text-lg" style="color:white;"></i>
                     </div>
-                    <span style="font-weight:500;">Dashboard</span>
+                    <span style="font-weight:500;">{move || crate::i18n::tr("nav-dashboard", None)}</span>
                 </A>
 
                 <A href="/patients" attr:class=move || format!("nav-link {}", if is_active_exact("/patients") { "active" } else { "" })>
                     <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);">
                         <i class="fa-solid fa-users w-6 text-center text-lg" style="color:white;"></i>
                     </div>
-                    <span style="font-weight:500;">Pacientes</span>
+                    <span style="font-weight:500;">{move || crate::i18n::tr("nav-patients", None)}</span>
                 </A>
 
                 <Show when=move || user_has("escalation:read")>
@@ -308,12 +307,12 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);">
                             <i class="fa-solid fa-bell w-6 text-center text-lg" style="color:white;"></i>
                         </div>
-                        <span style="font-weight:500;">Escalamiento</span>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-escalation", None)}</span>
                     </A>
                 </Show>
 
                 <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; padding:20px 10px 8px; font-weight:700;">
-                    <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px; font-size:8px;"></i>ACCIONES
+                    <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px; font-size:8px;"></i>{move || crate::i18n::tr("nav-section-actions", None)}
                 </div>
 
                 <Show when=move || user_has("patients:create")>
@@ -321,7 +320,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
                             <i class="fa-solid fa-user-plus w-6 text-center text-lg" style="color:white;"></i>
                         </div>
-                        <span style="font-weight:500;">Nuevo Paciente</span>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-patients-new", None)}</span>
                     </A>
                 </Show>
 
@@ -330,7 +329,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);">
                             <i class="fa-solid fa-gears w-6 text-center text-lg" style="color:white;"></i>
                         </div>
-                        <span style="font-weight:500;">Administración</span>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-admin", None)}</span>
                     </A>
                 </Show>
 
@@ -339,7 +338,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
                             <i class="fa-solid fa-screwdriver-wrench w-6 text-center text-lg" style="color:white;"></i>
                         </div>
-                        <span style="font-weight:500;">Soporte Técnico</span>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-support", None)}</span>
                     </A>
                 </Show>
 
@@ -348,7 +347,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);">
                             <i class="fa-solid fa-microchip w-6 text-center text-lg" style="color:white;"></i>
                         </div>
-                        <span style="font-weight:500;">Dispositivos</span>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-devices", None)}</span>
                     </A>
                 </Show>
 
@@ -357,7 +356,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);">
                             <i class="fa-solid fa-shield-heart w-6 text-center text-lg" style="color:white;"></i>
                         </div>
-                        <span style="font-weight:500;">Calidad de Datos</span>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-quality", None)}</span>
                     </A>
                 </Show>
 
@@ -365,7 +364,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #14B8A6 0%, #0D9488 100%);">
                         <i class="fa-solid fa-user-gear w-6 text-center text-lg" style="color:white;"></i>
                     </div>
-                    <span style="font-weight:500;">Mi Perfil</span>
+                    <span style="font-weight:500;">{move || crate::i18n::tr("nav-profile", None)}</span>
                 </A>
 
                 {move || active_patient_id().map(|pid| {
@@ -373,21 +372,21 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     view! {
                         <div class="mt-4 pt-4 border-t border-uci-border sidebar-quick-fade" style="background:linear-gradient(180deg, rgba(236,72,153,0.06) 0%, transparent 100%); margin:12px; border-radius:12px; padding:12px;">
                             <div style="font-size:10px; color:#EC4899; text-transform:uppercase; letter-spacing:1px; padding:4px 8px 8px; font-weight:900;">
-                                <i class="fa-solid fa-id-card-clip" style="margin-right:5px;"></i>PACIENTE ACTIVO
+                                <i class="fa-solid fa-id-card-clip" style="margin-right:5px;"></i>{move || crate::i18n::tr("nav-patient-active", None)}
                             </div>
 
                             <A href=base.clone() attr:class="nav-link">
                                 <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%);">
                                     <i class="fa-solid fa-user-injured w-6 text-center text-lg" style="color:white;"></i>
                                 </div>
-                                <span style="font-weight:500;">Expediente</span>
+                                <span style="font-weight:500;">{move || crate::i18n::tr("nav-record", None)}</span>
                             </A>
 
                             <A href=format!("{}/measure", base) attr:class="nav-link">
                                 <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #06B6D4 0%, #0891B2 100%);">
                                     <i class="fa-solid fa-calculator w-6 text-center text-lg" style="color:white;"></i>
                                 </div>
-                                <span style="font-weight:500;">Medir Escalas</span>
+                                <span style="font-weight:500;">{move || crate::i18n::tr("nav-measure", None)}</span>
                             </A>
                         </div>
                     }
@@ -416,6 +415,9 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                 <div style="margin-bottom:12px;">
                     <crate::theme::ThemeSelector />
                 </div>
+                <div style="margin-bottom:12px;">
+                    <crate::theme::LangSelector />
+                </div>
                 <button
                     on:click=move |_| {
                         let set_auth = use_context::<WriteSignal<bool>>();
@@ -440,7 +442,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    "Cerrar Sesión"
+                    {move || crate::i18n::tr("nav-logout", None)}
                 </button>
                 <div style="font-size:11px; color:var(--uci-muted); text-align:center; margin-top:12px;">
                     "UCI-DMART v2.0"
