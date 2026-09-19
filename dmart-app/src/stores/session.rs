@@ -2,7 +2,7 @@
 use dmart_shared::models::{LoginResponse, UserInfo};
 use gloo_storage::{LocalStorage, Storage};
 use gloo_timers::future::TimeoutFuture;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 
 const AUTH_KEY: &str = "dmart_auth";
 const USER_KEY: &str = "dmart_user";

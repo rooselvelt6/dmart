@@ -3,7 +3,7 @@ use crate::components::severity_badge::SeverityBadge;
 use crate::components::ui_kit::{ErrorState, LoadingState};
 use dmart_shared::models::Sexo;
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;

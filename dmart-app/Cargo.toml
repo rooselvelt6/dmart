@@ -15,6 +15,9 @@ leptos = { version = "0.8", features = ["csr"] }
 leptos_router = { version = "0.8" }
 console_error_panic_hook = "0.1"
 
+# Global executor for spawn_local (fixes "no global spawn_local configured")
+any_spawner = { version = "0.3", features = ["wasm-bindgen"] }
+
 # HTTP client (WASM)
 gloo-net = { version = "0.7", features = ["http"] }
 gloo-storage = "0.4"

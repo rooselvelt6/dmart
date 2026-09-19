@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 
 use crate::api;
 use crate::api::{ClinicalDevice, RegisterDeviceRequest};

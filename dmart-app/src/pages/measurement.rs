@@ -5,7 +5,7 @@ use dmart_shared::models::*;
 use dmart_shared::scales::{calculate_apache_ii_score, calculate_sofa_score, mortality_risk};
 use leptos::either::Either;
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use leptos_router::hooks::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]

@@ -2,7 +2,7 @@
 // Auto-dismiss notifications with contextual types
 
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use std::sync::Mutex;
 use std::collections::VecDeque;
 use rand::Rng;

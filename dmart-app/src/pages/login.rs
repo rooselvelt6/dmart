@@ -1,6 +1,6 @@
 use crate::api;
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use leptos_router::hooks::*;
 
 #[component]

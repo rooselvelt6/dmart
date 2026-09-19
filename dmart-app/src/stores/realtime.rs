@@ -6,7 +6,7 @@
 ///   recargar la página.
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use serde::Deserialize;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;

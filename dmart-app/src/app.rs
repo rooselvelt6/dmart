@@ -9,7 +9,7 @@ use crate::pages::{
 };
 use leptos::either::Either;
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use wasm_bindgen_futures::spawn_local;
 use leptos_router::components::{A, Redirect, Route, Router, Routes};
 use leptos_router::hooks::*;
 use leptos_router::path;
@@ -33,32 +33,38 @@ pub fn App() -> impl IntoView {
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
     let _ = crate::stores::create_theme_store();
-    if has_token() {
-        start_session_refresh();
-        // Las sesiones creadas antes del gating solo guardaban el token: si no
-        // hay identidad, se recupera con `/auth/me` (y valida que el token
-        // siga vigente). La recarga hace que el gating por rol se reevalúe.
-        spawn_local(async move {
-            if current_user().is_none() {
-                match crate::api::me().await {
-                    Ok(u) => save_user(&u),
-                    Err(_) => {
-                        clear_session();
-                        set_is_auth.set(false);
+    
+    // Use create_effect to ensure Leptos runtime is initialized before spawning tasks
+    create_effect(move |_| {
+        if has_token() {
+            start_session_refresh();
+            // Las sesiones creadas antes del gating solo guardaban el token: si no
+            // hay identidad, se recupera con `/auth/me` (y valida que el token
+            // siga vigente). La recarga hace que el gating por rol se reevalúe.
+            spawn_local(async move {
+                if current_user().is_none() {
+                    match crate::api::me().await {
+                        Ok(u) => save_user(&u),
+                        Err(_) => {
+                            clear_session();
+                            set_is_auth.set(false);
+                        }
                     }
+                    window().location().reload().unwrap_or_default();
                 }
-                window().location().reload().unwrap_or_default();
-            }
-        });
-    }
+            });
+        }
+    });
 
     // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).
     let _realtime = crate::stores::use_realtime();
 
     let preloaded = RwSignal::new(load_patients_cached().unwrap_or_default());
-    spawn_local(async move {
-        let fresh = fetch_patients_cached().await;
-        preloaded.set(fresh);
+    create_effect(move |_| {
+        spawn_local(async move {
+            let fresh = fetch_patients_cached().await;
+            preloaded.set(fresh);
+        });
     });
 
     view! {
