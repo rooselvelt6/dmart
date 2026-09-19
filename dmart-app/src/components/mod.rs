@@ -8,5 +8,6 @@ pub mod severity_badge;
 pub mod skin_picker;
 pub mod slider;
 pub mod theme_toggle;
+pub mod toast;
 pub mod toggle;
 pub mod ui_kit;

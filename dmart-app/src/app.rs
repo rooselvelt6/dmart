@@ -1,4 +1,5 @@
 use crate::components::theme_toggle::ThemeToggle;
+use crate::components::toast::ToastContainer;
 use crate::pages::{
     admin::AdminPage, dashboard::DashboardPage, data_quality::DataQualityPage,
     devices::DevicesPage, escalation::EscalationPage, login::LoginPage,
@@ -21,6 +22,13 @@ use crate::stores::{
 
 #[component]
 pub fn App() -> impl IntoView {
+    console_error_panic_hook::set_once();
+    
+    // Initialize core modules
+    crate::i18n::init_i18n();
+    crate::theme::init_theme();
+    crate::shortcuts::init_shortcuts();
+
     let (is_auth, set_is_auth) = signal(has_token());
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
@@ -55,7 +63,7 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Router>
-            <div class="flex flex-col md:flex-row min-h-screen" style="background:var(--uci-bg)">
+            <div class="flex flex-col md:flex-row min-h-screen" style="background:var(--bg-primary); color:var(--text-primary);">
                 <Show when=move || is_auth.get() fallback=|| ()>
                     <NavSidebar sidebar_open />
                 </Show>
@@ -67,7 +75,7 @@ pub fn App() -> impl IntoView {
                             aria-label="Abrir menú de navegación"
                             aria-expanded=move || sidebar_open.get()
                             class="md:hidden fixed top-4 left-4 z-30 p-2 rounded-lg shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                            style="background:var(--uci-surface); border:1px solid var(--uci-border);"
+                            style="background:var(--bg-card); border:1px solid var(--border-primary);"
                         >
                             <svg style="width:24px;height:24px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -187,7 +195,7 @@ pub fn App() -> impl IntoView {
                     </Routes>
                 </main>
             </div>
-            <crate::stores::ToastContainer />
+            <ToastContainer />
         </Router>
     }
 }
@@ -400,7 +408,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     </div>
                 </Show>
                 <div style="margin-bottom:12px;">
-                    <ThemeToggle />
+                    <crate::theme::ThemeSelector />
                 </div>
                 <button
                     on:click=move |_| {

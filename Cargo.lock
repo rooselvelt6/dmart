@@ -2009,6 +2009,8 @@ dependencies = [
  "js-sys",
  "leptos",
  "leptos_router",
+ "once_cell",
+ "rand 0.8.8",
  "serde",
  "serde_json",
  "uuid",
