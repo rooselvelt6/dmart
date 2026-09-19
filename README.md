@@ -131,7 +131,6 @@ cargo llvm-cov -p dmart-server --lib --test api_tests   # cobertura
 
 ## 📚 Documentación
 
-- [roadmapFinal.md](roadmapFinal.md) — Plan de fases y hitos
 - [CHANGELOG.md](CHANGELOG.md) — Historial de versiones (conventional commits)
 - [specs/](specs/) — Especificaciones SDD (SPEC-001…052)
 - [docs/ADR.md](docs/ADR.md) — Architecture Decision Records
@@ -147,7 +146,7 @@ cargo llvm-cov -p dmart-server --lib --test api_tests   # cobertura
 
 ## 🤝 Contribución
 
-1. Lee [roadmapFinal.md](roadmapFinal.md) y elige una SPEC pendiente
+1. Revisa [specs/](specs/) y elige una SPEC pendiente
 2. Abre issue con la especificación (formato Gherkin en `specs/`)
 3. Implementa → tests → `cargo fmt && cargo clippy -D warnings`
 4. Actualiza CHANGELOG.md y abre PR
