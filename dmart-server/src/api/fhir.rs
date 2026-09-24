@@ -1,4 +1,5 @@
-use crate::db::Database;
+use crate::auth::Claims;
+use crate::db::{Database, EstadoFilter};
 use anyhow::Error;
 use axum::{
     extract::{Path, Query, State},
@@ -19,6 +20,23 @@ fn err_to_str(e: Error) -> (StatusCode, String) {
         StatusCode::INTERNAL_SERVER_ERROR,
         crate::security::sanitize_internal_error(&e),
     )
+}
+
+/// Carga un paciente y verifica que pertenezca al tenant del JWT.
+/// Cross-tenant → 404 (no revela existencia de la PHI).
+async fn require_own_patient(
+    db: &Database,
+    id: &str,
+    claims: &Claims,
+) -> Result<Patient, (StatusCode, String)> {
+    let patient = crate::db::get_patient(db, id)
+        .await
+        .map_err(err_to_str)?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
+    if patient.tenant_id != claims.tenant_id {
+        return Err((StatusCode::NOT_FOUND, format!("Patient {} not found", id)));
+    }
+    Ok(patient)
 }
 
 /// Mapea SeverityLevel al CodeSystem FHIR R4 `condition-severity`.
@@ -157,11 +175,19 @@ pub struct FhirSearchQuery {
 pub async fn fhir_patient_search(
     State(db): State<Database>,
     Query(params): Query<FhirSearchQuery>,
+    claims: Claims,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let fhir_count = params._count.unwrap_or(50).min(200) as u32;
-    let patients = crate::db::list_patients(&db, fhir_count, 0)
-        .await
-        .map_err(err_to_str)?;
+    // SPEC-025: la búsqueda FHIR solo ve pacientes del tenant del JWT.
+    let patients = crate::db::list_patients_for_tenant(
+        &db,
+        &claims.tenant_id,
+        EstadoFilter::default(),
+        fhir_count,
+        0,
+    )
+    .await
+    .map_err(err_to_str)?;
 
     let entries: Vec<FhirBundleEntry> = if let Some(name) = &params.name {
         let lower = name.to_lowercase();
@@ -203,11 +229,9 @@ pub async fn fhir_patient_search(
 pub async fn fhir_patient_get(
     State(db): State<Database>,
     Path(id): Path<String>,
+    claims: Claims,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let patient = crate::db::get_patient(&db, &id)
-        .await
-        .map_err(err_to_str)?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
+    let patient = require_own_patient(&db, &id, &claims).await?;
 
     Ok(Json(
         serde_json::to_value(patient_to_fhir(&patient)).map_err(|e| {
@@ -299,11 +323,9 @@ fn match_cie10(text: &str, catalog: &[Diagnostico]) -> Option<(String, String)> 
 pub async fn fhir_condition_list(
     State(db): State<Database>,
     Path(id): Path<String>,
+    claims: Claims,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let patient = crate::db::get_patient(&db, &id)
-        .await
-        .map_err(err_to_str)?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
+    let patient = require_own_patient(&db, &id, &claims).await?;
 
     let catalog = crate::db::list_diagnosticos(&db)
         .await
@@ -376,11 +398,9 @@ pub async fn fhir_condition_list(
 pub async fn fhir_observation_list(
     State(db): State<Database>,
     Path(id): Path<String>,
+    claims: Claims,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let patient = crate::db::get_patient(&db, &id)
-        .await
-        .map_err(err_to_str)?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
+    let patient = require_own_patient(&db, &id, &claims).await?;
 
     let effective = patient.updated_at.clone();
     let mut observations = Vec::new();
@@ -504,11 +524,9 @@ struct FhirAttachment {
 pub async fn fhir_diagnostic_report(
     State(db): State<Database>,
     Path(id): Path<String>,
+    claims: Claims,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let patient = crate::db::get_patient(&db, &id)
-        .await
-        .map_err(err_to_str)?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
+    let patient = require_own_patient(&db, &id, &claims).await?;
 
     let _measurements = crate::db::get_measurements_for_patient(&db, &id)
         .await
@@ -622,11 +640,9 @@ pub async fn fhir_diagnostic_report(
 pub async fn fhir_diagnostic_report_qr(
     State(db): State<Database>,
     Path(id): Path<String>,
+    claims: Claims,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let patient = crate::db::get_patient(&db, &id)
-        .await
-        .map_err(err_to_str)?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Patient {} not found", id)))?;
+    let patient = require_own_patient(&db, &id, &claims).await?;
 
     let pdf_url = format!("/api/patients/{}/export/pdf", patient.patient_id);
     let qr_data = format!("https://dmart.local{}", pdf_url);

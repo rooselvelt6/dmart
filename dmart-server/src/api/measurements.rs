@@ -1,3 +1,4 @@
+use crate::auth::Claims;
 use crate::db as db_ops;
 use crate::db::Database;
 use axum::{
@@ -19,8 +20,30 @@ use uuid::Uuid;
 pub async fn create_measurement(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
     Json(body): Json<MeasurementRequest>,
 ) -> impl IntoResponse {
+    // SPEC-025: la medición solo se puede asociar a un paciente del propio
+    // tenant (verificado antes de escribir; el tenant se hereda del registro).
+    let tenant_id = match db_ops::get_patient(&db, &patient_id).await {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p.tenant_id.clone(),
+        Ok(Some(_)) | Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<Measurement>::err("Patient not found")),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Measurement>::err(msg)),
+            )
+                .into_response();
+        }
+    };
+
     // Calcular todos los scores
     let apache_score = calculate_apache_ii_score(&body.apache_data);
     let gcs_score = calculate_gcs_score(&body.gcs_data);
@@ -60,7 +83,7 @@ pub async fn create_measurement(
         algorithm_version,
         fingerprint,
         notas: body.notas,
-        tenant_id: dmart_shared::models::default_tenant_id(),
+        tenant_id,
     };
 
     match db_ops::create_measurement(&db, measurement).await {
@@ -104,7 +127,15 @@ pub async fn create_measurement(
 pub async fn get_measurements(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
 ) -> impl IntoResponse {
+    if !patient_belongs_to_tenant(&db, &patient_id, &claims).await {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<Vec<Measurement>>::err("Patient not found")),
+        )
+            .into_response();
+    }
     match db_ops::get_measurements_for_patient(&db, &patient_id).await {
         Ok(ms) => (StatusCode::OK, Json(ApiResponse::ok(ms))).into_response(),
         Err(e) => (
@@ -121,7 +152,15 @@ pub async fn get_measurements(
 pub async fn get_last_measurement(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
 ) -> impl IntoResponse {
+    if !patient_belongs_to_tenant(&db, &patient_id, &claims).await {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<Option<Measurement>>::err("Patient not found")),
+        )
+            .into_response();
+    }
     match db_ops::get_last_measurement(&db, &patient_id).await {
         Ok(m) => (StatusCode::OK, Json(ApiResponse::ok(m))).into_response(),
         Err(e) => (
@@ -132,6 +171,14 @@ pub async fn get_last_measurement(
         )
             .into_response(),
     }
+}
+
+// TRUE si existe un paciente con ese ID dentro del tenant del JWT.
+async fn patient_belongs_to_tenant(db: &Database, patient_id: &str, claims: &Claims) -> bool {
+    matches!(
+        db_ops::get_patient(db, patient_id).await,
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id
+    )
 }
 
 // ─── DTOs ──────────────────────────────────────────────────────────────────

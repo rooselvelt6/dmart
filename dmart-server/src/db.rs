@@ -125,12 +125,35 @@ pub struct PatientAggregates {
 /// Calcula totales y promedios de scores con agregaciones SurrealQL en lugar
 /// de cargar los pacientes en memoria.
 pub async fn aggregate_patient_stats(db: &Surreal<Db>) -> Result<PatientAggregates> {
-    let mut agg = PatientAggregates::default();
+    aggregate_patient_stats_scoped(db, None).await
+}
 
-    let groups: Vec<serde_json::Value> = db
-        .query("SELECT estado_gravedad, count() AS n FROM patients GROUP BY estado_gravedad")
-        .await?
-        .take(0)?;
+/// SPEC-025: igual que [`aggregate_patient_stats`] pero solo para el tenant
+/// indicado (los KPIs ejecutivos no pueden sumar pacientes de otros tenants).
+pub async fn aggregate_patient_stats_for_tenant(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+) -> Result<PatientAggregates> {
+    aggregate_patient_stats_scoped(db, Some(tenant_id)).await
+}
+
+async fn aggregate_patient_stats_scoped(
+    db: &Surreal<Db>,
+    tenant: Option<&str>,
+) -> Result<PatientAggregates> {
+    let mut agg = PatientAggregates::default();
+    let (scope_where, bind) = match tenant {
+        Some(t) => ("WHERE tenant_id = $tenant ".to_string(), Some(t.to_string())),
+        None => (String::new(), None),
+    };
+
+    let mut groups_q = db.query(format!(
+        "SELECT estado_gravedad, count() AS n FROM patients {scope_where}GROUP BY estado_gravedad"
+    ));
+    if let Some(t) = &bind {
+        groups_q = groups_q.bind(("tenant", t.clone()));
+    }
+    let groups: Vec<serde_json::Value> = groups_q.await?.take(0)?;
     for row in groups {
         let (Some(sev), Some(n)) = (
             row.get("estado_gravedad").and_then(|v| v.as_str()),
@@ -146,12 +169,13 @@ pub async fn aggregate_patient_stats(db: &Surreal<Db>) -> Result<PatientAggregat
         }
     }
 
-    let scores: Vec<serde_json::Value> = db
-        .query(
-            "SELECT ultimo_apache_score, ultimo_gcs_score, ultimo_sofa_score, ultimo_saps3_score, ultimo_news2_score, fecha_egreso_uci, fecha_ingreso_uci, desenlace_uci, mortality_risk FROM patients",
-        )
-        .await?
-        .take(0)?;
+    let mut scores_q = db.query(format!(
+        "SELECT ultimo_apache_score, ultimo_gcs_score, ultimo_sofa_score, ultimo_saps3_score, ultimo_news2_score, fecha_egreso_uci, fecha_ingreso_uci, desenlace_uci, mortality_risk FROM patients {scope_where}"
+    ));
+    if let Some(t) = &bind {
+        scores_q = scores_q.bind(("tenant", t.clone()));
+    }
+    let scores: Vec<serde_json::Value> = scores_q.await?.take(0)?;
 
     agg.total = scores.len() as u64;
     for row in scores {

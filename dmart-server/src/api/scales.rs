@@ -1,3 +1,4 @@
+use crate::auth::Claims;
 use crate::db as db_ops;
 use crate::db::Database;
 use axum::{
@@ -155,8 +156,28 @@ pub struct ScaleHistoryEntry {
 pub async fn calc_apache(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
     Json(body): Json<ApacheRequest>,
 ) -> impl IntoResponse {
+    // SPEC-025: las escalas solo se registran para pacientes del propio tenant.
+    let tenant_id = match db_ops::get_patient(&db, &patient_id).await {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p.tenant_id.clone(),
+        Ok(Some(_)) | Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<ApacheResult>::err("Patient not found")),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<ApacheResult>::err(msg)),
+            )
+                .into_response();
+        }
+    };
     let apache_score = calculate_apache_ii_score(&body.data);
     let gcs_score = calculate_gcs_score_from_total(body.data.gcs_total);
     let severity = SeverityLevel::from_score(apache_score);
@@ -202,7 +223,7 @@ pub async fn calc_apache(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
-        tenant_id: dmart_shared::models::default_tenant_id(),
+        tenant_id: tenant_id.clone(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -241,8 +262,28 @@ pub async fn calc_apache(
 pub async fn calc_gcs(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
     Json(body): Json<GcsRequest>,
 ) -> impl IntoResponse {
+    // SPEC-025: las escalas solo se registran para pacientes del propio tenant.
+    let tenant_id = match db_ops::get_patient(&db, &patient_id).await {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p.tenant_id.clone(),
+        Ok(Some(_)) | Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<GcsResult>::err("Patient not found")),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<GcsResult>::err(msg)),
+            )
+                .into_response();
+        }
+    };
     let gcs = GcsData {
         apertura_ocular: body.apertura_ocular.clamp(1, 4),
         respuesta_verbal: body.respuesta_verbal.clamp(1, 5),
@@ -292,7 +333,7 @@ pub async fn calc_gcs(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
-        tenant_id: dmart_shared::models::default_tenant_id(),
+        tenant_id: tenant_id.clone(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -328,8 +369,28 @@ pub async fn calc_gcs(
 pub async fn calc_news2(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
     Json(body): Json<News2Request>,
 ) -> impl IntoResponse {
+    // SPEC-025: las escalas solo se registran para pacientes del propio tenant.
+    let tenant_id = match db_ops::get_patient(&db, &patient_id).await {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p.tenant_id.clone(),
+        Ok(Some(_)) | Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<News2Result>::err("Patient not found")),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<News2Result>::err(msg)),
+            )
+                .into_response();
+        }
+    };
     let apache_data = ApacheIIData {
         frecuencia_respiratoria: body.frecuencia_respiratoria,
         spo2: body.spo2,
@@ -377,7 +438,7 @@ pub async fn calc_news2(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
-        tenant_id: dmart_shared::models::default_tenant_id(),
+        tenant_id: tenant_id.clone(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -406,8 +467,28 @@ pub async fn calc_news2(
 pub async fn calc_sofa(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
     Json(body): Json<SofaRequest>,
 ) -> impl IntoResponse {
+    // SPEC-025: las escalas solo se registran para pacientes del propio tenant.
+    let tenant_id = match db_ops::get_patient(&db, &patient_id).await {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p.tenant_id.clone(),
+        Ok(Some(_)) | Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<SofaResult>::err("Patient not found")),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<SofaResult>::err(msg)),
+            )
+                .into_response();
+        }
+    };
     let apache_data = ApacheIIData {
         pao2: Some(body.pao2),
         fio2: body.fio2,
@@ -458,7 +539,7 @@ pub async fn calc_sofa(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
-        tenant_id: dmart_shared::models::default_tenant_id(),
+        tenant_id: tenant_id.clone(),
     };
 
     match db_ops::create_measurement(&db, m).await {
@@ -487,8 +568,28 @@ pub async fn calc_sofa(
 pub async fn calc_saps3(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
     Json(body): Json<Saps3Request>,
 ) -> impl IntoResponse {
+    // SPEC-025: las escalas solo se registran para pacientes del propio tenant.
+    let tenant_id = match db_ops::get_patient(&db, &patient_id).await {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p.tenant_id.clone(),
+        Ok(Some(_)) | Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<Saps3Result>::err("Patient not found")),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<Saps3Result>::err(msg)),
+            )
+                .into_response();
+        }
+    };
     let apache_data = ApacheIIData {
         edad: body.edad,
         dias_pre_uci: body.dias_pre_uci,
@@ -544,7 +645,7 @@ pub async fn calc_saps3(
         algorithm_version,
         fingerprint,
         notas: body.notas.clone().unwrap_or_default(),
-        tenant_id: dmart_shared::models::default_tenant_id(),
+        tenant_id: tenant_id.clone(),
     };
 
     match db_ops::create_measurement(&db, m).await {

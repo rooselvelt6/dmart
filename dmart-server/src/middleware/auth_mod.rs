@@ -49,17 +49,11 @@ pub async fn auth_middleware(
         .get("authorization")
         .and_then(|v| v.to_str().ok());
 
+    // Seguridad: el access token SOLO se acepta en el header `Authorization`.
+    // NUNCA en la query string (`?token=...`): quedaría en logs, historial del
+    // navegador, referrer y headers de proxy (fuga de sesión).
     let token = match auth_header.and_then(extract_token_from_header) {
         Some(t) => Some(t.to_string()),
-        None if path.starts_with("/realtime")
-            || path.starts_with("/monitores")
-            || path.contains("/export/") =>
-        {
-            request.uri().query().and_then(|q| {
-                q.split('&')
-                    .find_map(|kv| kv.strip_prefix("token=").map(str::to_string))
-            })
-        }
         None => None,
     };
 

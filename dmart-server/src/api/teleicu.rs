@@ -49,7 +49,11 @@ pub struct LiveViewResponse {
 }
 
 // POST /api/teleicu/sessions
-pub async fn start_session(State(db): State<Database>, body: Json<Value>) -> Response {
+pub async fn start_session(
+    State(db): State<Database>,
+    claims: crate::auth::Claims,
+    body: Json<Value>,
+) -> Response {
     let req: StartSessionRequest = match serde_json::from_value(body.0.clone()) {
         Ok(r) => r,
         Err(_) => {
@@ -73,9 +77,10 @@ pub async fn start_session(State(db): State<Database>, body: Json<Value>) -> Res
             .into_response();
     }
 
+    // SPEC-025: iniciar tele-ICU solo para pacientes del propio tenant.
     match crate::db::get_patient(&db, &req.patient_id).await {
-        Ok(Some(_)) => {}
-        Ok(None) => {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => {}
+        Ok(Some(_)) | Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(ApiResponse::<()>::err("Paciente no encontrado")),
@@ -157,7 +162,11 @@ pub async fn list_sessions(State(db): State<Database>) -> Response {
 }
 
 // POST /api/teleicu/sessions/{id}/end
-pub async fn end_session(State(db): State<Database>, Path(id): Path<String>) -> Response {
+pub async fn end_session(
+    State(db): State<Database>,
+    Path(id): Path<String>,
+    claims: crate::auth::Claims,
+) -> Response {
     let session = match teleicu::get_session(&db, &id).await {
         Ok(s) => s,
         Err(e) => {
@@ -179,7 +188,31 @@ pub async fn end_session(State(db): State<Database>, Path(id): Path<String>) -> 
             )
                 .into_response();
         }
-        Some(s) => s,
+        Some(s) => {
+            // SPEC-025: no se termina una sesión sobre un paciente de otro tenant.
+            match crate::db::get_patient(&db, &s.patient_id).await {
+                Ok(Some(p)) if p.tenant_id == claims.tenant_id => {}
+                Ok(_) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(ApiResponse::<EndedSessionResponse>::err(
+                            "Sesión no encontrada",
+                        )),
+                    )
+                        .into_response();
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::<EndedSessionResponse>::err(
+                            crate::security::sanitize_internal_error(&e),
+                        )),
+                    )
+                        .into_response();
+                }
+            }
+            s
+        }
     };
 
     if session.status == SessionStatus::Ended {
@@ -231,10 +264,16 @@ pub async fn end_session(State(db): State<Database>, Path(id): Path<String>) -> 
 }
 
 // GET /api/teleicu/live/{id}  (id = patient_id)
-pub async fn live_view(State(db): State<Database>, Path(id): Path<String>) -> Response {
+pub async fn live_view(
+    State(db): State<Database>,
+    Path(id): Path<String>,
+    claims: crate::auth::Claims,
+) -> Response {
     let patient = match crate::db::get_patient(&db, &id).await {
-        Ok(Some(p)) => p,
-        Ok(None) => {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p,
+        // SPEC-025: la vista en vivo (paciente + mediciones + timeline) solo
+        // se sirve para pacientes del propio tenant.
+        Ok(Some(_)) | Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(ApiResponse::<LiveViewResponse>::err(
@@ -246,7 +285,9 @@ pub async fn live_view(State(db): State<Database>, Path(id): Path<String>) -> Re
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::<LiveViewResponse>::err(e.to_string())),
+                Json(ApiResponse::<LiveViewResponse>::err(
+                    crate::security::sanitize_internal_error(&e),
+                )),
             )
                 .into_response();
         }

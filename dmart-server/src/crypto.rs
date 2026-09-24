@@ -63,16 +63,18 @@ impl Default for MasterKey {
 /// Validates that `DMART_MASTER_KEY` is configured with a strong value.
 ///
 /// The server refuses to start (returns `Err`) when the variable is missing or
-/// still using the development vector, so encrypted data is never protected by
-/// a publicly known key.
+/// still using a development/example vector (including the `.env.example`
+/// placeholder), so encrypted data is never protected by a publicly known key.
 pub fn validate_master_key() -> Result<(), String> {
+    const KNOWN_WEAK: [&str; 2] = ["dmart-default-key-change-me", "change-this-to-a-random-32-char-secret"];
     match std::env::var("DMART_MASTER_KEY") {
-        Ok(key) if !key.is_empty() && key != "dmart-default-key-change-me" && key.len() >= 16 => {
+        Ok(key) if !key.is_empty() && !KNOWN_WEAK.contains(&key.as_str()) && key.len() >= 32 => {
             Ok(())
         }
         Ok(_) => Err(
-            "DMART_MASTER_KEY is missing or still the insecure development default. Set a strong \
-             value (>= 16 chars) in .env before starting the server (e.g. `openssl rand -hex 32`)."
+            "DMART_MASTER_KEY is missing or still the insecure development/example default. Set \
+             a strong value (>= 32 chars) in .env before starting the server \
+             (e.g. `openssl rand -hex 32`)."
                 .to_string(),
         ),
         Err(_) => Err(

@@ -1,3 +1,4 @@
+use crate::auth::Claims;
 use crate::db as db_ops;
 use crate::db::Database;
 use axum::{
@@ -12,10 +13,12 @@ use printpdf::*;
 pub async fn export_csv(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
 ) -> impl IntoResponse {
+    // SPEC-025: exportar PHI de pacientes ajenos → 404 (no revela existencia).
     let patient = match db_ops::get_patient(&db, &patient_id).await {
-        Ok(Some(p)) => p,
-        Ok(None) => return error_response("Paciente no encontrado"),
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p,
+        Ok(Some(_)) | Ok(None) => return error_response("Paciente no encontrado"),
         Err(e) => {
             let msg = crate::security::sanitize_internal_error(&e);
             return error_response(&msg);
@@ -104,10 +107,11 @@ pub async fn export_csv(
 pub async fn export_pdf(
     State(db): State<Database>,
     Path(patient_id): Path<String>,
+    claims: Claims,
 ) -> impl IntoResponse {
     let patient = match db_ops::get_patient(&db, &patient_id).await {
-        Ok(Some(p)) => p,
-        Ok(None) => return error_response("Paciente no encontrado"),
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => p,
+        Ok(Some(_)) | Ok(None) => return error_response("Paciente no encontrado"),
         Err(e) => {
             let msg = crate::security::sanitize_internal_error(&e);
             return error_response(&msg);

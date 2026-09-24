@@ -1,3 +1,4 @@
+use crate::auth::Claims;
 use crate::db as db_ops;
 use crate::db::Database;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
@@ -51,9 +52,17 @@ pub struct EjecutivoKpi {
     pub los_dias_promedio: f64,
 }
 
-pub async fn get_stats(State(db): State<Database>) -> impl IntoResponse {
-    let agg_result = db_ops::aggregate_patient_stats(&db).await;
-    let recent_result = db_ops::list_patients(&db, 50, 0).await;
+pub async fn get_stats(State(db): State<Database>, claims: Claims) -> impl IntoResponse {
+    // SPEC-025: KPIs y pacientes "recientes" solo del tenant del JWT.
+    let agg_result = db_ops::aggregate_patient_stats_for_tenant(&db, &claims.tenant_id).await;
+    let recent_result = db_ops::list_patients_for_tenant(
+        &db,
+        &claims.tenant_id,
+        db_ops::EstadoFilter::default(),
+        50,
+        0,
+    )
+    .await;
 
     match (agg_result, recent_result) {
         (Ok(agg), Ok(patients)) => {

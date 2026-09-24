@@ -168,14 +168,16 @@ pub fn build_v1_router(
     security_state: SecurityState,
     version_state: VersionState,
 ) -> Router {
-    // Public routes (no auth required)
+    // Public routes (no auth required). PRECAUCIÓN: solo endpoints que no
+    // filtran ni permiten escribir datos clínicos. `/monitores/hl7` (ingesta) y
+    // `/realtime/stream` (datos de pacientes en vivo) viven en el router
+    // protegido: la ingesta requiere un JWT de sesión con `measurements:create`
+    // y el stream `patients:read`.
     let public_router = Router::new()
         .route("/health", get(health_check_v1))
         .route("/openapi.json", get(openapi_json_handler))
         .route("/openapi.yaml", get(openapi_yaml_handler))
-        .route("/monitores/hl7", post(crate::api::monitores::hl7_ingest))
         .route("/monitores/health", get(crate::api::monitores::hl7_health))
-        .route("/realtime/stream", get(crate::realtime::realtime_stream))
         .route("/realtime/ping", get(crate::realtime::realtime_ping))
         .with_state(database.clone());
 
@@ -468,6 +470,8 @@ pub fn build_v1_router(
             "/fhir/Patient/{id}/DiagnosticReport/QR",
             get(crate::api::fhir::fhir_diagnostic_report_qr),
         )
+        .route("/monitores/hl7", post(crate::api::monitores::hl7_ingest))
+        .route("/realtime/stream", get(crate::realtime::realtime_stream))
         .with_state(database.clone());
 
     // Apply security middleware only to protected routes

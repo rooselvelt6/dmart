@@ -47,6 +47,10 @@ async fn main() -> anyhow::Result<()> {
     // Fail fast if a strong DMART_MASTER_KEY is not configured
     crypto::validate_master_key().map_err(|e| anyhow::anyhow!("{}", e))?;
 
+    // Fail fast if JWT_SECRET is missing/weak (fail-closed: los access tokens
+    // no pueden emitirse con un secreto predecible).
+    auth::validate_jwt_secret().map_err(|e| anyhow::anyhow!("{}", e))?;
+
     // Setup panic hook FIRST - before any async code
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -220,9 +224,12 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors)
         .layer(axum_mw::from_fn(security::security_headers_middleware))
         .layer(
+            // Seguridad: no incluir headers en los spans de trazado (contendrían
+            // `Authorization: Bearer <token>` y la cookie `refresh_token`), ni
+            // en las respuestas. Solo se registra método + URI + status.
             TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::new().include_headers(true))
-                .on_response(DefaultOnResponse::new().include_headers(true)),
+                .make_span_with(DefaultMakeSpan::new())
+                .on_response(DefaultOnResponse::new()),
         );
 
     // Server

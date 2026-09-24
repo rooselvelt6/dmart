@@ -185,6 +185,49 @@ pub fn observability_router(db: Database, prometheus_handle: PrometheusHandle_) 
         .route("/slo", get(slo_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(metrics_middleware))
+        .layer(axum::middleware::from_fn(metrics_auth_middleware))
+}
+
+/// Equivalencia en tiempo constante (evita side-channels al comparar el token).
+fn timing_safe_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+///
+/// `/metrics` y `/slo` solo se sirven con `Authorization: Bearer <token>` si
+/// `DMART_METRICS_TOKEN` está configurada (fail-closed). Health/live/ready
+/// quedan públicos (los consumen los probes de Kubernetes/OOM y no revelan
+/// datos clínicos). Sin `DMART_METRICS_TOKEN`, el scrape queda en modo
+/// explícito de desarrollo local.
+pub async fn metrics_auth_middleware(
+    req: axum::http::Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> Response {
+    let path = req.uri().path();
+    let sensitive = path.ends_with("/metrics") || path.ends_with("/slo");
+
+    let expected = std::env::var("DMART_METRICS_TOKEN")
+        .ok()
+        .filter(|s| !s.is_empty());
+
+    if sensitive
+        && let Some(expected) = expected
+    {
+        let provided = req
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(crate::auth::extract_token_from_header);
+
+        if !provided.is_some_and(|p| timing_safe_eq(p, &expected)) {
+            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+        }
+    }
+
+    next.run(req).await
 }
 
 /// GET /slo — Reporte SLI/SLO y error budget en JSON (SPEC-050).

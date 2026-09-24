@@ -1824,7 +1824,7 @@ async fn test_e2e_audit_retention_cleanup_deletes_old_logs() {
 }
 
 #[tokio::test]
-async fn test_e2e_realtime_stream_requires_auth_and_accepts_token_param() {
+async fn test_e2e_realtime_stream_requires_bearer_auth_header() {
     let (db, _dir) = test_db().await;
     seed_user(
         &db,
@@ -1841,28 +1841,41 @@ async fn test_e2e_realtime_stream_requires_auth_and_accepts_token_param() {
     let (status, _) = send(&http, Method::GET, "/realtime/stream", None, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "SSE sin token => 401");
 
-    // Token inválido => 401
+    // Token inválido por header => 401
     let (status, _) = send(
         &http,
         Method::GET,
-        "/realtime/stream?token=basura",
-        None,
+        "/realtime/stream",
+        Some("basura"),
         None,
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "token inválido => 401");
 
-    // Con token en query => 200 + content-type text/event-stream.
+    // El token NUNCA viaja en query string (fuga por logs/historial/referrer).
+    // Con un token válido en query => 401 (la URL token= ya no es un canal).
+    let (status, _) = send(
+        &http,
+        Method::GET,
+        &format!("/realtime/stream?token={}", token),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "token en query => 401");
+
+    // Con Authorization: Bearer => 200 + content-type text/event-stream.
     // No usamos send() (colecciona el body completo y el stream no termina);
     // verificamos el status y el content-type de la cabecera.
     let app = http.clone();
     let request = axum::http::Request::builder()
         .method(Method::GET)
-        .uri(format!("/realtime/stream?token={}", token))
+        .uri("/realtime/stream")
+        .header(header::AUTHORIZATION, format!("Bearer {}", token))
         .body(Body::empty())
         .expect("build request");
     let response = app.clone().oneshot(request).await.expect("oneshot");
-    assert_eq!(response.status(), StatusCode::OK, "SSE con token => 200");
+    assert_eq!(response.status(), StatusCode::OK, "SSE con Bearer => 200");
     let content_type = response
         .headers()
         .get(header::CONTENT_TYPE)

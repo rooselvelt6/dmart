@@ -243,9 +243,30 @@ pub async fn update_patient(
             )
             .await;
     }
-    match db_ops::update_patient(&db, &id, patient).await {
-        Ok(Some(p)) => (StatusCode::OK, Json(ApiResponse::ok(p))).into_response(),
-        Ok(None) => (
+    match db_ops::get_patient(&db, &id).await {
+        // SPEC-025: solo se edita un paciente del propio tenant. El tenant del
+        // registro es SIEMPRE el del JWT (nunca el del payload).
+        Ok(Some(existing)) if existing.tenant_id == claims.tenant_id => {
+            let mut patient = patient;
+            patient.tenant_id = claims.tenant_id.clone();
+            match db_ops::update_patient(&db, &id, patient).await {
+                Ok(Some(p)) => (StatusCode::OK, Json(ApiResponse::ok(p))).into_response(),
+                Ok(None) => (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse::<Patient>::err("Patient not found")),
+                )
+                    .into_response(),
+                Err(e) => {
+                    let msg = crate::security::sanitize_internal_error(&e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::<Patient>::err(msg)),
+                    )
+                        .into_response()
+                }
+            }
+        }
+        Ok(Some(_)) | Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ApiResponse::<Patient>::err("Patient not found")),
         )
@@ -278,8 +299,26 @@ pub async fn delete_patient(
             )
             .await;
     }
-    match db_ops::delete_patient(&db, &id).await {
-        Ok(_) => (StatusCode::OK, Json(ApiResponse::ok(()))).into_response(),
+    match db_ops::get_patient(&db, &id).await {
+        // SPEC-025: borrar pacientes ajenos → 404 (no revela existencia).
+        Ok(Some(existing)) if existing.tenant_id == claims.tenant_id => {
+            match db_ops::delete_patient(&db, &id).await {
+                Ok(_) => (StatusCode::OK, Json(ApiResponse::ok(()))).into_response(),
+                Err(e) => {
+                    let msg = crate::security::sanitize_internal_error(&e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::<()>::err(msg)),
+                    )
+                        .into_response()
+                }
+            }
+        }
+        Ok(Some(_)) | Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<()>::err("Patient not found")),
+        )
+            .into_response(),
         Err(e) => {
             let msg = crate::security::sanitize_internal_error(&e);
             (
@@ -313,24 +352,27 @@ pub async fn egreso_paciente(
     let paciente = db_ops::get_patient(&db, &id).await;
 
     match paciente {
-        Ok(Some(p)) => match db_ops::egresar_paciente(&db, &p, &desenlace).await {
-            Ok(_) => (
-                StatusCode::OK,
-                Json(ApiResponse::ok(
-                    "Paciente egresado, cama y equipos liberados",
-                )),
-            )
-                .into_response(),
-            Err(e) => {
-                let msg = crate::security::sanitize_internal_error(&e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ApiResponse::<String>::err(msg)),
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => {
+            match db_ops::egresar_paciente(&db, &p, &desenlace).await {
+                Ok(_) => (
+                    StatusCode::OK,
+                    Json(ApiResponse::ok(
+                        "Paciente egresado, cama y equipos liberados",
+                    )),
                 )
-                    .into_response()
+                    .into_response(),
+                Err(e) => {
+                    let msg = crate::security::sanitize_internal_error(&e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::<String>::err(msg)),
+                    )
+                        .into_response()
+                }
             }
-        },
-        Ok(None) => (
+        }
+        // SPEC-025: egresar a un paciente de otro tenant → 404.
+        Ok(Some(_)) | Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(ApiResponse::<String>::err("Paciente no encontrado")),
         )
@@ -385,6 +427,32 @@ pub async fn patient_timeline(
         .and_then(|v| v.to_str().ok())
         .map(|v| v.contains("application/fhir+json"))
         .unwrap_or(false);
+
+    // SPEC-025: verificar propiedad del paciente antes de leer su timeline
+    // (los `patient_event` están indexados por patient_id, UID global único,
+    // pero la propiedad debe confirmarse para no filtrar eventos ajenos).
+    match db_ops::get_patient(&db, &id).await {
+        Ok(Some(p)) if p.tenant_id != claims.tenant_id => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(dmart_shared::models::ApiResponse::<TimelineResponse>::err(
+                    "Patient not found",
+                )),
+            )
+                .into_response();
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(dmart_shared::models::ApiResponse::<TimelineResponse>::err(
+                    "Patient not found",
+                )),
+            )
+                .into_response();
+        }
+        Err(_) => {}
+        Ok(Some(_)) => {}
+    }
 
     match query_timeline(&db, &id, query).await {
         Ok(response) => {

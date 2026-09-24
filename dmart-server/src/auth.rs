@@ -79,6 +79,32 @@ fn jwt_secret() -> &'static [u8] {
 
 static REVOKED_TOKENS: OnceLock<std::sync::Mutex<HashMap<String, i64>>> = OnceLock::new();
 
+/// Acceso interno compartido a los bytes del secreto JWT.
+pub(crate) fn jwt_secret_bytes() -> &'static [u8] {
+    jwt_secret()
+}
+
+/// Valida que `JWT_SECRET` esté configurada con una clave fuerte (>= 32 bytes)
+/// y no sea el valor de ejemplo del repo. El server arranca en fail-closed: sin
+/// esta variable NO se emiten tokens, porque un secreto predecible o ausente
+/// permite forjar cualquier access token (escalada total).
+pub fn validate_jwt_secret() -> Result<(), String> {
+    const EXAMPLE: &str = "change-me-to-a-random-64-char-string";
+    match std::env::var("JWT_SECRET") {
+        Ok(v) if !v.is_empty() && v != EXAMPLE && v.len() >= 32 => Ok(()),
+        Ok(_) => Err(
+            "JWT_SECRET is missing or too weak (or still the development example). Set a strong \
+             random secret (>= 32 chars, e.g. `openssl rand -hex 32`) in .env."
+                .to_string(),
+        ),
+        Err(_) => Err(
+            "JWT_SECRET is required in production (fail-closed). Set a strong random secret \
+             (>= 32 chars, e.g. `openssl rand -hex 32`) in .env."
+                .to_string(),
+        ),
+    }
+}
+
 /// Adds a JWT to the revocation list until its natural expiration (used on logout).
 pub fn revoke_token(token: &str, exp: i64) {
     if token.is_empty() {

@@ -219,6 +219,24 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
         };
     }
 
+    // Ingesta HL7 por HTTP (`/monitores/hl7`): requiere crear mediciones, nunca
+    // un rol de solo lectura. `/monitores/health` es público y no llega aquí.
+    if path.starts_with("/monitores") {
+        return match m.as_str() {
+            "POST" => Some("measurements:create"),
+            _ => None,
+        };
+    }
+
+    // Streaming en tiempo real (`/realtime/stream`): cualquier rol clínico con
+    // `patients:read` puede consumir el hub. `/realtime/ping` es público.
+    if path.starts_with("/realtime") {
+        return match m.as_str() {
+            "GET" => Some("patients:read"),
+            _ => None,
+        };
+    }
+
     // Rutas de cuidado clínico: accesibles para cualquier rol clínico autenticado.
     if path.starts_with("/admin/check-camas")
         || path.starts_with("/admin/camas/disponibles")
@@ -606,6 +624,24 @@ mod tests {
         assert!(Role::Support.can("notifications:write"));
         assert!(Role::Support.can("support:act"));
         assert!(!Role::Nurse.can("notifications:write"));
+    }
+
+    #[test]
+    fn permission_for_monitores_and_realtime() {
+        // Ingesta HL7 por HTTP → requiere crear mediciones.
+        assert_eq!(
+            permission_for("POST", "/monitores/hl7"),
+            Some("measurements:create")
+        );
+        // Stream en tiempo real → lectura de pacientes.
+        assert_eq!(
+            permission_for("GET", "/realtime/stream"),
+            Some("patients:read")
+        );
+        assert!(Role::Doctor.can("measurements:create"));
+        assert!(Role::Nurse.can("measurements:create"));
+        assert!(!Role::Viewer.can("measurements:create"));
+        assert!(Role::Viewer.can("patients:read"));
     }
 
     #[test]

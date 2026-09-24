@@ -50,9 +50,30 @@ pub async fn list_plans(
 
 pub async fn evaluate_cds(
     State(db): State<Database>,
-    _claims: crate::auth::Claims,
+    claims: crate::auth::Claims,
     req: Json<EvaluateRequest>,
 ) -> impl IntoResponse {
+    // SPEC-025: el CDS solo evalúa pacientes del propio tenant (defensa en
+    // profundidad; la evaluación usa el contexto pasado, no PHI del servidor).
+    match crate::db::get_patient(&db, &req.patient_id).await {
+        Ok(Some(p)) if p.tenant_id == claims.tenant_id => {}
+        Ok(_) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::<serde_json::Value>::err("Patient not found")),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let msg = crate::security::sanitize_internal_error(&e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<serde_json::Value>::err(msg)),
+            )
+                .into_response();
+        }
+    }
+
     let engine = CdsEngine::new(Arc::new(db.clone()));
     let _ = engine.load_active_plans().await;
 

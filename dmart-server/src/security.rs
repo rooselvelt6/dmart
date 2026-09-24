@@ -202,16 +202,48 @@ pub async fn rate_limit_middleware(
     }
 }
 
-/// Real client IP from the socket, unless `DMART_TRUST_PROXY=true` is set
-/// (then the `X-Forwarded-For` header is honored because the app sits behind
-/// a trusted reverse proxy that overwrites it). Never trusts the header by
-/// default, otherwise the rate limiter can be bypassed by spoofing it.
-fn client_ip(req: &Request) -> Option<String> {
+/// Determina si `peer` (IP origen del socket) es un proxy de confianza.
+///
+/// El header `X-Forwarded-For` SOLO se honra cuando:
+/// - `DMART_TRUST_PROXY=true`, y
+/// - la conexión directa proviene de un peer en `DMART_TRUSTED_PROXIES` (CSV)
+///   o, si tal variable no existe, de loopback (proxy en el mismo host).
+///
+/// Sin esto, cualquier cliente que alcance el servidor directamente podría
+/// espoofear `X-Forwarded-For` para evadir el rate limiter y el login throttle.
+fn peer_is_trusted_proxy(peer: Option<&str>) -> bool {
     let trust_proxy = std::env::var("DMART_TRUST_PROXY")
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false);
+    if !trust_proxy {
+        return false;
+    }
+    let configured: std::collections::HashSet<String> = std::env::var("DMART_TRUSTED_PROXIES")
+        .map(|v| {
+            v.split(',')
+                .map(|s: &str| s.trim().to_string())
+                .filter(|s: &String| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    if configured.is_empty() {
+        // Fail-safe: sin lista explícita solo se confía en loopback.
+        return peer.is_some_and(|p| ["127.0.0.1", "::1", "localhost"].contains(&p));
+    }
+    peer.is_some_and(|p| configured.contains(p))
+}
 
-    if trust_proxy
+/// Real client IP from the socket, unless the request arrives from a trusted
+/// reverse proxy (`DMART_TRUST_PROXY=true` + peer en `DMART_TRUSTED_PROXIES` o
+/// loopback) that overwrites `X-Forwarded-For`. Never trusts the header without
+/// trusting the direct peer, otherwise the rate limiter can be bypassed.
+fn client_ip(req: &Request) -> Option<String> {
+    let peer = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ci| ci.0.ip().to_string());
+
+    if peer_is_trusted_proxy(peer.as_deref())
         && let Some(forwarded) = req
             .headers()
             .get("x-forwarded-for")
@@ -227,32 +259,84 @@ fn client_ip(req: &Request) -> Option<String> {
         );
     }
 
-    req.extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|ci| ci.0.ip().to_string())
+    peer
 }
 
 fn get_client_key(req: &Request) -> String {
     client_ip(req).unwrap_or_else(|| "unknown".to_string())
 }
 
+/// Decodifica el `sub` (user_id) de un token Bearer sin tocar la BD, para
+/// granular el throttle MFA por usuario (además de por IP).
+fn bearer_sub(req: &Request) -> Option<String> {
+    let header = req.headers().get("authorization")?.to_str().ok()?;
+    let token = crate::auth::extract_token_from_header(header)?;
+    match jsonwebtoken::decode::<crate::auth::Claims>(
+        token,
+        &jsonwebtoken::DecodingKey::from_secret(crate::auth::jwt_secret_bytes()),
+        &jsonwebtoken::Validation::default(),
+    ) {
+        Ok(data) => Some(data.claims.sub),
+        Err(_) => None,
+    }
+}
+
+/// Key del throttle: IP + (para login) username del body, (para MFA) subject
+/// del reto. Así un bot distribuido no puede esquivar el lockout rotando IPs y
+/// un mismo usuario no bloquea a toda la NAT.
+fn throttle_key(req: &Request, path: &str, ip: &str, body: &[u8]) -> String {
+    if path.ends_with("/auth/login") {
+        if let Ok(value) = serde_json::from_slice::<serde_json::Value>(body) {
+            if let Some(u) = value.get("username").and_then(|v| v.as_str()) {
+                let u = u.trim().to_lowercase();
+                if !u.is_empty() {
+                    return format!("{}|{}", ip, u);
+                }
+            }
+        }
+    } else if path.ends_with("/auth/mfa/verify") {
+        if let Some(sub) = bearer_sub(req) {
+            return format!("{}|{}", ip, sub);
+        }
+    }
+    ip.to_string()
+}
+
 /// Middleware for login throttling
 ///
-/// The generic throttle counts failed authentication attempts (401) per IP
-/// across the whole API. The MFA challenge flow (`/auth/mfa/verify`) is carved
-/// out and gets its own stricter throttle (3 attempts / 5 min) so a TOTP code
-/// cannot be brute-forced even by replaying the challenge token.
+/// Solo se cuenta un fallo (401) y únicamente en las rutas `/auth/*`; si una
+/// cuenta se bloquea, el lockout afecta a esa combinación IP+usuario (login) o
+/// IP+user_id (MFA), no a toda la NAT. El flujo MFA (`/auth/mfa/verify`) tiene
+/// su propio throttle más estricto (3 intentos / 5 min) para que un código TOTP
+/// no pueda brute-forcearse ni repitiendo el reto.
 pub async fn login_throttle_middleware(
     State(state): State<SecurityState>,
     req: Request,
     next: Next,
 ) -> Response {
-    let key = get_client_key(&req);
-    let is_mfa_verify = req.uri().path().ends_with("/auth/mfa/verify");
+    let path = req.uri().path().to_string();
+    let is_mfa_verify = path.ends_with("/auth/mfa/verify");
+    let is_auth_path = path.starts_with("/auth/");
     let throttle = if is_mfa_verify {
         &state.mfa_throttle
     } else {
         &state.login_throttle
+    };
+
+    // Leer el body de una vez para poder granular la key por username (login).
+    let (parts, body) = req.into_parts();
+    let bytes = axum::body::to_bytes(body, 16 * 1024)
+        .await
+        .unwrap_or_default();
+    let req = Request::from_parts(parts, axum::body::Body::from(bytes.clone()));
+
+    let key = {
+        let ip = get_client_key(&req);
+        if is_auth_path {
+            throttle_key(&req, &path, &ip, &bytes)
+        } else {
+            ip
+        }
     };
 
     if let Some(remaining) = throttle.is_locked(&key).await {
@@ -269,8 +353,13 @@ pub async fn login_throttle_middleware(
 
     let res = next.run(req).await;
 
-    if res.status() == StatusCode::UNAUTHORIZED && throttle.record_failure(&key).await {
-        tracing::warn!("Login throttle triggered for IP: {}", key);
+    // Solo cuentan los 401 reales de autenticación (`/auth/*`). Un 401 generado
+    // por otro endpoint no debe poder quebrar la IP de la víctima.
+    if is_auth_path
+        && res.status() == StatusCode::UNAUTHORIZED
+        && throttle.record_failure(&key).await
+    {
+        tracing::warn!("Login throttle triggered for {}", key);
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::CONTENT_TYPE, "application/json")],
@@ -283,6 +372,7 @@ pub async fn login_throttle_middleware(
 
     if is_mfa_verify && res.status().is_success() {
         throttle.record_success(&key).await;
+        state.login_throttle.record_success(&key).await;
     }
 
     res
