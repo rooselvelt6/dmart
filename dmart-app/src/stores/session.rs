@@ -1,15 +1,39 @@
 /// Sesión del usuario: identidad, rol y renovación del access token.
+///
+/// El access token se guarda SOLO en memoria (nunca en `localStorage` ni en la
+/// URL), para no dejar material de sesión expuesto a XSS persistente. La
+/// identidad puede persistir en `localStorage` (nombre/rol para el gating tras
+/// una recarga); la sesión real se reanuda con `/auth/refresh` (cookie
+/// httpOnly) re-parseada en `app.rs`.
 use dmart_shared::models::{LoginResponse, UserInfo};
 use gloo_storage::{LocalStorage, Storage};
 use gloo_timers::future::TimeoutFuture;
+use std::sync::{Mutex, OnceLock};
 use wasm_bindgen_futures::spawn_local;
 
-const AUTH_KEY: &str = "dmart_auth";
+/// Clave legacy de la versión anterior (token en `localStorage`). Se borra al
+/// pasar por `save_session`/`clear_session` para no dejar restos.
+const AUTH_KEY_LEGACY: &str = "dmart_auth";
 const USER_KEY: &str = "dmart_user";
 
-/// Guarda el par (access token, identidad) tras login/refresh.
+/// Access token en memoria. WASM es single-threaded → un `Mutex` es de sobra.
+static ACCESS_TOKEN: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+
+fn token_slot() -> &'static Mutex<Option<String>> {
+    ACCESS_TOKEN.get_or_init(|| Mutex::new(None))
+}
+
+/// Access token vigente (se envía solo por `Authorization: Bearer`, nunca en la URL).
+pub fn access_token() -> Option<String> {
+    token_slot().lock().ok().and_then(|slot| slot.clone())
+}
+
+/// Guarda el par (access token en memoria, identidad en localStorage) tras login/refresh.
 pub fn save_session(resp: &LoginResponse) {
-    LocalStorage::set(AUTH_KEY, &resp.token).ok();
+    if let Ok(mut slot) = token_slot().lock() {
+        *slot = Some(resp.token.clone());
+    }
+    LocalStorage::delete(AUTH_KEY_LEGACY);
     LocalStorage::set(USER_KEY, &resp.user).ok();
 }
 
@@ -23,9 +47,9 @@ pub fn current_user() -> Option<UserInfo> {
     LocalStorage::get::<UserInfo>(USER_KEY).ok()
 }
 
-/// True mientras exista access token (independiente de la identidad).
+/// True mientras exista access token en memoria (independiente de la identidad).
 pub fn has_token() -> bool {
-    LocalStorage::get::<String>(AUTH_KEY).is_ok()
+    access_token().is_some()
 }
 
 /// Permiso RBAC del usuario actual (`patients:create`, `users:read`, ...).
@@ -41,7 +65,10 @@ pub fn is_admin() -> bool {
 
 /// Limpia la sesión local (logout o expiración).
 pub fn clear_session() {
-    LocalStorage::delete(AUTH_KEY);
+    if let Ok(mut slot) = token_slot().lock() {
+        *slot = None;
+    }
+    LocalStorage::delete(AUTH_KEY_LEGACY);
     LocalStorage::delete(USER_KEY);
 }
 

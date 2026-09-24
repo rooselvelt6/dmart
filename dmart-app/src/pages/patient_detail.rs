@@ -89,6 +89,8 @@ pub fn PatientDetailPage() -> impl IntoView {
                 {move || patient_res.get().map(|res_wrapper| match res_wrapper {
                     Ok(p_wrapper) => {
                         let p = p_wrapper.clone();
+                        let pid_pdf = p.patient_id.clone();
+                        let pid_csv = p.patient_id.clone();
                         Either::Left(view! {
                             <div class="max-w-6xl mx-auto">
                                 <div class="glass-card p-6 mb-6">
@@ -113,12 +115,34 @@ pub fn PatientDetailPage() -> impl IntoView {
                                             <a href=format!("/patients/{}/edit", p.patient_id) class="btn-outline p-2" title="Editar">
                                                 <i class="fa-solid fa-pen"></i>
                                             </a>
-                                            <a href=api::export_pdf_url(&p.patient_id) target="_blank" class="btn-outline px-4 py-3" title="PDF">
+                                            <button
+                                                on:click=move |_| {
+                                                    let pid = pid_pdf.clone();
+                                                    spawn_local(async move {
+                                                        if let Err(e) = api::export_pdf(&pid).await {
+                                                            show_alert(&e);
+                                                        }
+                                                    });
+                                                }
+                                                type="button"
+                                                class="btn-outline px-4 py-3" title="PDF"
+                                            >
                                                 <i class="fa-solid fa-file-pdf mr-2"></i>"PDF"
-                                            </a>
-                                            <a href=api::export_csv_url(&p.patient_id) class="btn-outline px-4 py-3" title="CSV">
+                                            </button>
+                                            <button
+                                                on:click=move |_| {
+                                                    let pid = pid_csv.clone();
+                                                    spawn_local(async move {
+                                                        if let Err(e) = api::export_csv(&pid).await {
+                                                            show_alert(&e);
+                                                        }
+                                                    });
+                                                }
+                                                type="button"
+                                                class="btn-outline px-4 py-3" title="CSV"
+                                            >
                                                 <i class="fa-solid fa-file-csv mr-2"></i>"CSV"
-                                            </a>
+                                            </button>
                                             {if p.fecha_egreso_uci.is_empty() {
                                                 Either::Left(view! {
                                                     <button on:click=move |_| show_egreso_modal.set(true) class="btn-outline px-4 py-3" title="Egresar paciente">

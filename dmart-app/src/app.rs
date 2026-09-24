@@ -1,4 +1,3 @@
-use crate::components::theme_toggle::ThemeToggle;
 use crate::components::toast::ToastContainer;
 use crate::pages::{
     admin::AdminPage, dashboard::DashboardPage, data_quality::DataQualityPage,
@@ -17,7 +16,7 @@ use leptos_router::path;
 use crate::stores::start_session_refresh;
 use crate::stores::{
     clear_session, current_user, fetch_patients_cached, has_token, is_admin, load_patients_cached,
-    save_user, user_has,
+    save_session, save_user, user_has,
 };
 
 #[component]
@@ -30,11 +29,12 @@ pub fn App() -> impl IntoView {
     crate::shortcuts::init_shortcuts();
 
     let (is_auth, set_is_auth) = signal(has_token());
+    provide_context(is_auth);
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
     
-    // Use create_effect to ensure Leptos runtime is initialized before spawning tasks
-    create_effect(move |_| {
+    // Use Effect::new to ensure Leptos runtime is initialized before spawning tasks
+    Effect::new(move |_| {
         if has_token() {
             start_session_refresh();
             // Las sesiones creadas antes del gating solo guardaban el token: si no
@@ -52,6 +52,20 @@ pub fn App() -> impl IntoView {
                     window().location().reload().unwrap_or_default();
                 }
             });
+        } else if current_user().is_some() {
+            // El access token vive solo en memoria: tras una recarga ya no hay
+            // token. Si quedó identidad persistida, la sesión se reanuda con
+            // `/auth/refresh` (cookie httpOnly). Si falla, se borra la identidad
+            // local para que el gating por rol quede consistente.
+            spawn_local(async move {
+                match crate::api::refresh_session().await {
+                    Ok(resp) => {
+                        save_session(&resp);
+                        set_is_auth.set(true);
+                    }
+                    Err(_) => clear_session(),
+                }
+            });
         }
     });
 
@@ -59,7 +73,7 @@ pub fn App() -> impl IntoView {
     let _realtime = crate::stores::use_realtime();
 
     let preloaded = RwSignal::new(load_patients_cached().unwrap_or_default());
-    create_effect(move |_| {
+    Effect::new(move |_| {
         spawn_local(async move {
             let fresh = fetch_patients_cached().await;
             preloaded.set(fresh);

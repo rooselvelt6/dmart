@@ -1,15 +1,17 @@
-/// Almacén de tiempo real: conexión SSE (`EventSource`) y notificaciones toast.
+/// Almacén de tiempo real: conexión SSE y notificaciones toast.
 ///
-/// - `subscribe_realtime`: mantiene un `EventSource` al backend y dispara un
-///   callback con cada evento `measurement` publicado.
+/// - `subscribe_realtime`: abre un stream SSE al backend (con `fetch` +
+///   `Authorization: Bearer`; `EventSource` no permite cabeceras, así que el
+///   token nunca viaja en la URL) y dispara un callback con cada evento
+///   `measurement` publicado.
 /// - Sistema global de toasts para avisar al usuario de nuevos scores sin
 ///   recargar la página.
-use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
-use serde::Deserialize;
 use wasm_bindgen::JsCast;
-use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsValue;
+use wasm_bindgen_futures::{JsFuture, spawn_local};
+use web_sys::{RequestCredentials, Response};
+use serde::Deserialize;
 
 /// Evento de medición publicado por el backend (SSE `measurement`).
 #[derive(Debug, Clone, Deserialize)]
@@ -35,36 +37,150 @@ impl MeasurementEvent {
 pub fn use_realtime() -> RwSignal<Option<MeasurementEvent>> {
     let event = RwSignal::new(None::<MeasurementEvent>);
 
-    let Some(token) = LocalStorage::get::<String>("dmart_auth").ok() else {
+    if crate::stores::session::access_token().is_none() {
         return event;
+    }
+
+    spawn_local(realtime_loop(event));
+    event
+}
+
+/// Fin de una pasada del stream: `Stop` (no reintentar, sesión inválida) o
+/// `Retry` (reconectar con backoff).
+enum StreamResult {
+    Stop,
+    Retry,
+}
+
+/// Bucle de reconexión del stream SSE. Toma el access token fresco en cada
+/// pasada (por si el refresh lo rotó) y se detiene si la sesión se cierra.
+async fn realtime_loop(event: RwSignal<Option<MeasurementEvent>>) {
+    let mut backoff_ms: u32 = 500;
+    loop {
+        let Some(token) = crate::stores::session::access_token() else {
+            return;
+        };
+        match read_sse_stream(&token, &event).await {
+            StreamResult::Stop => return,
+            StreamResult::Retry => {
+                gloo_timers::future::TimeoutFuture::new(backoff_ms).await;
+                backoff_ms = (backoff_ms * 2).min(15_000);
+            }
+        }
+    }
+}
+
+/// Lee una conexión SSE completa hasta que el servidor la cierra. Devuelve el
+/// estado para el bucle de reconexión.
+async fn read_sse_stream(token: &str, event: &RwSignal<Option<MeasurementEvent>>) -> StreamResult {
+    let window = web_sys::window().expect("window");
+
+    let headers = match web_sys::Headers::new() {
+        Ok(h) => h,
+        Err(_) => return StreamResult::Stop,
+    };
+    headers.append("Authorization", &format!("Bearer {}", token)).ok();
+    headers.append("Accept", "text/event-stream").ok();
+
+    let init = web_sys::RequestInit::new();
+    init.set_method("GET");
+    init.set_headers(&headers);
+    init.set_credentials(RequestCredentials::Include);
+
+    let request = match web_sys::Request::new_with_str_and_init("/api/realtime/stream", &init) {
+        Ok(r) => r,
+        Err(_) => return StreamResult::Stop,
     };
 
-    let source = web_sys::EventSource::new(&format!("/api/realtime/stream?token={}", token))
-        .expect("EventSource creation failed");
+    let resp_js = match JsFuture::from(window.fetch_with_request(&request)).await {
+        Ok(v) => v,
+        Err(_) => return StreamResult::Retry,
+    };
+    let response: Response = match resp_js.dyn_into() {
+        Ok(r) => r,
+        Err(_) => return StreamResult::Retry,
+    };
 
-    let onmessage = Closure::wrap(Box::new(move |ev: web_sys::MessageEvent| {
-        if let Some(data) = ev.data().as_string()
-            && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data)
-            && let Some(event_type) = parsed.get("type").and_then(|t| t.as_str())
-            && event_type == "measurement"
-            && let Ok(me) = serde_json::from_value::<MeasurementEvent>(
-                parsed
-                    .get("data")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null),
-            )
-        {
-            event.set(Some(me.clone()));
-            show_toast(&me);
+    if response.status() == 401 || response.status() == 403 {
+        // Credencial inválida: reintentar no tiene sentido.
+        return StreamResult::Stop;
+    }
+    if response.status() != 200 {
+        return StreamResult::Retry;
+    }
+
+    let body = match response.body() {
+        Some(b) => b,
+        None => return StreamResult::Retry,
+    };
+    let reader: web_sys::ReadableStreamDefaultReader = match body.get_reader().dyn_into() {
+        Ok(r) => r,
+        Err(_) => return StreamResult::Retry,
+    };
+
+    let mut buffer: Vec<u8> = Vec::new();
+    loop {
+        let chunk = match JsFuture::from(reader.read()).await {
+            Ok(v) => v,
+            Err(_) => return StreamResult::Retry,
+        };
+        let done = js_sys::Reflect::get(&chunk, &"done".into())
+            .map(|v| v.as_bool().unwrap_or(false))
+            .unwrap_or(false);
+        if done {
+            // Cierre normal: reconectar (el servidor hace drop por keep-alive).
+            break;
         }
-    }) as Box<dyn FnMut(web_sys::MessageEvent)>);
-    source.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+        let value = js_sys::Reflect::get(&chunk, &"value".into())
+            .unwrap_or(JsValue::UNDEFINED);
+        if value.is_undefined() {
+            continue;
+        }
+        let array: js_sys::Uint8Array = value.unchecked_into();
+        buffer.extend_from_slice(&array.to_vec());
+        drain_frames(&mut buffer, event);
+        if crate::stores::session::access_token().is_none() {
+            break;
+        }
+    }
 
-    // Mantener el closure y el source vivos mientras la app esté viva.
-    std::mem::forget(onmessage);
-    std::mem::forget(source);
+    let _ = JsFuture::from(reader.cancel()).await;
+    StreamResult::Retry
+}
 
-    event
+/// Extrae y procesa los frames SSE completos (`data: ...\n\n`) del buffer.
+fn drain_frames(buffer: &mut Vec<u8>, event: &RwSignal<Option<MeasurementEvent>>) {
+    while let Some(pos) = buffer.windows(2).position(|w| w == [b'\n', b'\n']) {
+        let frame = String::from_utf8_lossy(&buffer[..pos]).into_owned();
+        buffer.drain(..=pos + 1);
+        handle_frame(&frame, event);
+    }
+}
+
+/// Procesa un frame SSE: une las líneas `data:`, y si el evento es
+/// `measurement`, actualiza la señal y muestra el toast.
+fn handle_frame(frame: &str, event: &RwSignal<Option<MeasurementEvent>>) {
+    let data: String = frame
+        .lines()
+        .filter_map(|line| line.strip_prefix("data:").map(str::trim))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if data.is_empty() {
+        return;
+    }
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data)
+        && let Some(event_type) = parsed.get("type").and_then(|t| t.as_str())
+        && event_type == "measurement"
+        && let Ok(me) = serde_json::from_value::<MeasurementEvent>(
+            parsed
+                .get("data")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
+        )
+    {
+        event.set(Some(me.clone()));
+        show_toast(&me);
+    }
 }
 
 /// Mensaje de toast global.

@@ -1,9 +1,9 @@
 /// HTTP client — communicates with the Axum backend API
 use dmart_shared::models::*;
 use gloo_net::http::Request;
-use gloo_storage::{LocalStorage, Storage};
 use serde::Deserialize;
 use serde_json::Value;
+use wasm_bindgen::JsCast;
 use web_sys::RequestCredentials;
 
 const API_BASE: &str = "/api";
@@ -12,7 +12,7 @@ pub type ApiResult<T> = Result<T, String>;
 
 fn authed_get(url: &str) -> gloo_net::http::RequestBuilder {
     let req = Request::get(url);
-    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
+    if let Some(token) = crate::stores::session::access_token() {
         req.header("Authorization", &format!("Bearer {}", token))
     } else {
         req
@@ -21,7 +21,7 @@ fn authed_get(url: &str) -> gloo_net::http::RequestBuilder {
 
 fn authed_post(url: &str) -> gloo_net::http::RequestBuilder {
     let req = Request::post(url);
-    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
+    if let Some(token) = crate::stores::session::access_token() {
         req.header("Authorization", &format!("Bearer {}", token))
     } else {
         req
@@ -30,7 +30,7 @@ fn authed_post(url: &str) -> gloo_net::http::RequestBuilder {
 
 fn authed_put(url: &str) -> gloo_net::http::RequestBuilder {
     let req = Request::put(url);
-    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
+    if let Some(token) = crate::stores::session::access_token() {
         req.header("Authorization", &format!("Bearer {}", token))
     } else {
         req
@@ -39,7 +39,7 @@ fn authed_put(url: &str) -> gloo_net::http::RequestBuilder {
 
 fn authed_delete(url: &str) -> gloo_net::http::RequestBuilder {
     let req = Request::delete(url);
-    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
+    if let Some(token) = crate::stores::session::access_token() {
         req.header("Authorization", &format!("Bearer {}", token))
     } else {
         req
@@ -604,20 +604,63 @@ pub async fn get_scales_history(patient_id: &str) -> ApiResult<Vec<Value>> {
 
 // ─── Export helpers ─────────────────────────────────────────────────────────
 
-pub fn export_csv_url(patient_id: &str) -> String {
-    let mut url = format!("{}/patients/{}/export/csv", API_BASE, patient_id);
-    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
-        url = format!("{}?token={}", url, token);
+/// Descarga el CSV del paciente con credenciales por header (el token nunca va
+/// en la URL). El cliente genera un objeto URL de un `Blob` y dispara la
+/// descarga, eliminando la exposición del token en `window.open`/enlaces.
+pub async fn export_csv(patient_id: &str) -> ApiResult<()> {
+    let resp = authed_get(&format!("{}/patients/{}/export/csv", API_BASE, patient_id))
+        .send()
+        .await
+        .map_err(|e| format!("Export CSV: {}", e))?;
+    if resp.status() != 200 {
+        return Err(format!("Export CSV: HTTP {}", resp.status()));
     }
-    url
+    let blob = response_blob(&resp).await?;
+    download_blob(&blob, &format!("UCI_{}.csv", patient_id));
+    Ok(())
 }
 
-pub fn export_pdf_url(patient_id: &str) -> String {
-    let mut url = format!("{}/patients/{}/export/pdf", API_BASE, patient_id);
-    if let Ok(token) = LocalStorage::get::<String>("dmart_auth") {
-        url = format!("{}?token={}", url, token);
+/// Descarga el PDF del paciente con credenciales por header (el token nunca va
+/// en la URL). Misma estrategia blob que el CSV.
+pub async fn export_pdf(patient_id: &str) -> ApiResult<()> {
+    let resp = authed_get(&format!("{}/patients/{}/export/pdf", API_BASE, patient_id))
+        .send()
+        .await
+        .map_err(|e| format!("Export PDF: {}", e))?;
+    if resp.status() != 200 {
+        return Err(format!("Export PDF: HTTP {}", resp.status()));
     }
-    url
+    let blob = response_blob(&resp).await?;
+    download_blob(&blob, &format!("UCI_{}.pdf", patient_id));
+    Ok(())
+}
+
+/// Crea un `web_sys::Blob` a partir del cuerpo de la respuesta (para descargar).
+async fn response_blob(resp: &gloo_net::http::Response) -> ApiResult<web_sys::Blob> {
+    let bytes = resp
+        .binary()
+        .await
+        .map_err(|e| format!("Export: {}", e))?;
+    let parts = js_sys::Array::new();
+    parts.push(&js_sys::Uint8Array::from(bytes.as_slice()));
+    web_sys::Blob::new_with_u8_array_sequence(&parts).map_err(|e| format!("Export: {:?}", e))
+}
+
+/// Crea un `<a download>` apuntando a un objeto URL del blob y lo "clickea".
+/// El objeto URL se revoca al instante para no acumular referencias.
+fn download_blob(blob: &web_sys::Blob, filename: &str) {
+    let window = web_sys::window().expect("window");
+    if let Ok(url) = web_sys::Url::create_object_url_with_blob(blob) {
+        let document = window.document().expect("document");
+        if let Ok(a) = document.create_element("a")
+            && let Ok(anchor) = a.dyn_into::<web_sys::HtmlAnchorElement>()
+        {
+            anchor.set_href(&url);
+            anchor.set_download(filename);
+            anchor.click();
+        }
+        let _ = web_sys::Url::revoke_object_url(&url);
+    }
 }
 
 // ─── Admin ──────────────────────────────────────────────────────────

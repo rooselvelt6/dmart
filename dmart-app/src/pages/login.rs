@@ -19,6 +19,17 @@ pub fn LoginPage() -> impl IntoView {
     let navigate_submit = navigate.clone();
     let navigate_mfa = navigate.clone();
     let set_is_auth = use_context::<WriteSignal<bool>>();
+    let is_auth_read = use_context::<ReadSignal<bool>>();
+    let nav_authed = navigate.clone();
+
+    // Tras una recarga el access token (solo en memoria) no existe; el boot
+    // intenta `/auth/refresh` con la cookie httpOnly. Si reanuda la sesión
+    // mientras la URL es `/login`, redirige al dashboard.
+    Effect::new(move |_| {
+        if is_auth_read.is_some_and(|a| a.get()) {
+            nav_authed("/", Default::default());
+        }
+    });
 
     let on_submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();

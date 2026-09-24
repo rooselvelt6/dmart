@@ -1,10 +1,10 @@
 // Keyboard shortcuts module for dMart UCI
 // Power-user shortcuts for clinical workflows
 
-use leptos::prelude::*;
 use web_sys::{KeyboardEvent, window, HtmlElement};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen_futures::spawn_local;
 use js_sys;
 
 /// Shortcut definitions
@@ -130,24 +130,19 @@ fn navigate(path: &str) {
 }
 
 /// Focus search input
-fn focus_search() {
-    let window = window().unwrap();
-    let document = window.document().unwrap();
-    if let Some(input) = document.get_element_by_id("search-input") {
-        let _ = input.dyn_into::<HtmlElement>().unwrap().focus();
-    }
-}
-
-/// Export current patient PDF (if on patient detail page)
+/// Export current patient PDF (if on patient detail page). El acceso se hace
+/// con `Authorization: Bearer` (el token nunca va en la URL) y se descarga un
+/// blob, igual que el botón de exportar de la ficha del paciente.
 fn export_current_pdf() {
     // Get current patient ID from URL
     let location = window().unwrap().location();
     let pathname = location.pathname().unwrap_or_default();
     if let Some(patient_id) = pathname.strip_prefix("/patients/") {
         if let Some(id) = patient_id.split('/').next() {
-            let url = format!("/api/patients/{}/export/pdf", id);
-            let window = window().unwrap();
-            let _ = window.open_with_url_and_target(&url, "_blank");
+            let pid = id.to_string();
+            spawn_local(async move {
+                let _ = crate::api::export_pdf(&pid).await;
+            });
         }
     }
 }
