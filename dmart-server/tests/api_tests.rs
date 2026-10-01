@@ -1842,14 +1842,7 @@ async fn test_e2e_realtime_stream_requires_bearer_auth_header() {
     assert_eq!(status, StatusCode::UNAUTHORIZED, "SSE sin token => 401");
 
     // Token inválido por header => 401
-    let (status, _) = send(
-        &http,
-        Method::GET,
-        "/realtime/stream",
-        Some("basura"),
-        None,
-    )
-    .await;
+    let (status, _) = send(&http, Method::GET, "/realtime/stream", Some("basura"), None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "token inválido => 401");
 
     // El token NUNCA viaja en query string (fuga por logs/historial/referrer).
@@ -2666,18 +2659,29 @@ async fn test_push_vapid_and_subscribe_flow() {
         .expect("claves VAPID");
     let public_key = service.public_key().to_string();
     assert!(!public_key.is_empty());
-    assert!(!public_key.contains('='), "URL-safe sin padding: {public_key}");
+    assert!(
+        !public_key.contains('='),
+        "URL-safe sin padding: {public_key}"
+    );
 
     // Alta nueva -> 201 (Ok(true)).
     let inserted = service
-        .subscribe(&db, "doctor-1", fake_subscription("https://push.example/ep1"))
+        .subscribe(
+            &db,
+            "doctor-1",
+            fake_subscription("https://push.example/ep1"),
+        )
         .await
         .expect("subscribe");
     assert!(inserted, "primera suscripción es nueva");
 
     // Repetir el mismo (user_id, endpoint) no duplica -> Ok(false).
     let replaced = service
-        .subscribe(&db, "doctor-1", fake_subscription("https://push.example/ep1"))
+        .subscribe(
+            &db,
+            "doctor-1",
+            fake_subscription("https://push.example/ep1"),
+        )
         .await
         .expect("resubscribe");
     assert!(!replaced, "la repetición reemplaza, no duplica");
@@ -2692,13 +2696,19 @@ async fn test_push_vapid_and_subscribe_flow() {
 
     // Otro usuario puede suscribirse al mismo endpoint sin colisión.
     let doctor2 = service
-        .subscribe(&db, "doctor-2", fake_subscription("https://push.example/ep1"))
+        .subscribe(
+            &db,
+            "doctor-2",
+            fake_subscription("https://push.example/ep1"),
+        )
         .await
         .expect("subscribe doctor-2");
     assert!(doctor2);
 
     // Sin suscripciones el envío es un no-op (nunca rompe el flujo clínico).
-    let sent = service.send_to_user(&db, "doctor-inexistente", "tit", "cuerpo").await;
+    let sent = service
+        .send_to_user(&db, "doctor-inexistente", "tit", "cuerpo")
+        .await;
     assert_eq!(sent, 0);
 }
 
@@ -2713,7 +2723,11 @@ async fn test_push_unsubscribe() {
         .expect("claves VAPID");
 
     service
-        .subscribe(&db, "nurse-7", fake_subscription("https://push.example/ep7"))
+        .subscribe(
+            &db,
+            "nurse-7",
+            fake_subscription("https://push.example/ep7"),
+        )
         .await
         .expect("subscribe");
 
@@ -2731,7 +2745,11 @@ async fn test_push_unsubscribe() {
 
     // Un usuario distinto no puede dar de baja la suscripción ajena.
     service
-        .subscribe(&db, "nurse-7", fake_subscription("https://push.example/ep8"))
+        .subscribe(
+            &db,
+            "nurse-7",
+            fake_subscription("https://push.example/ep8"),
+        )
         .await
         .expect("subscribe otra");
     let cross_removed = service
@@ -2780,6 +2798,194 @@ async fn test_push_requires_permission() {
         .await
         .expect("claves VAPID");
     let pk = service.public_key();
-    assert_eq!(pk.len(), 87, "clave pública P-256 uncompressed (65 bytes) en URL-safe base64");
+    assert_eq!(
+        pk.len(),
+        87,
+        "clave pública P-256 uncompressed (65 bytes) en URL-safe base64"
+    );
     assert!(!pk.contains('='), "URL-safe sin padding: {pk}");
+}
+
+// ─── SPEC-052 F0.2: aislamiento cross-tenant en ingesta HL7 ─────────────────
+// Regresión de la auditoría H1: `resolve_patient` buscaba por MRN/cedula sin
+// acotar por tenant, de modo que un token de un hospital podía inyectar y leer
+// signos vitales de un paciente de otro hospital.
+
+/// Crea un usuario dentro de un tenant concreto.
+async fn seed_user_in_tenant(
+    db: &TestDb,
+    username: &str,
+    password: &str,
+    rol: dmart_shared::models::UserRole,
+    tenant_id: &str,
+) {
+    let hash = dmart_server::auth::hash_password(password).expect("hash failed");
+    let user = dmart_shared::models::User {
+        user_id: uuid::Uuid::new_v4().to_string(),
+        username: username.into(),
+        password_hash: hash,
+        rol,
+        nombre: username.into(),
+        activo: true,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        tenant_id: tenant_id.into(),
+    };
+    dmart_server::db::create_user(db, user)
+        .await
+        .expect("seed user failed");
+}
+
+/// Paciente con MRN `MRN-XTENANT-1` en el tenant `hosp-b`.
+async fn seed_patient_in_tenant(db: &TestDb, tenant_id: &str, mrn: &str) -> String {
+    let mut p = dmart_shared::models::Patient::new();
+    p.tenant_id = tenant_id.to_string();
+    p.historia_clinica = mrn.to_string();
+    let pid = p.patient_id.clone();
+    dmart_server::db::create_patient(db, p)
+        .await
+        .expect("create patient");
+    pid
+}
+
+fn oru_for(mrn: &str) -> serde_json::Value {
+    serde_json::json!({
+        "message": format!(
+            "MSH|^~\\&|BeneVision|TJUH|DMART|HOSP|20240821141031||ORU^R01|1|P|2.5\r\
+             PID|||{mrn}^^^TJUHMR||PACIENTE^TEST||19600415|M\r\
+             OBR|1|||||||20240821141030\r\
+             OBX|1|NM|8867-4^Heart rate^LN||210|bpm"
+        )
+    })
+}
+
+#[tokio::test]
+async fn test_hl7_ingest_rejects_patient_from_other_tenant() {
+    let (db, _dir) = test_db().await;
+    dmart_server::migrations::run_migrations(&db)
+        .await
+        .expect("migrations");
+
+    dmart_server::tenant::create_tenant(&db, "hosp-a", "Hospital A")
+        .await
+        .ok();
+    dmart_server::tenant::create_tenant(&db, "hosp-b", "Hospital B")
+        .await
+        .ok();
+
+    let mrn_b = "MRN-XTENANT-1";
+    let patient_b = seed_patient_in_tenant(&db, "hosp-b", mrn_b).await;
+
+    seed_user_in_tenant(
+        &db,
+        "clin_a",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Enfermero,
+        "hosp-a",
+    )
+    .await;
+
+    let app = build_app(&db).await;
+    let token = login_token(&app, "clin_a", "SuperSecreto_01!").await;
+
+    // El token pertenece a hosp-a pero el MRN es de hosp-b.
+    let (status, json) = send(
+        &app,
+        Method::POST,
+        "/monitores/hl7",
+        Some(&token),
+        Some(oru_for(mrn_b)),
+    )
+    .await;
+
+    assert!(
+        status == StatusCode::NOT_FOUND || status == StatusCode::UNPROCESSABLE_ENTITY,
+        "ingesta cross-tenant debe rechazarse, status={status} body={json}"
+    );
+    assert!(
+        !json.to_string().contains(mrn_b),
+        "la respuesta no debe confirmar la existencia del MRN ajeno: {json}"
+    );
+
+    // Y lo decisivo: no se escribió ninguna medición para el paciente ajeno.
+    let measurements = dmart_server::db::get_measurements_for_patient(&db, &patient_b)
+        .await
+        .expect("query measurements");
+    assert!(
+        measurements.is_empty(),
+        "no debe crearse medición para un paciente de otro tenant"
+    );
+}
+
+#[tokio::test]
+async fn test_hl7_ingest_accepts_own_tenant_patient() {
+    let (db, _dir) = test_db().await;
+    dmart_server::migrations::run_migrations(&db)
+        .await
+        .expect("migrations");
+
+    dmart_server::tenant::create_tenant(&db, "hosp-a", "Hospital A")
+        .await
+        .ok();
+
+    let mrn_a = "MRN-XTENANT-A";
+    let patient_a = seed_patient_in_tenant(&db, "hosp-a", mrn_a).await;
+
+    seed_user_in_tenant(
+        &db,
+        "clin_a_ok",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Enfermero,
+        "hosp-a",
+    )
+    .await;
+
+    let app = build_app(&db).await;
+    let token = login_token(&app, "clin_a_ok", "SuperSecreto_01!").await;
+
+    let (status, json) = send(
+        &app,
+        Method::POST,
+        "/monitores/hl7",
+        Some(&token),
+        Some(oru_for(mrn_a)),
+    )
+    .await;
+
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "ingesta dentro del propio tenant debe aceptarse: {json}"
+    );
+
+    let measurements = dmart_server::db::get_measurements_for_patient(&db, &patient_a)
+        .await
+        .expect("query measurements");
+    assert_eq!(measurements.len(), 1, "una medición persistida");
+    assert_eq!(
+        measurements[0].tenant_id, "hosp-a",
+        "la medición hereda el tenant del paciente"
+    );
+}
+
+#[tokio::test]
+async fn test_hl7_ingest_requires_authentication() {
+    let (db, _dir) = test_db().await;
+    dmart_server::migrations::run_migrations(&db)
+        .await
+        .expect("migrations");
+    let app = build_app(&db).await;
+
+    // Sin token: la ingesta HL7 no debe ser un endpoint anónimo.
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/monitores/hl7",
+        None,
+        Some(oru_for("MRN-1")),
+    )
+    .await;
+    assert!(
+        status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN,
+        "POST /monitores/hl7 sin token debe ser 401/403, status={status}"
+    );
 }

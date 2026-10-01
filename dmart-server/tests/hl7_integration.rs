@@ -506,7 +506,15 @@ mod hl7_mllp_stream {
         let ack = send_frame(addr, &frame).await;
         let ack_str = String::from_utf8_lossy(&ack).into_owned();
         assert!(ack_str.contains("AR"), "ACK AR esperado => {ack_str}");
-        assert!(ack_str.contains("non-utf8"), "motivo en ACK => {ack_str}");
+        // SPEC-052 / auditoría H3: el ACK nunca revela el motivo interno.
+        assert!(
+            ack_str.contains("ERR|Ste|internal_error"),
+            "debe usar un código genérico => {ack_str}"
+        );
+        assert!(
+            !ack_str.contains("non-utf8") && !ack_str.contains("utf8"),
+            "no debe filtrar el error interno => {ack_str}"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -566,8 +574,12 @@ mod hl7_mllp_stream {
             ack_str
         );
         assert!(
-            ack_str.contains("frame_too_large"),
-            "debe indicar frame_too_large"
+            ack_str.contains("frame_error"),
+            "debe indicar un código genérico de frame, got: {ack_str}"
+        );
+        assert!(
+            !ack_str.contains("frame_too_large"),
+            "no debe filtrar el motivo interno => {ack_str}"
         );
 
         let _ = std::fs::remove_dir_all(&dir);

@@ -7,6 +7,8 @@ use dmart_server::db;
 use std::sync::Arc;
 use tempfile::TempDir;
 
+const TENANT_TEST: &str = "tenant-test";
+
 async fn make_test_db() -> (Arc<db::Database>, TempDir) {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("test.db");
@@ -61,6 +63,7 @@ async fn cds_evaluate_sepsis_plan_triggers() {
     };
 
     let ctx = EvaluationContext {
+        tenant_id: TENANT_TEST.to_string(),
         patient_id: "SEPSIS-TEST-001".to_string(),
         patient: None,
         current_vitals: Some(vitals),
@@ -111,6 +114,7 @@ async fn cds_evaluate_ards_plan_triggers() {
     };
 
     let ctx = EvaluationContext {
+        tenant_id: TENANT_TEST.to_string(),
         patient_id: "ARDS-TEST-001".to_string(),
         patient: None,
         current_vitals: Some(vitals),
@@ -162,6 +166,7 @@ async fn cds_evaluate_anticoag_plan_always_triggers() {
     };
 
     let ctx = EvaluationContext {
+        tenant_id: TENANT_TEST.to_string(),
         patient_id: "ANTICOAG-TEST-001".to_string(),
         patient: None,
         current_vitals: Some(vitals),

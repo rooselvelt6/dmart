@@ -2,13 +2,15 @@
 //! Gate: 100 VitalsMessage → 100 ScoreEvent SSE publicados < 5 s.
 //! clippy -D 0/0; reusa scales + realtime hub.
 
-use dmart_server::ews_stream::{EwsConfig, EwsEngine, spawn_engine};
+use dmart_server::ews_stream::{EwsConfig, EwsEngine, ScopedVitals, spawn_engine};
 use dmart_server::hl7::parser::{MonitorSource, VitalsMessage};
 use dmart_server::metrics::{EwsAlgo, EwsSeverity, ews_score_published};
 use dmart_server::realtime::RealtimeHub;
 use dmart_server::realtime::ScoreEvent;
 use std::time::Duration;
 use tokio::time::timeout;
+
+const TENANT_TEST: &str = "tenant-test";
 
 fn vitals_for(patient: &str, hr: f32) -> VitalsMessage {
     use dmart_server::hl7::parser::Vital;
@@ -58,7 +60,7 @@ async fn ews_engine_processes_vitals_emits_scores() {
     let mut submitted = 0;
     for i in 0..20 {
         let vm = vitals_for(&format!("PAT-{:03}", i), 70.0 + (i % 30) as f32);
-        if tx.send(vm).await.is_ok() {
+        if tx.send(ScopedVitals::new(TENANT_TEST, vm)).await.is_ok() {
             submitted += 1;
         }
     }
@@ -80,6 +82,7 @@ async fn ews_publishes_score_events_via_hub() {
 
     let events = vec![
         ScoreEvent {
+            tenant_id: TENANT_TEST.to_string(),
             patient_id: "PAT-EWS-001".into(),
             apache_score: 12.0,
             news2_score: 6.0,
@@ -88,6 +91,7 @@ async fn ews_publishes_score_events_via_hub() {
             severity: EwsSeverity::High,
         },
         ScoreEvent {
+            tenant_id: TENANT_TEST.to_string(),
             patient_id: "PAT-EWS-002".into(),
             apache_score: 8.0,
             news2_score: 2.0,
@@ -98,7 +102,7 @@ async fn ews_publishes_score_events_via_hub() {
     ];
 
     for ev in events {
-        hub.publish("score", serde_json::to_value(ev).unwrap());
+        hub.publish_for_tenant(TENANT_TEST, "score", serde_json::to_value(ev).unwrap());
     }
 
     let mut received = 0;
@@ -128,7 +132,12 @@ async fn ews_engine_spawn_handle_completes() {
     };
     let (handle, tx) = spawn_engine(config).await;
     for i in 0..20 {
-        tx.send(vitals_for(&format!("S-{i}"), 80.0)).await.unwrap();
+        tx.send(ScopedVitals::new(
+            TENANT_TEST,
+            vitals_for(&format!("S-{i}"), 80.0),
+        ))
+        .await
+        .unwrap();
     }
     drop(tx);
     timeout(Duration::from_secs(10), handle)
