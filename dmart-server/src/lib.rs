@@ -32,6 +32,8 @@ pub mod forecasting;
 pub mod hl7;
 pub mod ingest;
 pub mod metrics;
+pub mod mllp_tls;
+pub mod phi_store;
 pub mod mfa;
 pub mod middleware;
 pub mod migrations;

@@ -83,6 +83,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "049_web_push",
         include_str!("../migrations/049_web_push.surql"),
     ),
+    (
+        "050_phi_envelope",
+        include_str!("../migrations/050_phi_envelope.surql"),
+    ),
 ];
 
 pub async fn applied_versions(db: &Surreal<Db>) -> Result<Vec<u64>> {
@@ -145,10 +149,9 @@ mod tests {
         assert_eq!(first.len(), MIGRATIONS.len());
         let mut applied = applied_versions(&db).await.expect("applied");
         applied.sort_unstable();
-        assert_eq!(
-            applied,
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-        );
+        // Se deriva del catálogo en vez de hardcodear la lista: así añadir una
+        // migración no rompe este test por un número desactualizado.
+        assert_eq!(applied, (1..=MIGRATIONS.len() as u64).collect::<Vec<_>>());
 
         let second = run_migrations(&db).await.expect("second run");
         assert!(second.is_empty(), "no pending migrations after first run");

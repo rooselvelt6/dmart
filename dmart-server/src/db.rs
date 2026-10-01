@@ -1,6 +1,17 @@
 #![allow(dead_code)]
 
-use anyhow::Result;
+use crate::phi_store;
+use anyhow::{Context, Result};
+
+/// Variante pública de [`sdb_id`] para uso desde los tests del crate.
+pub fn sdb_id_pub(table: &str, id: &str) -> surrealdb::sql::Thing {
+    sdb_id(table, id)
+}
+
+/// Construye un `Thing` de SurrealDB para vincularlo como parámetro de query.
+fn sdb_id(table: &str, id: &str) -> surrealdb::sql::Thing {
+    surrealdb::sql::Thing::from((table, id))
+}
 use dmart_shared::models::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -143,7 +154,10 @@ async fn aggregate_patient_stats_scoped(
 ) -> Result<PatientAggregates> {
     let mut agg = PatientAggregates::default();
     let (scope_where, bind) = match tenant {
-        Some(t) => ("WHERE tenant_id = $tenant ".to_string(), Some(t.to_string())),
+        Some(t) => (
+            "WHERE tenant_id = $tenant ".to_string(),
+            Some(t.to_string()),
+        ),
         None => (String::new(), None),
     };
 
@@ -236,54 +250,86 @@ async fn aggregate_patient_stats_scoped(
 
 // ─── Patients ──────────────────────────────────────────────────────────────
 
-pub async fn create_patient(db: &Surreal<Db>, mut patient: Patient) -> Result<Patient> {
-    let patient_id = patient.patient_id.clone();
-    if patient_id.is_empty() {
-        patient.patient_id = Uuid::new_v4().to_string();
-    }
-    let created: Option<Patient> = db
-        .create(("patients", patient.patient_id.clone()))
-        .content(patient)
-        .await?;
+/// SPEC-052: crea el paciente con la PHI cifrada en reposo.
+///
+/// Ya no se persiste el `Patient` completo: se sella en un envelope
+/// AES-256-GCM (`phi`) y sólo quedan en claro las columnas de filtro. Ver
+/// [`crate::phi_store`].
+pub async fn create_patient(db: &Surreal<Db>, patient: Patient) -> Result<Patient> {
+    let created = phi_store::save_patient(db, patient).await?;
     crate::metrics::patient_created();
-    created.ok_or_else(|| anyhow::anyhow!("Failed to create patient"))
+    Ok(created)
 }
 
 pub async fn get_patient(db: &Surreal<Db>, id: &str) -> Result<Option<Patient>> {
-    let patient: Option<Patient> = db.select(("patients", id)).await?;
-    Ok(patient)
+    // `OMIT id`: ver nota en phi_store. `id` es un RecordId y no se puede
+    // deserializar dentro de un serde_json::Value.
+    let mut res = db
+        .query("SELECT * OMIT id FROM $id")
+        .bind(("id", sdb_id("patients", id)))
+        .await?;
+    let rows: Vec<serde_json::Value> = res.take(0)?;
+    let row = rows.into_iter().next();
+    phi_store::open_patient_opt(row)
 }
 
 /// Busca paciente por número de registro médico (historia clínica) o cédula.
-/// Usado por la integración HL7 (PID-3) para vincular monitores a pacientes.
+///
+/// SPEC-052: la PHI está cifrada, así que la coincidencia es **exacta** sobre
+/// índices ciegos HMAC en vez de un `~` sobre el valor en claro. La
+/// normalización (`MRN-001` = `mrn 001`) ocurre antes del HMAC, así que el
+/// comportamiento de búsqueda se conserva sin exponer el identificador.
 pub async fn get_patient_by_mrn(db: &Surreal<Db>, mrn: &str) -> Result<Option<Patient>> {
-    let q = mrn.trim().to_string();
-    let patients: Vec<Patient> = db
-        .query(
-            "SELECT * FROM patients WHERE historia_clinica = $mrn OR cedula = $mrn \
-             ORDER BY created_at DESC LIMIT 1",
-        )
-        .bind(("mrn", mrn.trim().to_string()))
-        .await?
-        .take(0)?;
-    if patients.is_empty() {
-        // búsqueda con comodines por si trae espacios/guiones distintos
-        let patients: Vec<Patient> = db
-            .query(
-                "SELECT * FROM patients WHERE historia_clinica ~ $q OR cedula ~ $q \
-                 ORDER BY created_at DESC LIMIT 1",
-            )
-            .bind(("q", q))
-            .await?
-            .take(0)?;
-        return Ok(patients.into_iter().next());
-    }
-    Ok(patients.into_iter().next())
+    let candidates = patients_by_identifier_any_tenant(db, mrn).await?;
+    Ok(candidates.into_iter().next())
 }
 
-/// Crea el paciente asignando cama y equipos dentro de una única transacción
-/// SurrealQL. Si cualquier paso falla (cama ocupada, error de escritura), toda
-/// la transacción se revierte y no quedan camas ni equipos huérfanos.
+/// SPEC-025: variante **acotada al tenant** de [`get_patient_by_mrn`].
+///
+/// La referencia MRN/cédula (`PID-3`) de un mensaje HL7 la elige el emisor, así
+/// que la ingesta autenticada debe resolverse siempre dentro del tenant del
+/// emisor: sin este filtro, un `MRN` duplicado en otro hospital escribiría
+/// signos vitales en la historia equivocada (o devolvería PHI ajena).
+pub async fn get_patient_by_mrn_for_tenant(
+    db: &Surreal<Db>,
+    mrn: &str,
+    tenant_id: &str,
+) -> Result<Vec<Patient>> {
+    phi_store::find_patients_by_identifier(db, tenant_id, mrn, 10).await
+}
+
+/// Búsqueda de MRN sin tenant, para los endpoints administrativos legacy.
+///
+/// Cada tenant se consulta por separado y con su propia clave de índice: el
+/// índice ciego se calcula con el tenant como parte del HMAC, así que un mismo
+/// MRN en dos hospitales produce valores distintos y se resuelven sin cruzarlos.
+async fn patients_by_identifier_any_tenant(db: &Surreal<Db>, mrn: &str) -> Result<Vec<Patient>> {
+    let mut out = Vec::new();
+    for t in tenants_with_patients(db).await? {
+        if let Ok(found) = phi_store::find_patients_by_identifier(db, &t, mrn, 1).await {
+            out.extend(found);
+        }
+    }
+    out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    out.truncate(1);
+    Ok(out)
+}
+
+/// SPEC-052: re-sella la PHI del paciente con su contexto vigente.
+pub async fn update_patient(
+    db: &Surreal<Db>,
+    id: &str,
+    patient: Patient,
+) -> Result<Option<Patient>> {
+    phi_store::update_patient(db, id, patient).await
+}
+
+/// SPEC-052: crea el paciente y le asigna cama/equipos en una sola transacción
+/// SurrealQL.
+///
+/// El `CONTENT` que se escribe es la fila ya sellada por
+/// [`crate::phi_store::seal_patient`], no el `Patient` en claro: una escritura
+/// que pase por alto la capa de cifrado reintroduciría PHI en el disco.
 pub async fn create_patient_with_assignments(
     db: &Surreal<Db>,
     patient: Patient,
@@ -305,6 +351,13 @@ pub async fn create_patient_with_assignments(
         }
     }
 
+    // Se sella **antes** de abrir la transacción para que un fallo del cifrado
+    // no deje una cama reservada sin paciente.
+    let mut sealed_patient = patient.clone();
+    sealed_patient.patient_id = patient_id.clone();
+    let row = serde_json::to_value(phi_store::seal_patient(&sealed_patient)?)
+        .context("serializando fila cifrada del paciente")?;
+
     let sql = r#"
         BEGIN TRANSACTION;
         IF string::len($cama_id) > 0 {
@@ -315,11 +368,8 @@ pub async fn create_patient_with_assignments(
                 UPDATE type::thing('equipos', $e) SET cama_id = $cama_id;
             };
         };
-        LET $patient = $patient;
-        $patient.patient_id = $pid;
-        LET $created = CREATE type::thing('patients', $pid) CONTENT $patient RETURN AFTER;
+        CREATE type::thing('patients', $pid) CONTENT $row;
         COMMIT TRANSACTION;
-        RETURN $created;
     "#;
 
     let mut res = db
@@ -328,7 +378,7 @@ pub async fn create_patient_with_assignments(
         .bind(("pid", patient_id.clone()))
         .bind(("pnombre", paciente_nombre))
         .bind(("equipos", equipos_ids.to_vec()))
-        .bind(("patient", patient))
+        .bind(("row", row))
         .await?;
 
     if let Some((_, err)) = res.take_errors().into_iter().next() {
@@ -345,6 +395,12 @@ pub async fn create_patient_with_assignments(
 /// transacción SurrealQL. `desenlace` es el resultado clínico (`Mejorado`,
 /// `Trasladado`, `Fallecido`), que se guarda en el paciente para poder
 /// comparar la mortalidad **real** contra la **predicha**.
+///
+/// SPEC-052: los KPIs de egreso (`fecha_egreso_uci`, `desenlace_uci`) son
+/// columnas en claro porque se agregan en SQL, pero también viven dentro del
+/// envelope. Actualizar sólo la columna dejaría el envelope desactualizado y
+/// el paciente devuelto por la API mostraría el estado anterior, así que tras
+/// la transacción se re-sella el documento completo.
 pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient, desenlace: &str) -> Result<()> {
     let Some(cama_id) = &patient.cama_id else {
         return Ok(());
@@ -369,16 +425,15 @@ pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient, desenlace: &s
     if let Some((_, err)) = res.take_errors().into_iter().next() {
         return Err(anyhow::anyhow!("{}", err));
     }
-    Ok(())
-}
 
-pub async fn update_patient(
-    db: &Surreal<Db>,
-    id: &str,
-    patient: Patient,
-) -> Result<Option<Patient>> {
-    let updated: Option<Patient> = db.update(("patients", id)).content(patient).await?;
-    Ok(updated)
+    // Re-sella el envelope con el estado de egreso que acaba de aplicar SurrealDB.
+    if let Some(mut fresh) = get_patient(db, &patient.patient_id).await? {
+        fresh.desenlace_uci = desenlace.to_owned();
+        fresh.fecha_egreso_uci = chrono::Utc::now().to_rfc3339();
+        fresh.updated_at = chrono::Utc::now().to_rfc3339();
+        phi_store::update_patient(db, &patient.patient_id, fresh).await?;
+    }
+    Ok(())
 }
 
 /// Filtro por estado del paciente para listados y búsquedas.
@@ -413,13 +468,13 @@ impl EstadoFilter {
 
 pub async fn list_patients(db: &Surreal<Db>, limit: u32, offset: u32) -> Result<Vec<Patient>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
-    let patients: Vec<Patient> = db
-        .query("SELECT * FROM patients ORDER BY created_at DESC LIMIT $limit START $offset")
+    let rows: Vec<serde_json::Value> = db
+        .query("SELECT * OMIT id FROM patients ORDER BY created_at DESC LIMIT $limit START $offset")
         .bind(("limit", limit as i64))
         .bind(("offset", offset as i64))
         .await?
         .take(0)?;
-    Ok(patients)
+    phi_store::open_patients(rows)
 }
 
 /// SPEC-025: listado de pacientes filtrado por tenant (RLS).
@@ -432,17 +487,17 @@ pub async fn list_patients_for_tenant(
 ) -> Result<Vec<Patient>> {
     let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
     let sql = format!(
-        "SELECT * FROM patients WHERE tenant_id = $tenant{} ORDER BY created_at DESC LIMIT $limit START $offset",
+        "SELECT * OMIT id FROM patients WHERE tenant_id = $tenant{} ORDER BY created_at DESC LIMIT $limit START $offset",
         estado.sql()
     );
-    let patients: Vec<Patient> = db
+    let rows: Vec<serde_json::Value> = db
         .query(sql)
         .bind(("tenant", tenant_id.to_string()))
         .bind(("limit", limit as i64))
         .bind(("offset", offset as i64))
         .await?
         .take(0)?;
-    Ok(patients)
+    phi_store::open_patients(rows)
 }
 
 pub async fn count_patients(db: &Surreal<Db>) -> Result<u64> {
@@ -471,35 +526,28 @@ pub async fn count_patients_for_tenant(
     Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 
+/// SPEC-052: búsqueda **exacta** de pacientes.
+///
+/// Ya no es posible `nombre ~ $q`: la PHI está cifrada. Cada campo buscable
+/// tiene su índice ciego HMAC, así que el filtro corre en la base sin exponer
+/// texto y sin escanear la colección. Se pierde la búsqueda parcial por
+/// subcadena, que es el coste aceptado de cifrar la PHI.
 pub async fn search_patients(
     db: &Surreal<Db>,
     query: &str,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Patient>> {
-    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
-    let q = query.to_string();
-    let patients: Vec<Patient> = db
-        .query("SELECT * FROM patients WHERE nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q ORDER BY created_at DESC LIMIT $limit START $offset")
-        .bind(("q", q))
-        .bind(("limit", limit as i64))
-        .bind(("offset", offset as i64))
-        .await?
-        .take(0)?;
-    Ok(patients)
+    search_patients_any_tenant(db, query, "", limit, offset).await
 }
 
 pub async fn search_patients_count(db: &Surreal<Db>, query: &str) -> Result<u64> {
-    let q = query.to_string();
-    let count: Vec<serde_json::Value> = db
-        .query("SELECT count() as count FROM patients WHERE nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q GROUP BY count")
-        .bind(("q", q))
-        .await?
-        .take(0)?;
-    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+    search_patients_any_tenant(db, query, "", 1000, 0)
+        .await
+        .map(|v| v.len() as u64)
 }
 
-/// SPEC-025: búsqueda de pacientes filtrada por tenant (RLS).
+/// SPEC-025: búsqueda exacta de pacientes acotada al tenant del solicitante.
 pub async fn search_patients_for_tenant(
     db: &Surreal<Db>,
     query: &str,
@@ -508,46 +556,64 @@ pub async fn search_patients_for_tenant(
     limit: u32,
     offset: u32,
 ) -> Result<Vec<Patient>> {
-    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT);
-    let q = query.to_string();
-    let sql = format!(
-        "SELECT * FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q){} ORDER BY created_at DESC LIMIT $limit START $offset",
-        estado.sql()
-    );
-    let patients: Vec<Patient> = db
-        .query(sql)
-        .bind(("tenant", tenant_id.to_string()))
-        .bind(("q", q))
-        .bind(("limit", limit as i64))
-        .bind(("offset", offset as i64))
-        .await?
-        .take(0)?;
-    Ok(patients)
+    phi_store::search_patients_exact(db, tenant_id, query, estado.sql(), limit, offset).await
 }
 
-/// SPEC-025: recuento de búsqueda filtrado por tenant (RLS).
+/// SPEC-025: recuento de la búsqueda exacta acotada al tenant (RLS).
 pub async fn search_patients_count_for_tenant(
     db: &Surreal<Db>,
     query: &str,
     tenant_id: &str,
     estado: EstadoFilter,
 ) -> Result<u64> {
-    let q = query.to_string();
-    let sql = format!(
-        "SELECT count() as count FROM patients WHERE tenant_id = $tenant AND (nombre ~ $q OR apellido ~ $q OR cedula ~ $q OR historia_clinica ~ $q){} GROUP BY count",
-        estado.sql()
-    );
-    let count: Vec<serde_json::Value> = db
-        .query(sql)
-        .bind(("tenant", tenant_id.to_string()))
-        .bind(("q", q))
+    phi_store::count_patients_exact(db, tenant_id, query, estado.sql()).await
+}
+
+/// Búsqueda sin tenant para endpoints administrativos: cada tenant se consulta
+/// con su propia clave de índice ciego.
+async fn search_patients_any_tenant(
+    db: &Surreal<Db>,
+    query: &str,
+    extra_where: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Patient>> {
+    let mut out = Vec::new();
+    for t in tenants_with_patients(db).await? {
+        if let Ok(found) =
+            phi_store::search_patients_exact(db, &t, query, extra_where, limit, offset).await
+        {
+            out.extend(found);
+        }
+    }
+    Ok(out)
+}
+
+/// Tenants que tienen al menos un paciente.
+///
+/// `SELECT DISTINCT` no es válido en SurrealQL 2.x; se usa `SELECT VALUE` y la
+/// deduplicación se hace en Rust, donde ya se está recorriendo la lista.
+async fn tenants_with_patients(db: &Surreal<Db>) -> Result<Vec<String>> {
+    let values: Vec<String> = db
+        .query("SELECT VALUE tenant_id FROM patients WHERE tenant_id != ''")
         .await?
         .take(0)?;
-    Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
+    let mut seen = Vec::new();
+    for t in values {
+        if !seen.contains(&t) {
+            seen.push(t);
+        }
+    }
+    Ok(seen)
 }
 
 pub async fn delete_patient(db: &Surreal<Db>, id: &str) -> Result<()> {
-    let _: Option<Patient> = db.delete(("patients", id)).await?;
+    // Se borra por query en vez de con `db.delete(..)`: el builder devuelve el
+    // record eliminado y su `id` es un `Thing`, que no se puede deserializar
+    // (ni interesa: la PHI se va con el registro).
+    db.query("DELETE $id")
+        .bind(("id", sdb_id("patients", id)))
+        .await?;
     crate::metrics::patient_deleted();
     Ok(())
 }
