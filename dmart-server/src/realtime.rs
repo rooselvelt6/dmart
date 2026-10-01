@@ -11,6 +11,7 @@ pub mod keepalive {
     pub const INTERVAL_SECS: u64 = 15;
 }
 
+use crate::auth::Claims;
 use axum::{
     extract::ConnectInfo,
     http::StatusCode,
@@ -67,6 +68,26 @@ fn sse_release(ip: &str) {
 
 type EventSender = broadcast::Sender<String>;
 
+/// Filtrado de eventos por tenant en el stream SSE.
+///
+/// Un evento se entrega al suscriptor si:
+/// - su sobre lleva `tenant_id` y coincide con el del suscriptor, o
+/// - el sobre **no** lleva `tenant_id` (evento no clínico/no particionado).
+///
+/// En multi-tenancy (`DMART_MULTI_TENANT=1`) los eventos sin `tenant_id` se
+/// **suprimen** para que un evento mal publicado no pueda filtrar PHI a un
+/// hospital equivocado. En single-tenant se comportan como antes.
+fn event_visible_to(message: &str, tenant_id: &str) -> bool {
+    let tenant: Option<String> = serde_json::from_str::<serde_json::Value>(message)
+        .ok()
+        .and_then(|v| v.get("tenant").and_then(|t| t.as_str()).map(str::to_owned));
+
+    match tenant.as_deref() {
+        Some(t) => t == tenant_id,
+        None => !crate::tenant::multi_tenant_enabled(),
+    }
+}
+
 /// Un hub de eventos: permite publicar y suscribirse sobre un canal `broadcast`.
 pub struct RealtimeHub {
     tx: EventSender,
@@ -79,9 +100,12 @@ impl RealtimeHub {
         Self { tx }
     }
 
-    /// Publica un evento JSON a todos los suscriptores de este hub.
-    pub fn publish(&self, event_type: &str, payload: serde_json::Value) {
-        let message = json!({ "type": event_type, "data": payload }).to_string();
+    fn broadcast(&self, tenant_id: Option<&str>, event_type: &str, payload: serde_json::Value) {
+        let envelope = match tenant_id {
+            Some(t) => json!({ "type": event_type, "tenant": t, "data": payload }),
+            None => json!({ "type": event_type, "data": payload }),
+        };
+        let message = envelope.to_string();
         // Ignorar errores ("no receivers") de forma silenciosa; la telemetría de
         // SPEC-044 solo cuenta la actividad (publish sin suscriptores es normal).
         let _ = self.tx.send(message);
@@ -89,25 +113,49 @@ impl RealtimeHub {
         crate::slo::record_sse_publish();
     }
 
+    /// Publica un evento **particionado por tenant**: solo llega a suscriptores
+    /// del mismo hospital.
+    pub fn publish_for_tenant(
+        &self,
+        tenant_id: &str,
+        event_type: &str,
+        payload: serde_json::Value,
+    ) {
+        self.broadcast(Some(tenant_id), event_type, payload);
+    }
+
+    /// Publica un evento JSON a todos los suscriptores de este hub.
+    pub fn publish(&self, event_type: &str, payload: serde_json::Value) {
+        self.broadcast(None, event_type, payload);
+    }
+
     /// Suscribe un receptor al canal de este hub.
     pub fn subscribe(&self) -> broadcast::Receiver<String> {
         self.tx.subscribe()
     }
 
-    /// Construye un stream SSE que emite los eventos del hub. `client_ip` se
-    /// usa para el registro de conexiones concurrentes por IP.
+    /// Construye un stream SSE que emite los eventos del hub **acotados al
+    /// tenant** del suscriptor. `client_ip` se usa para el registro de
+    /// conexiones concurrentes por IP.
     pub fn sse_stream(
         &self,
         client_ip: String,
+        tenant_id: String,
     ) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
         let rx = self.subscribe();
         let ip = client_ip;
 
-        let stream = unfold(rx, |mut rx| async move {
+        let stream = unfold((rx, tenant_id.clone()), |(mut rx, t)| async move {
             loop {
                 match rx.recv().await {
                     Ok(message) => {
-                        return Some((Ok::<_, Infallible>(Event::default().data(message)), rx));
+                        if !event_visible_to(&message, &t) {
+                            continue;
+                        }
+                        return Some((
+                            Ok::<_, Infallible>(Event::default().data(message)),
+                            (rx, t),
+                        ));
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(broadcast::error::RecvError::Closed) => return None,
@@ -160,6 +208,7 @@ use crate::metrics::EwsSeverity;
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ScoreEvent {
     pub patient_id: String,
+    pub tenant_id: String,
     pub apache_score: f64,
     pub news2_score: f64,
     pub sofa_score: f64,
@@ -167,9 +216,11 @@ pub struct ScoreEvent {
     pub severity: EwsSeverity,
 }
 
-/// Publica un ScoreEvent en el hub global (SPEC-014).
+/// Publica un ScoreEvent en el hub global (SPEC-014), acotado a su tenant.
 pub fn publish_event(event: ScoreEvent) {
-    global_hub().publish(
+    let tenant_id = event.tenant_id.clone();
+    global_hub().publish_for_tenant(
+        &tenant_id,
         "score",
         serde_json::to_value(event).expect("ScoreEvent serialize"),
     );
@@ -181,15 +232,51 @@ fn global_hub() -> &'static RealtimeHub {
     REALTIME_TX.get_or_init(RealtimeHub::new)
 }
 
+/// Publica un evento JSON **acotado al tenant** indicado (hub global).
+pub fn publish_for_tenant(tenant_id: &str, event_type: &str, payload: serde_json::Value) {
+    global_hub().publish_for_tenant(tenant_id, event_type, payload);
+}
+
 /// Publica un evento JSON a todos los clientes conectados (hub global).
+///
+/// ⚠️ Reservado a eventos **no particionados** (ping, estado de servicio). Los
+/// eventos clínicos deben usar [`publish_for_tenant`] con el tenant del
+/// paciente: en multi-tenancy un evento sin `tenant` se suprime en el stream.
 pub fn publish(event_type: &str, payload: serde_json::Value) {
     global_hub().publish(event_type, payload);
 }
 
+/// Publica un evento clínico resolviendo el tenant desde el paciente.
+///
+/// Si el paciente no existe en la base no se publica nada: es preferible perder
+/// el evento a emitirlo sin particionar (en multi-tenancy se suprimiría, pero en
+/// single-tenant filtraría PHI de un hospital a otro).
+pub async fn publish_for_patient(
+    db: &crate::db::Database,
+    patient_id: &str,
+    event_type: &str,
+    payload: serde_json::Value,
+) {
+    match crate::db::get_patient(db, patient_id).await {
+        Ok(Some(p)) => publish_for_tenant(&p.tenant_id, event_type, payload),
+        Ok(None) => tracing::warn!(
+            "[realtime] evento {event_type} suprimido: paciente {patient_id} no encontrado"
+        ),
+        Err(e) => {
+            tracing::warn!("[realtime] no se pudo resolver tenant para evento {event_type}: {e}")
+        }
+    }
+}
+
 /// GET /api/realtime/stream — Streaming SSE de eventos del hub global.
 ///
-/// Limita a `MAX_SSE_PER_IP` conexiones concurrentes por IP origen.
-pub async fn realtime_stream(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
+/// El `tenant_id` se toma de los claims del JWT y se aplica como filtro en el
+/// servidor: un suscriptor solo recibe eventos de su propio hospital, aunque
+/// el hub sea compartido por toda la instancia.
+pub async fn realtime_stream(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    claims: Claims,
+) -> Response {
     let ip = addr.ip().to_string();
     if !sse_try_acquire(&ip) {
         return (
@@ -200,7 +287,9 @@ pub async fn realtime_stream(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Resp
         )
             .into_response();
     }
-    global_hub().sse_stream(ip).into_response()
+    global_hub()
+        .sse_stream(ip, claims.tenant_id)
+        .into_response()
 }
 
 /// GET /api/realtime/ping — Público, para probar el canal sin autenticación.
@@ -226,6 +315,35 @@ mod tests {
         let m2 = rx2.recv().await.expect("m2");
         assert_eq!(m1, m2);
         assert!(m1.contains("\"type\":\"broadcast\""));
+    }
+
+    /// El sobre de un evento particionado lleva `tenant`, para que el
+    /// suscriptor pueda filtrarlo sin tocar el payload clínico.
+    #[tokio::test]
+    async fn tenant_event_envelope_carries_tenant() {
+        let hub = RealtimeHub::new();
+        let mut rx = hub.subscribe();
+        hub.publish_for_tenant("hosp-b", "measurement", json!({ "apache_score": 12 }));
+        let message = rx.recv().await.expect("message");
+        assert!(message.contains("\"tenant\":\"hosp-b\""));
+        assert!(message.contains("\"apache_score\":12"));
+        assert!(event_visible_to(&message, "hosp-b"));
+        assert!(!event_visible_to(&message, "hosp-a"));
+    }
+
+    /// SPEC-025: un evento clínico de `hosp-b` no puede pasar a un suscriptor de
+    /// `hosp-a`, ni siquiera si comparten instancia/hub.
+    #[tokio::test]
+    async fn tenant_event_is_not_visible_to_other_tenant() {
+        let hub = RealtimeHub::new();
+        let mut rx = hub.subscribe();
+        hub.publish_for_tenant("hosp-b", "measurement", json!({ "patient_id": "p2" }));
+        let message = rx.recv().await.expect("message");
+        assert!(
+            !event_visible_to(&message, "hosp-a"),
+            "PHI de hosp-b filtrada a hosp-a"
+        );
+        assert!(event_visible_to(&message, "hosp-b"));
     }
 
     #[tokio::test]

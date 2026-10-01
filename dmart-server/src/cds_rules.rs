@@ -60,9 +60,18 @@ pub struct Participant {
     pub actor_type: String,
 }
 
+fn default_ctx_tenant() -> String {
+    dmart_shared::models::default_tenant_id()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationContext {
     pub patient_id: String,
+    /// SPEC-025: tenant del paciente. Los eventos que emita el motor (notificaciones
+    /// de reglas) se publican acotados a este hospital; sin él, el evento no
+    /// tendría partición y el stream SSE lo suprimiría en multi-tenancy.
+    #[serde(default = "default_ctx_tenant")]
+    pub tenant_id: String,
     pub patient: Option<Patient>,
     pub current_vitals: Option<crate::hl7::parser::VitalsMessage>,
     pub current_scores: HashMap<String, f64>,
@@ -254,6 +263,7 @@ impl CdsEngine {
             ActionKind::Notification => {
                 publish_event(ScoreEvent {
                     patient_id: ctx.patient_id.clone(),
+                    tenant_id: ctx.tenant_id.clone(),
                     apache_score: 0.0,
                     news2_score: 0.0,
                     sofa_score: 0.0,

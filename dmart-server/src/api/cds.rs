@@ -77,7 +77,7 @@ pub async fn evaluate_cds(
     let engine = CdsEngine::new(Arc::new(db.clone()));
     let _ = engine.load_active_plans().await;
 
-    let ctx = build_context(&req);
+    let ctx = build_context(&req, &claims.tenant_id);
     match engine.evaluate(ctx).await {
         Ok(results) => {
             let caret_events = results
@@ -123,7 +123,7 @@ pub async fn evaluate_cds(
     }
 }
 
-fn build_context(req: &EvaluateRequest) -> EvaluationContext {
+fn build_context(req: &EvaluateRequest, tenant_id: &str) -> EvaluationContext {
     let mut current_scores = HashMap::new();
     let mut current_vitals = None;
 
@@ -179,6 +179,7 @@ fn build_context(req: &EvaluateRequest) -> EvaluationContext {
 
     EvaluationContext {
         patient_id: req.patient_id.clone(),
+        tenant_id: tenant_id.to_string(),
         patient: None,
         current_vitals,
         current_scores,

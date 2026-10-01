@@ -26,6 +26,26 @@ impl Default for EwsConfig {
     }
 }
 
+/// SPEC-025: mensaje HL7 anotado con el tenant resuelto del paciente. El motor
+/// EWS no consulta la base, así que el productor (ingesta) debe particionar el
+/// evento; sin `tenant_id` el `ScoreEvent` se suprimiría del stream SSE.
+#[derive(Debug, Clone)]
+pub struct ScopedVitals {
+    pub tenant_id: String,
+    pub msg: VitalsMessage,
+}
+
+impl ScopedVitals {
+    /// Envuelve un mensaje de monitor con el tenant propietario para que la
+    /// propagación downstream (SSE) pueda particionarse.
+    pub fn new(tenant_id: impl Into<String>, msg: VitalsMessage) -> Self {
+        Self {
+            tenant_id: tenant_id.into(),
+            msg,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct EwsEngine {
     config: EwsConfig,
@@ -37,8 +57,8 @@ impl EwsEngine {
         config: EwsConfig,
     ) -> (
         Self,
-        mpsc::Sender<VitalsMessage>,
-        mpsc::Receiver<VitalsMessage>,
+        mpsc::Sender<ScopedVitals>,
+        mpsc::Receiver<ScopedVitals>,
     ) {
         let (tx, rx) = mpsc::channel(config.channel_capacity);
         let engine = Self {
@@ -48,13 +68,13 @@ impl EwsEngine {
         (engine, tx, rx)
     }
 
-    pub async fn run(self, mut rx: mpsc::Receiver<VitalsMessage>) {
-        while let Some(vm) = rx.recv().await {
-            let _ = self.process_vitals(vm).await;
+    pub async fn run(self, mut rx: mpsc::Receiver<ScopedVitals>) {
+        while let Some(scoped) = rx.recv().await {
+            let _ = self.process_vitals(scoped.tenant_id, scoped.msg).await;
         }
     }
 
-    async fn process_vitals(&self, vm: VitalsMessage) -> Result<(), String> {
+    async fn process_vitals(&self, tenant_id: String, vm: VitalsMessage) -> Result<(), String> {
         let hr = vm
             .vitals
             .iter()
@@ -145,6 +165,7 @@ impl EwsEngine {
 
         let score_event = ScoreEvent {
             patient_id: vm.patient_ref,
+            tenant_id,
             apache_score: apache as f64,
             news2_score: news2 as f64,
             sofa_score: sofa as f64,
@@ -163,7 +184,7 @@ impl EwsEngine {
 
 pub async fn spawn_engine(
     config: EwsConfig,
-) -> (tokio::task::JoinHandle<()>, mpsc::Sender<VitalsMessage>) {
+) -> (tokio::task::JoinHandle<()>, mpsc::Sender<ScopedVitals>) {
     let (engine, tx, rx) = EwsEngine::new(config);
     let handle = tokio::spawn(async move { engine.run(rx).await });
     (handle, tx)

@@ -98,8 +98,10 @@ pub async fn create_measurement(
                 patient.updated_at = Utc::now().to_rfc3339();
                 let _ = db_ops::update_patient(&db, &patient_id, patient).await;
             }
-            // Publicar evento en tiempo real (SSE)
-            crate::realtime::publish(
+            // Publicar evento en tiempo real (SSE), acotado al tenant del
+            // paciente (SPEC-025): el hub es compartido por toda la instancia.
+            crate::realtime::publish_for_tenant(
+                &m.tenant_id,
                 "measurement",
                 serde_json::json!({
                     "patient_id": patient_id,

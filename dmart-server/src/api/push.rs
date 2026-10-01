@@ -25,7 +25,9 @@ pub async fn vapid_public_key() -> Response {
     };
     (
         StatusCode::OK,
-        Json(ApiResponse::ok(json!({ "public_key": service.public_key() }))),
+        Json(ApiResponse::ok(
+            json!({ "public_key": service.public_key() }),
+        )),
     )
         .into_response()
 }
@@ -128,10 +130,17 @@ pub async fn unsubscribe(
         }
     };
 
-    match service.unsubscribe(&db, &claims.sub, input.endpoint.trim()).await {
+    match service
+        .unsubscribe(&db, &claims.sub, input.endpoint.trim())
+        .await
+    {
         Ok(removed) => {
-            audit_push(&claims, "push_unsubscribe", &format!("baja de {removed} suscripción(es)"))
-                .await;
+            audit_push(
+                &claims,
+                "push_unsubscribe",
+                &format!("baja de {removed} suscripción(es)"),
+            )
+            .await;
             (
                 StatusCode::OK,
                 Json(ApiResponse::ok(json!({ "removed": removed }))),
@@ -179,7 +188,9 @@ pub async fn send_test(
         }
     };
     let title = input.title.unwrap_or_else(|| "dMart UCI".to_string());
-    let body = input.body.unwrap_or_else(|| "Prueba de notificación".to_string());
+    let body = input
+        .body
+        .unwrap_or_else(|| "Prueba de notificación".to_string());
 
     let (sent, failed) = service.send_to_all(&db, &title, &body).await;
     audit_push(

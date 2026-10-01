@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use zeroize::Zeroizing;
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use tracing;
@@ -62,19 +63,27 @@ const MFA_CHALLENGE_SECONDS: i64 = 5 * 60;
 /// Validez (días) del refresh token.
 const REFRESH_TOKEN_TTL_DAYS: i64 = 7;
 
+/// Secreto de firma JWT, cacheado para no releer el entorno en cada token.
+///
+/// Se guarda en un buffer [`Zeroizing`] para que la clave no quede residiendo
+/// en el heap como `Vec<u8>` normal: es material criptográfico de 256 bits y un
+/// dump de memoria lo expondría.
 fn jwt_secret() -> &'static [u8] {
-    static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
-    JWT_SECRET.get_or_init(|| {
-        std::env::var("JWT_SECRET")
-            .map(|s| s.into_bytes())
-            .unwrap_or_else(|_| {
-                let mut key = vec![0u8; 32];
-                rand::thread_rng().fill_bytes(&mut key);
-                tracing::warn!("⚠️ JWT_SECRET not set! Using auto-generated 32-byte key. Tokens will be invalid after server restart. Set JWT_SECRET in .env");
-                key
-            })
-    })
-    .as_slice()
+    static JWT_SECRET: OnceLock<Zeroizing<Vec<u8>>> = OnceLock::new();
+    JWT_SECRET
+        .get_or_init(|| {
+            Zeroizing::new(
+                std::env::var("JWT_SECRET")
+                    .map(|s| s.into_bytes())
+                    .unwrap_or_else(|_| {
+                        let mut key = Zeroizing::new(vec![0u8; 32]);
+                        rand::thread_rng().fill_bytes(key.as_mut_slice());
+                        tracing::warn!("⚠️ JWT_SECRET not set! Using auto-generated 32-byte key. Tokens will be invalid after server restart. Set JWT_SECRET in .env");
+                        key.to_vec()
+                    }),
+            )
+        })
+        .as_slice()
 }
 
 static REVOKED_TOKENS: OnceLock<std::sync::Mutex<HashMap<String, i64>>> = OnceLock::new();
@@ -84,22 +93,16 @@ pub(crate) fn jwt_secret_bytes() -> &'static [u8] {
     jwt_secret()
 }
 
-/// Valida que `JWT_SECRET` esté configurada con una clave fuerte (>= 32 bytes)
-/// y no sea el valor de ejemplo del repo. El server arranca en fail-closed: sin
-/// esta variable NO se emiten tokens, porque un secreto predecible o ausente
-/// permite forjar cualquier access token (escalada total).
+/// Valida que `JWT_SECRET` esté configurada con un secreto fuerte (>= 32 bytes)
+/// que no sea un valor de ejemplo del repo. El server arranca en fail-closed:
+/// sin esta variable NO se emiten tokens, porque un secreto predecible o
+/// ausente permite forjar cualquier access token (escalada total).
 pub fn validate_jwt_secret() -> Result<(), String> {
-    const EXAMPLE: &str = "change-me-to-a-random-64-char-string";
     match std::env::var("JWT_SECRET") {
-        Ok(v) if !v.is_empty() && v != EXAMPLE && v.len() >= 32 => Ok(()),
-        Ok(_) => Err(
-            "JWT_SECRET is missing or too weak (or still the development example). Set a strong \
-             random secret (>= 32 chars, e.g. `openssl rand -hex 32`) in .env."
-                .to_string(),
-        ),
+        Ok(v) => crate::crypto::validate_secret_strength("JWT_SECRET", &v),
         Err(_) => Err(
-            "JWT_SECRET is required in production (fail-closed). Set a strong random secret \
-             (>= 32 chars, e.g. `openssl rand -hex 32`) in .env."
+            "JWT_SECRET is required in production (fail-closed). Generate one with \
+             `openssl rand -hex 32` and set it in .env."
                 .to_string(),
         ),
     }

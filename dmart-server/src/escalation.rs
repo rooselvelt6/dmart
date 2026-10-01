@@ -7,7 +7,6 @@
 //! canal "escalation" al crear / acusar / escalar.
 
 use crate::db::Database;
-use crate::realtime;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -213,7 +212,11 @@ pub async fn create_escalation(
     let created: Option<Escalation> = db.select(("escalations", &id)).await?;
     let created = created.ok_or_else(|| anyhow!("failed to create escalation"))?;
 
-    realtime::publish(
+    // SPEC-025: el evento lleva `patient_id`, así que debe quedar acotado al
+    // tenant del paciente.
+    crate::realtime::publish_for_patient(
+        db,
+        patient_id,
         "escalation",
         json!({
             "event": "created",
@@ -222,7 +225,8 @@ pub async fn create_escalation(
             "alert_type": alert_type,
             "severity": severity.as_str()
         }),
-    );
+    )
+    .await;
     let _ = crate::patient_timeline::record_alert_event(
         db,
         patient_id,
@@ -272,10 +276,15 @@ pub async fn acknowledge_escalation(db: &Database, id: &str) -> Result<Option<Es
         .take(0)?;
     let updated = updated.into_iter().next();
 
-    realtime::publish(
-        "escalation",
-        json!({ "event": "acknowledged", "escalation_id": id }),
-    );
+    if let Some(patient_id) = updated.as_ref().map(|e| &e.patient_id).cloned() {
+        crate::realtime::publish_for_patient(
+            db,
+            &patient_id,
+            "escalation",
+            json!({ "event": "acknowledged", "escalation_id": id }),
+        )
+        .await;
+    }
     Ok(updated.or(Some(esc)))
 }
 
@@ -308,14 +317,19 @@ pub async fn escalate_escalation(
         .take(0)?;
     let updated = updated.into_iter().next();
 
-    realtime::publish(
-        "escalation",
-        json!({
-            "event": "escalated",
-            "escalation_id": id,
-            "level": level
-        }),
-    );
+    if let Some(patient_id) = updated.as_ref().map(|e| &e.patient_id).cloned() {
+        crate::realtime::publish_for_patient(
+            db,
+            &patient_id,
+            "escalation",
+            json!({
+                "event": "escalated",
+                "escalation_id": id,
+                "level": level
+            }),
+        )
+        .await;
+    }
     Ok(updated.or(Some(esc)))
 }
 
@@ -338,10 +352,15 @@ pub async fn resolve_escalation(db: &Database, id: &str) -> Result<Option<Escala
         .take(0)?;
     let updated = updated.into_iter().next();
 
-    realtime::publish(
-        "escalation",
-        json!({ "event": "resolved", "escalation_id": id }),
-    );
+    if let Some(patient_id) = updated.as_ref().map(|e| &e.patient_id).cloned() {
+        crate::realtime::publish_for_patient(
+            db,
+            &patient_id,
+            "escalation",
+            json!({ "event": "resolved", "escalation_id": id }),
+        )
+        .await;
+    }
     Ok(updated.or(Some(esc)))
 }
 

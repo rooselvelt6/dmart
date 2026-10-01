@@ -39,6 +39,27 @@ async fn api_not_found() -> impl IntoResponse {
     )
 }
 
+/// Dirección de escucha del listener MLLP.
+///
+/// Por defecto **loopback**: publicar el listener en toda la interfaz expone una
+/// superficie de escritura de datos clínicos sin autenticación. Para bedside en
+/// una VLAN, configurar `DMART_MLLP_BIND=<ip-de-la-vlan>:<puerto>` de forma
+/// explícita (y siempre junto con `DMART_MLLP_AUTH_SECRET`).
+fn mllp_bind_addr(port: u16) -> SocketAddr {
+    match std::env::var("DMART_MLLP_BIND") {
+        Ok(v) => match v.trim().parse::<SocketAddr>() {
+            Ok(addr) => addr,
+            Err(e) => {
+                tracing::error!(
+                    "[mllp] DMART_MLLP_BIND inválido ({v:?}: {e}); fallback a 127.0.0.1:{port}"
+                );
+                SocketAddr::from(([127, 0, 0, 1], port))
+            }
+        },
+        Err(_) => SocketAddr::from(([127, 0, 0, 1], port)),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load .env file first (before any env var reads)
@@ -245,14 +266,27 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("    Obs:      http://{}/obs/health", addr);
     tracing::info!("    Metrics:  http://localhost:9090/metrics");
 
-    // Listener HL7/MLLP para monitores de cama (opcional, se aísla por VLAN).
+    // Listener HL7/MLLP para monitores de cama (opcional).
+    //
+    // Seguridad: **NO** se expone en `0.0.0.0` por defecto. `DMART_MLLP_BIND`
+    // permite escuchar solo en la interfaz de la VLAN clínica, y la
+    // autenticación (handshake de secreto compartido + allowlist de emisores)
+    // se configura en `server_ingest::MllpSecurityConfig`. El aislamiento por
+    // VLAN es una mitigación complementaria, no un sustituto.
     if let Some(hl7_port) = std::env::var("DMART_HL7_PORT")
         .ok()
         .and_then(|p| p.parse::<u16>().ok())
     {
         let hl7_db = database.clone();
         let hl7_ingest = ingest_state.clone();
-        let hl7_addr = SocketAddr::from(([0, 0, 0, 0], hl7_port));
+        let hl7_addr = mllp_bind_addr(hl7_port);
+        if hl7_addr.ip().is_unspecified() {
+            tracing::warn!(
+                "[mllp] DMART_MLLP_BIND no restringido ({}) — el listener queda accesible desde \
+                 toda la red. Asegura DMART_MLLP_AUTH_SECRET y firewall/VLAN.",
+                hl7_addr
+            );
+        }
         tokio::spawn(async move {
             if let Err(e) = server_ingest::serve(hl7_addr, hl7_db, hl7_ingest).await {
                 tracing::error!("[mllp] listener cerrado: {e}");

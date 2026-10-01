@@ -109,7 +109,8 @@ pub async fn start_session(
             let session = TeleIcuSession::new(req.patient_id, req.specialist_id, req.channel);
             match teleicu::create_session(&db, &session).await {
                 Ok(created) => {
-                    crate::realtime::publish(
+                    crate::realtime::publish_for_tenant(
+                        &claims.tenant_id,
                         "teleicu",
                         json!({
                             "event": "session_started",
@@ -231,7 +232,8 @@ pub async fn end_session(
                 .ended_at
                 .as_deref()
                 .and_then(|e| teleicu::duration_minutes(&ended.started_at, e));
-            crate::realtime::publish(
+            crate::realtime::publish_for_tenant(
+                &claims.tenant_id,
                 "teleicu",
                 json!({
                     "event": "session_ended",

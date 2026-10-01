@@ -201,6 +201,9 @@ pub async fn register(
         .bind(("heartbeat_interval_secs", device.heartbeat_interval_secs))
         .await?;
 
+    // Evento operativo sin PHI ni `patient_id`: no se particiona por tenant.
+    // En multi-tenancy el stream SSE lo suprime (fail-safe) porque el registro
+    // de dispositivos todavía no modela `tenant_id` (SPEC-017 pendiente).
     realtime::publish(
         "device",
         json!({ "event": "registered", "device_id": device.id, "estado": device.estado }),
@@ -321,6 +324,9 @@ pub async fn heartbeat(
         .bind(("id", id.to_string()))
         .await?;
 
+    // Evento operativo sin PHI ni `patient_id`: no se particiona por tenant.
+    // En multi-tenancy el stream SSE lo suprime (fail-safe) porque el registro
+    // de dispositivos todavía no modela `tenant_id` (SPEC-017 pendiente).
     realtime::publish(
         "device",
         json!({

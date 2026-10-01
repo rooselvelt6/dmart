@@ -696,6 +696,19 @@ pub struct Measurement {
 
 impl Measurement {
     pub fn new(patient_id: &str, apache: ApacheIIData, gcs: GcsData) -> Self {
+        Self::new_for_tenant(patient_id, &default_tenant_id(), apache, gcs)
+    }
+
+    /// SPEC-025: crea la medición herdando el tenant **del paciente**. Usar este
+    /// constructor en toda ingesta que parta de un `Patient` existente
+    /// (HTTP + HL7/MLLP): `Measurement::new` deja el tenant por defecto y
+    /// rompería el aislamiento (RLS) al escribir datos de otro hospital.
+    pub fn new_for_tenant(
+        patient_id: &str,
+        tenant_id: &str,
+        apache: ApacheIIData,
+        gcs: GcsData,
+    ) -> Self {
         use crate::scales::{
             ALGO_VERSION, calculate_apache_ii_score, calculate_news2_score,
             calculate_saps_iii_score, calculate_sofa_score, mortality_risk,
@@ -740,7 +753,7 @@ impl Measurement {
             algorithm_version,
             fingerprint,
             notas: String::new(),
-            tenant_id: default_tenant_id(),
+            tenant_id: tenant_id.to_string(),
         }
     }
 }
