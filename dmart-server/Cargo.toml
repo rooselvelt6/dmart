@@ -49,6 +49,7 @@ statrs = "0.17"
 
 # Environment
 dotenvy = "0.15"
+clap = { version = "4", features = ["derive"] }
 
 # Error handling
 thiserror = "2"

@@ -11,6 +11,15 @@ pub const CARRIAGE_RETURN: u8 = 0x0D;
 /// Máximo tamaño de un mensaje HL7 (1 MiB).
 pub const MAX_MESSAGE: usize = 1024 * 1024;
 
+/// Construye el ACK MLLP de un mensaje.
+///
+/// El formato del segmento MSH es contrato de interoperabilidad con los
+/// monitores ya desplegados (`ACKAA^<id>` / `ACKAR^<id>`), así que no se
+/// cambia sin coordinación.
+///
+/// Cuando hay error se añade un segmento `ERR` **dentro** del frame, antes del
+/// terminador. Antes iba después de `\x1C\r`, y como el peer corta ahí la
+/// lectura, el emisor nunca recibía el motivo del rechazo.
 pub fn build_ack(message_id: &str, err: Option<&str>) -> Vec<u8> {
     let ack_code = if err.is_some() { "AR" } else { "AA" };
     let now = chrono::Utc::now().format("%Y%m%d%H%M%S");
@@ -20,13 +29,12 @@ pub fn build_ack(message_id: &str, err: Option<&str>) -> Vec<u8> {
     );
     let mut body = vec![START_BLOCK];
     body.extend_from_slice(line.as_bytes());
+    if let Some(err_full) = err {
+        body.push(b'\r');
+        body.extend_from_slice(format!("ERR|Ste|{err_full}").as_bytes());
+    }
     body.push(END_BLOCK);
     body.push(CARRIAGE_RETURN);
-    if let Some(err_full) = err {
-        let err_line =
-            format!("\rMSH|^~\\&|DMART|UCI|||{now}||ACK^R01||ERR|P|2.5\rERR|Ste|{err_full}");
-        body.extend_from_slice(err_line.as_bytes());
-    }
     body
 }
 
@@ -41,8 +49,24 @@ mod tests {
         assert!(ok.contains("ACKAA^MSGID001"));
         assert!(ok.ends_with("\u{001C}\r"));
 
+        // El ACK de error lleva un único MSH y el motivo dentro del frame.
+        // Antes se emitía un segundo MSH^R01 **después** de `\x1C\r`: el peer
+        // cortaba ahí, así que nunca veía el motivo, y el tramo posterior era
+        // basura para cualquier parser MLLP estricto.
         let err =
             String::from_utf8(build_ack("MSGID001", Some("paciente desconocido"))).expect("utf8");
-        assert!(err.contains("ACK^R01"));
+        assert!(err.contains("ACKAR^MSGID001"));
+        assert!(err.contains("ERR|Ste|paciente desconocido"));
+        assert_eq!(
+            err.matches("MSH|").count(),
+            1,
+            "un ACK lleva un solo MSH: {err:?}"
+        );
+        assert!(err.ends_with("\u{001C}\r"));
+        // El motivo va antes del terminador, no después.
+        assert!(
+            err.find("ERR|Ste|").unwrap() < err.find('\u{001C}').unwrap(),
+            "el ERR debe ir dentro del frame: {err:?}"
+        );
     }
 }

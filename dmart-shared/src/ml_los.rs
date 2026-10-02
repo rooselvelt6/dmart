@@ -18,9 +18,9 @@ use candle_core::{DType, Device, Tensor};
 #[cfg(feature = "ml-nn")]
 use candle_nn::{Linear, Module, VarBuilder, VarMap, linear, ops::softmax};
 
-use crate::ml_features::{FeatureSet, Normalizer, build_los_nn_v1};
 #[cfg(feature = "ml-nn")]
 use crate::ml_features::MlFeatures;
+use crate::ml_features::{FeatureSet, Normalizer, build_los_nn_v1};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LosNnConfig {
@@ -515,6 +515,7 @@ mod nn_stub {
     }
 
     pub trait LosPredictor: Send + Sync {
+        #[allow(clippy::too_many_arguments)]
         fn train(
             &self,
             _train_features: &Array2<f32>,
@@ -684,9 +685,11 @@ pub fn generate_synthetic_los_data(n_samples: usize) -> (Array2<f32>, Array1<f32
                 features[[i, j]] = rng.gen_range(0.0..0.3);
             } else if fname.contains("count") {
                 features[[i, j]] = rng.gen_range(10.0..100.0);
-            } else if fname.contains("hour_sin") || fname.contains("day_sin") {
-                features[[i, j]] = rng.gen_range(-1.0..1.0);
-            } else if fname.contains("hour_cos") || fname.contains("day_cos") {
+            } else if fname.contains("hour_sin")
+                || fname.contains("day_sin")
+                || fname.contains("hour_cos")
+                || fname.contains("day_cos")
+            {
                 features[[i, j]] = rng.gen_range(-1.0..1.0);
             } else {
                 features[[i, j]] = rng.gen_range(-2.0..2.0);

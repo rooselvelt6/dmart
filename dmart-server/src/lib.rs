@@ -16,6 +16,7 @@ pub mod crypto;
 #[allow(dead_code)] // SPEC-018: Data Quality (ejercitado por test data_quality)
 pub mod data_quality;
 pub mod db;
+pub mod deployment;
 #[allow(dead_code)] // SPEC-017: Device Registry (ejercitado por test device_registry)
 pub mod device_registry;
 #[allow(dead_code)] // SPEC-019: Alert Escalation (ejercitado por test escalation)
@@ -32,16 +33,16 @@ pub mod forecasting;
 pub mod hl7;
 pub mod ingest;
 pub mod metrics;
-pub mod mllp_tls;
-pub mod phi_store;
 pub mod mfa;
 pub mod middleware;
 pub mod migrations;
 #[allow(dead_code)] // SPEC-032: ML Serving (ejercitado por test ml_serving)
 pub mod ml_serving;
+pub mod mllp_tls;
 pub mod observability;
 #[allow(dead_code)] // SPEC-015: Patient Timeline API (ejercitado por test patient_timeline)
 pub mod patient_timeline;
+pub mod phi_store;
 #[allow(dead_code)] // SPEC-052: Web Push VAPID (tarea 3.9)
 pub mod push;
 pub mod rbac;

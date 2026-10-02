@@ -446,8 +446,8 @@ fn compute_ensemble_metrics(probs: &[f32], preds: &[u8], targets: &[usize]) -> E
     let ece = compute_ece(probs, targets);
     let hl_p = hosmer_lemeshow_test(probs, targets);
 
-    let bootstrap_ci_auroc = bootstrap_ci(probs, targets, |p, t| compute_auroc(p, t));
-    let bootstrap_ci_auprc = bootstrap_ci(probs, targets, |p, t| compute_auprc(p, t));
+    let bootstrap_ci_auroc = bootstrap_ci(probs, targets, compute_auroc);
+    let bootstrap_ci_auprc = bootstrap_ci(probs, targets, compute_auprc);
     let bootstrap_ci_brier = bootstrap_ci(probs, targets, |p, t| {
         p.iter()
             .zip(t)
@@ -647,7 +647,7 @@ pub fn generate_synthetic_mortality_data(n_samples: usize) -> (Array2<f32>, Arra
             } else if fname.contains("sex") || fname.contains("emergency") {
                 features[[i, j]] = if rng.gen_bool(0.5) { 1.0 } else { 0.0 };
             } else if fname.contains("charlson") {
-                features[[i, j]] = (mortality_risk * 5.0) as f32;
+                features[[i, j]] = mortality_risk * 5.0;
             } else {
                 features[[i, j]] = rng.gen_range(-1.0..1.0);
             }

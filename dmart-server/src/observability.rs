@@ -193,7 +193,10 @@ fn timing_safe_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.bytes()
+        .zip(b.bytes())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 ///
@@ -213,9 +216,7 @@ pub async fn metrics_auth_middleware(
         .ok()
         .filter(|s| !s.is_empty());
 
-    if sensitive
-        && let Some(expected) = expected
-    {
+    if sensitive && let Some(expected) = expected {
         let provided = req
             .headers()
             .get("authorization")

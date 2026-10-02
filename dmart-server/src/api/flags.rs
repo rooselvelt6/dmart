@@ -8,8 +8,7 @@ use axum::{
 use crate::auth::Claims;
 use crate::db::Database;
 use dmart_shared::models::{
-    ApiResponse, CreateFeatureFlagRequest, FeatureFlagListResponse,
-    UpdateFeatureFlagRequest,
+    ApiResponse, CreateFeatureFlagRequest, FeatureFlagListResponse, UpdateFeatureFlagRequest,
 };
 
 /// GET /api/v1/admin/flags — Lista feature flags (admin)

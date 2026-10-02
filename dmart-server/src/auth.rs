@@ -15,11 +15,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use zeroize::Zeroizing;
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
 use tracing;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use dmart_shared::models::*;

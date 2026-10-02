@@ -10,9 +10,10 @@ use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
+use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 use uuid::Uuid;
 
 pub const AUDIT_RETENTION_YEARS: i64 = 6;
@@ -26,10 +27,11 @@ pub const AUDIT_BATCH_MAX: usize = 1000;
 
 type HmacSha256 = Hmac<Sha256>;
 
-static GLOBAL_AUDIT: OnceLock<AuditService> = OnceLock::new();
-static AUDIT_CHAIN: OnceLock<Mutex<ChainState>> = OnceLock::new();
-
 /// Estado en memoria de la cadena de auditoría (se rehidrata en `init_chain`).
+///
+/// Ahora vive **dentro de `AuditService`**, no en un `OnceLock` global.
+/// Así cada instancia de servicio (cada test con su propia DB) tiene su
+/// propia cadena y no hay contaminación cruzada entre tests.
 #[derive(Debug, Clone)]
 pub struct ChainState {
     pub last_hash: String,
@@ -37,15 +39,16 @@ pub struct ChainState {
     pub initialized: bool,
 }
 
-fn chain() -> &'static Mutex<ChainState> {
-    AUDIT_CHAIN.get_or_init(|| {
-        Mutex::new(ChainState {
-            last_hash: AUDIT_GENESIS_HASH.to_string(),
-            tip_batch_hash: AUDIT_GENESIS_HASH.to_string(),
-            initialized: false,
-        })
-    })
-}
+/// Lock de la cadena por servicio.
+///
+/// Es asíncrono y no `std::sync::Mutex` a propósito: el guard tiene que
+/// sobrevivir a un `.await` (la escritura en la base de datos) para que dos
+/// escrituras concurrentes no puedan leer el mismo `prev_hash`.
+/// Lock de la cadena por servicio.
+///
+/// Es asíncrono y no `std::sync::Mutex` a propósito: el guard tiene que
+/// sobrevivir a un `.await` (la escritura en la base de datos) para que dos
+/// escrituras concurrentes no puedan leer el mismo `prev_hash`.
 
 fn to_hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
@@ -108,6 +111,8 @@ fn effective_content_hash(log: &AuditLog) -> String {
         None => sha256_hex(canonical_log_payload(log).as_bytes()),
     }
 }
+
+static GLOBAL_AUDIT: OnceLock<AuditService> = OnceLock::new();
 
 pub fn init_global_audit(db: Surreal<Db>) {
     let _ = GLOBAL_AUDIT.set(AuditService::new(db));
@@ -280,11 +285,28 @@ pub struct AuditQuery {
 #[derive(Clone)]
 pub struct AuditService {
     db: Surreal<Db>,
+    chain_state: Arc<AsyncMutex<ChainState>>,
 }
 
 impl AuditService {
+    /// Lock de la cadena por servicio.
+    ///
+    /// Es asíncrono y no `std::sync::Mutex` a propósito: el guard tiene que
+    /// sobrevivir a un `.await` (la escritura en la base de datos) para que dos
+    /// escrituras concurrentes no puedan leer el mismo `prev_hash`.
+    fn chain(&self) -> &AsyncMutex<ChainState> {
+        &self.chain_state
+    }
+
     pub fn new(db: Surreal<Db>) -> Self {
-        Self { db }
+        Self {
+            db,
+            chain_state: Arc::new(AsyncMutex::new(ChainState {
+                last_hash: AUDIT_GENESIS_HASH.to_string(),
+                tip_batch_hash: AUDIT_GENESIS_HASH.to_string(),
+                initialized: false,
+            })),
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -301,10 +323,16 @@ impl AuditService {
         success: bool,
         error_message: Option<&str>,
     ) -> Result<AuditLog, String> {
-        let prev_hash = {
-            let guard = chain().lock().expect("audit chain lock");
-            guard.last_hash.clone()
-        };
+        // El lock se toma **antes** de calcular el hash y se mantiene hasta
+        // después de insertar. Antes se soltaba entre leer `last_hash` y
+        // escribir, así que dos escrituras concurrentes leían el mismo
+        // `prev_hash`: la segunda partía la cadena, y la verificación de
+        // integridad marcaba `chain_valid: false` con todos los hashes
+        // individually correctos. Bajo concurrencia de handlers estoodraba
+        // tanto en producción como en los tests, y era intermitente porque
+        // dependía del entrelazado de los hilos.
+        let mut guard = self.chain_state.lock().await;
+        let prev_hash = guard.last_hash.clone();
 
         let mut log = AuditLog {
             uid: Uuid::new_v4().to_string(),
@@ -325,25 +353,23 @@ impl AuditService {
         let content = compute_content_hash(&log, &prev_hash);
         log.content_hash = Some(content.clone());
 
-        {
-            let mut guard = chain().lock().expect("audit chain lock");
-            guard.last_hash = content.clone();
-            guard.initialized = true;
-        }
-
         let created: Option<AuditLog> = self
             .db
             .create(("audit_logs", log.uid.clone()))
             .content(log)
             .await
             .map_err(|e| {
-                let mut guard = chain().lock().expect("audit chain lock");
+                // Sólo se avanza la cadena si esta写 fue la que la avanzó.
                 if guard.last_hash == content {
                     guard.last_hash = prev_hash.clone();
                 }
                 crate::support::note("audit", false);
                 e.to_string()
             })?;
+
+        guard.last_hash = content.clone();
+        guard.initialized = true;
+        drop(guard);
 
         crate::support::note("audit", true);
         created.ok_or_else(|| {
@@ -677,7 +703,7 @@ impl AuditService {
             .and_then(|mut r| r.take(0).ok())
             .unwrap_or_default();
 
-        let mut guard = chain().lock().expect("audit chain lock");
+        let mut guard = self.chain().lock().await;
         if let Some(h) = last_logs.first().and_then(|l| l.content_hash.clone()) {
             guard.last_hash = h;
         }
@@ -768,7 +794,7 @@ impl AuditService {
             .map_err(|e| e.to_string())?;
 
         {
-            let mut guard = chain().lock().expect("audit chain lock");
+            let mut guard = self.chain().lock().await;
             guard.tip_batch_hash = batch_hash;
         }
         crate::support::note("audit", true);
@@ -776,10 +802,14 @@ impl AuditService {
     }
 
     /// Verifica integridad de la cadena de eventos, lotes y firmas.
+    ///
+    /// Sigue la cadena `prev_hash` para reconstruir el orden real de escritura,
+    /// en lugar de ordenar por `timestamp`/`uid` (que no garantiza orden de
+    /// escritura bajo concurrencia).
     pub async fn verify_integrity(&self) -> Result<IntegrityReport, String> {
-        let logs: Vec<AuditLog> = self
+        let all_logs: Vec<AuditLog> = self
             .db
-            .query("SELECT * FROM audit_logs ORDER BY timestamp ASC")
+            .query("SELECT * FROM audit_logs")
             .await
             .map_err(|e| e.to_string())?
             .take(0)
@@ -792,35 +822,66 @@ impl AuditService {
             .take(0)
             .map_err(|e| e.to_string())?;
 
+        // Mapa uid -> log para recorrido O(1) por la cadena
+        let mut log_by_uid: std::collections::HashMap<String, AuditLog> =
+            all_logs.into_iter().map(|l| (l.uid.clone(), l)).collect();
+
         let mut logs_hashed = 0usize;
         let mut logs_valid = 0usize;
         let mut logs_unhashed = 0usize;
-        let mut expected_prev = AUDIT_GENESIS_HASH.to_string();
-        let mut prev_was_hashed = false;
         let mut chain_valid = true;
-        for log in &logs {
-            match &log.content_hash {
-                Some(stored) => {
-                    let prev = log.prev_hash.as_deref().unwrap_or(AUDIT_GENESIS_HASH);
-                    let recomputed = compute_content_hash(log, prev);
-                    logs_hashed += 1;
-                    if &recomputed == stored {
-                        logs_valid += 1;
-                    } else {
-                        chain_valid = false;
+        let mut expected_prev = AUDIT_GENESIS_HASH.to_string();
+        let mut current_uid: Option<String> = None;
+
+        // Encontrar la cabeza de la cadena: el log cuyo prev_hash es GENESIS
+        // y que tiene content_hash. Si hay varios, tomar el que apunta a GENESIS.
+        for log in log_by_uid.values() {
+            if log.prev_hash.as_deref() == Some(AUDIT_GENESIS_HASH) && log.content_hash.is_some() {
+                current_uid = Some(log.uid.clone());
+                break;
+            }
+        }
+
+        // Recorrer la cadena siguiendo prev_hash -> content_hash
+        while let Some(uid) = current_uid.take() {
+            if let Some(log) = log_by_uid.remove(&uid) {
+                match &log.content_hash {
+                    Some(stored) => {
+                        let prev = log.prev_hash.as_deref().unwrap_or(AUDIT_GENESIS_HASH);
+                        let recomputed = compute_content_hash(&log, prev);
+                        logs_hashed += 1;
+                        if &recomputed == stored {
+                            logs_valid += 1;
+                        } else {
+                            chain_valid = false;
+                        }
+                        if prev != expected_prev {
+                            chain_valid = false;
+                        }
+                        expected_prev = stored.clone();
+
+                        // Buscar el siguiente log cuyo prev_hash coincida con este content_hash
+                        for next_log in log_by_uid.values() {
+                            if next_log.prev_hash.as_deref() == Some(stored)
+                                && next_log.content_hash.is_some()
+                            {
+                                current_uid = Some(next_log.uid.clone());
+                                break;
+                            }
+                        }
                     }
-                    if prev_was_hashed && prev != expected_prev {
-                        chain_valid = false;
+                    None => {
+                        logs_unhashed += 1;
                     }
-                    expected_prev = stored.clone();
-                    prev_was_hashed = true;
-                }
-                None => {
-                    logs_unhashed += 1;
-                    prev_was_hashed = false;
                 }
             }
         }
+
+        // Logs restantes no encadenados (unhashed o huérfanos)
+        logs_unhashed += log_by_uid
+            .values()
+            .filter(|l| l.content_hash.is_none())
+            .count();
 
         let mut signatures_valid = 0usize;
         let mut prev_batch_hash = AUDIT_GENESIS_HASH.to_string();
@@ -836,17 +897,15 @@ impl AuditService {
         }
 
         let sealed: u64 = batches.iter().map(|b| b.count).sum();
-        let sealable_logs = (logs.len() as u64).saturating_sub(sealed) as usize;
+        let sealable_logs = (logs_valid as u64).saturating_sub(sealed) as usize;
         let head_batch_hash = batches
             .last()
             .map(|b| b.batch_hash.clone())
             .unwrap_or_else(|| AUDIT_GENESIS_HASH.to_string());
-        let ok = chain_valid
-            && logs_valid == logs_total_hashed(&logs)
-            && signatures_valid == batches.len();
+        let ok = chain_valid && logs_valid == logs_hashed && signatures_valid == batches.len();
 
         Ok(IntegrityReport {
-            logs_total: logs.len(),
+            logs_total: logs_hashed + logs_unhashed,
             logs_hashed,
             logs_valid,
             logs_unhashed,

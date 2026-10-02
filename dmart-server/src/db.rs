@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
 use crate::phi_store;
+use crate::phi_store::{MeasurementRow, open_measurement, open_measurements, seal_measurement};
 use anyhow::{Context, Result};
+use serde_json::Value;
 
 /// Variante pública de [`sdb_id`] para uso desde los tests del crate.
 pub fn sdb_id_pub(table: &str, id: &str) -> surrealdb::sql::Thing {
@@ -358,12 +360,24 @@ pub async fn create_patient_with_assignments(
     let row = serde_json::to_value(phi_store::seal_patient(&sealed_patient)?)
         .context("serializando fila cifrada del paciente")?;
 
+    // Pre-sella la cama con paciente_nombre en PHI
+    let tenant_id = std::env::var("DMART_TENANT_ID").unwrap_or_else(|_| "default".to_string());
+    let mut cama_for_seal = dmart_shared::models::Cama {
+        cama_id: cama_id.clone(),
+        ..Default::default()
+    };
+    cama_for_seal.estado = EstadoCama::Ocupada;
+    cama_for_seal.paciente_id = Some(patient_id.clone());
+    cama_for_seal.paciente_nombre = Some(paciente_nombre.clone());
+    let cama_row = phi_store::seal_cama(&cama_for_seal, &tenant_id)?;
+    let cama_row_value = serde_json::to_value(&cama_row)?;
+
     let sql = r#"
         BEGIN TRANSACTION;
         IF string::len($cama_id) > 0 {
             LET $cama = (SELECT * FROM camas WHERE id = type::thing('camas', $cama_id) AND estado = 'Libre' LIMIT 1);
             IF array::len($cama) = 0 { THROW 'Cama no disponible o no encontrada'; };
-            UPDATE type::thing('camas', $cama_id) SET estado = 'Ocupada', paciente_id = $pid, paciente_nombre = $pnombre;
+            UPDATE type::thing('camas', $cama_id) CONTENT $cama_row;
             FOR $e in $equipos {
                 UPDATE type::thing('equipos', $e) SET cama_id = $cama_id;
             };
@@ -376,7 +390,7 @@ pub async fn create_patient_with_assignments(
         .query(sql)
         .bind(("cama_id", cama_id))
         .bind(("pid", patient_id.clone()))
-        .bind(("pnombre", paciente_nombre))
+        .bind(("cama_row", cama_row_value))
         .bind(("equipos", equipos_ids.to_vec()))
         .bind(("row", row))
         .await?;
@@ -406,10 +420,21 @@ pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient, desenlace: &s
         return Ok(());
     };
 
+    let tenant_id = std::env::var("DMART_TENANT_ID").unwrap_or_else(|_| "default".to_string());
+    let mut cama_for_seal = dmart_shared::models::Cama {
+        cama_id: cama_id.clone(),
+        ..Default::default()
+    };
+    cama_for_seal.estado = EstadoCama::Libre;
+    cama_for_seal.paciente_id = None;
+    cama_for_seal.paciente_nombre = None;
+    let cama_row = phi_store::seal_cama(&cama_for_seal, &tenant_id)?;
+    let cama_row_value = serde_json::to_value(&cama_row)?;
+
     let sql = r#"
         BEGIN TRANSACTION;
         UPDATE type::table('equipos') SET cama_id = NONE WHERE cama_id = $cama_id;
-        UPDATE type::thing('camas', $cama_id) SET estado = 'Libre', paciente_id = NONE, paciente_nombre = NONE;
+        UPDATE type::thing('camas', $cama_id) CONTENT $cama_row;
         UPDATE type::thing('patients', $paciente_id)
             SET fecha_egreso_uci = time::now(),
                 desenlace_uci = $desenlace;
@@ -419,6 +444,7 @@ pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient, desenlace: &s
     let mut res = db
         .query(sql)
         .bind(("cama_id", cama_id.clone()))
+        .bind(("cama_row", cama_row_value))
         .bind(("paciente_id", patient.patient_id.clone()))
         .bind(("desenlace", desenlace.to_owned()))
         .await?;
@@ -626,9 +652,10 @@ pub async fn create_measurement(db: &Surreal<Db>, mut m: Measurement) -> Result<
     if measurement_id.is_empty() {
         m.measurement_id = Uuid::new_v4().to_string();
     }
-    let created: Option<Measurement> = db
-        .create(("measurements", m.measurement_id.clone()))
-        .content(m)
+    let row = phi_store::seal_measurement(&m)?;
+    let created: Option<phi_store::MeasurementRow> = db
+        .create(("measurements", row.measurement_id.clone()))
+        .content(row)
         .await?;
 
     crate::metrics::measurement_created();
@@ -638,7 +665,12 @@ pub async fn create_measurement(db: &Surreal<Db>, mut m: Measurement) -> Result<
         crate::cache::cache_del(&format!("last_measurement:{}", patient_id)).await;
     }
 
-    created.ok_or_else(|| anyhow::anyhow!("Failed to create measurement"))
+    created
+        .map(|r| {
+            phi_store::open_measurement(serde_json::to_value(r).expect("serialize"))
+                .expect("open measurement")
+        })
+        .ok_or_else(|| anyhow::anyhow!("Failed to create measurement"))
 }
 
 pub async fn get_measurements_for_patient(
@@ -654,11 +686,13 @@ pub async fn get_measurements_for_patient(
     }
 
     let pid = patient_id.to_string();
-    let measurements: Vec<Measurement> = db
-        .query("SELECT * FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC")
+    let rows: Vec<Value> = db
+        .query("SELECT * OMIT id FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC")
         .bind(("pid", pid))
         .await?
         .take(0)?;
+
+    let measurements = phi_store::open_measurements(rows)?;
 
     if crate::cache::cache_available()
         && let Ok(json) = serde_json::to_string(&measurements)
@@ -670,12 +704,12 @@ pub async fn get_measurements_for_patient(
 }
 
 pub async fn get_all_measurements(db: &Surreal<Db>, patient_id: &str) -> Result<Vec<Measurement>> {
-    let result: Option<Vec<Measurement>> = db
-        .query("SELECT * FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC")
+    let rows: Vec<Value> = db
+        .query("SELECT * OMIT id FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC")
         .bind(("pid", patient_id.to_string()))
         .await?
         .take(0)?;
-    Ok(result.unwrap_or_default())
+    phi_store::open_measurements(rows)
 }
 
 pub async fn get_last_measurement(
@@ -691,12 +725,12 @@ pub async fn get_last_measurement(
     }
 
     let pid = patient_id.to_string();
-    let measurements: Vec<Measurement> = db
-        .query("SELECT * FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC LIMIT 1")
+    let rows: Vec<Value> = db
+        .query("SELECT * OMIT id FROM measurements WHERE patient_id = $pid ORDER BY timestamp DESC LIMIT 1")
         .bind(("pid", pid))
         .await?
         .take(0)?;
-    let result = measurements.into_iter().next();
+    let result = phi_store::open_measurements(rows)?.into_iter().next();
 
     if crate::cache::cache_available()
         && let Ok(json) = serde_json::to_string(&result)

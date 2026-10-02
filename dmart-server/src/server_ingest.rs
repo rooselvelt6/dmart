@@ -160,24 +160,12 @@ fn ack_error_code(err: &anyhow::Error) -> &'static str {
     }
 }
 
-pub fn build_ack(message_id: &str, err: Option<&str>) -> Vec<u8> {
-    let ack_code = if err.is_some() { "AR" } else { "AA" };
-    let now = chrono::Utc::now().format("%Y%m%d%H%M%S");
-    let line = format!(
-        "MSH|^~\\&|DMART|UCI|||{now}||ACK{ack_code}^{}|||P|2.5",
-        message_id
-    );
-    let mut body = vec![START_BLOCK];
-    body.extend_from_slice(line.as_bytes());
-    body.push(END_BLOCK);
-    body.push(CARRIAGE_RETURN);
-    if let Some(err_full) = err {
-        let err_line =
-            format!("\rMSH|^~\\&|DMART|UCI|||{now}||ACK^R01||ERR|P|2.5\rERR|Ste|{err_full}");
-        body.extend_from_slice(err_line.as_bytes());
-    }
-    body
-}
+/// Reexporta el constructor de ACK para no tener dos copias que divergir.
+///
+/// Existía una implementación duplicada aquí y otra en [`crate::hl7::mllp`], y
+/// ya lo habían hecho: una escribía el segmento `ERR` fuera del frame MLLP, de
+/// modo que el emisor nunca leía el motivo del rechazo.
+pub use crate::hl7::mllp::build_ack;
 
 /// Extrae device_id del mensaje HL7 (MSH.3 + MSH.4 o IP del peer)
 fn extract_device_id(
@@ -517,11 +505,28 @@ pub async fn serve(
     let tls_cfg = MllpTlsConfig::from_env().map_err(|e| -> anyhow::Error {
         anyhow::anyhow!("configuración mTLS inválida del listener MLLP: {e}")
     })?;
+    serve_with_security(address, db, ingest_state, sec, tls_cfg).await
+}
+
+/// Igual que [`serve`] pero con el material de mTLS y la configuración de
+/// seguridad inyectados en lugar de leídos del entorno.
+///
+/// Existe para que las pruebas end-to-end puedan levantar el listener real sin
+/// depender de variables de entorno de proceso: `DMART_MLLP_*` es global, así que
+/// varias pruebas concurrentes se pisarían el material unas a otras y el
+/// resultado dependería del orden de ejecución.
+pub(crate) async fn serve_with_security(
+    address: SocketAddr,
+    db: Database,
+    ingest_state: Arc<IngestState>,
+    sec: MllpSecurityConfig,
+    tls_cfg: Option<MllpTlsConfig>,
+) -> anyhow::Result<()> {
     let tls = match tls_cfg {
         Some(cfg) => {
-            let acceptor = cfg
-                .acceptor()
-                .map_err(|e| -> anyhow::Error { anyhow::anyhow!("mTLS MLLP no disponible: {e}") })?;
+            let acceptor = cfg.acceptor().map_err(|e| -> anyhow::Error {
+                anyhow::anyhow!("mTLS MLLP no disponible: {e}")
+            })?;
             if !sec.allowed_senders.is_empty() {
                 tracing::info!(
                     "[mllp] DMART_MLLP_ALLOWED_SENDERS se ignora con mTLS: la identidad la fija                      el certificado (pinned por fingerprint SHA-256)"
@@ -541,7 +546,11 @@ pub async fn serve(
         Some((cfg, _)) => tracing::info!(
             "[mllp] transporte: mTLS TLS1.3 + AES-256-GCM, {} identidades pinneadas (SHA-256),              handshake_capa2={} max_conn={} max_conn_per_ip={} read_timeout={:?} write_timeout={:?}",
             cfg.identities.len(),
-            if sec.auth_secret.is_some() { "ON" } else { "OFF" },
+            if sec.auth_secret.is_some() {
+                "ON"
+            } else {
+                "OFF"
+            },
             sec.max_connections,
             sec.max_connections_per_ip,
             sec.read_timeout,
@@ -611,13 +620,19 @@ pub async fn serve(
                         }
                     };
                     // Identidad = fingerprint del certificado pinneado.
-                    let Some(fp) = peer_cert_fingerprint(&tls_stream) else {
+                    //
+                    // Se resuelve sobre el DER del certificado, no sobre su
+                    // fingerprint hexadecimal: `sender_for_cert` hashea lo que
+                    // recibe, así que pasarle el hex volvería a hashear el hex
+                    // y nunca habría coincidencia.
+                    let Some(der) = peer_cert_der(&tls_stream) else {
                         tracing::warn!("[mllp:{peer}] cliente sin certificado utilizable");
                         crate::metrics::ingest_message("mllp", "tls_failed");
                         ip_counter.release(peer.ip());
                         return;
                     };
-                    match cfg.sender_for_cert(fp.as_bytes()) {
+                    let fp = MllpTlsConfig::fingerprint(&der);
+                    match cfg.sender_for_cert(&der) {
                         Some(sender) => {
                             tracing::debug!("[mllp:{peer}] identidad mTLS: {sender}");
                             if let Err(e) = handle_stream(
@@ -632,6 +647,11 @@ pub async fn serve(
                             {
                                 tracing::debug!("[mllp:{peer}] error de conexión: {e}");
                             }
+                            // El cupo por IP se libera siempre: sin esto, cada
+                            // conexión mTLS válida consumía un hueco para
+                            // siempre y el emisor quedaba bloqueado al alcanzar
+                            // el tope, sin forma de recuperarse.
+                            ip_counter.release(peer.ip());
                         }
                         None => {
                             tracing::warn!(
@@ -667,11 +687,8 @@ pub async fn serve(
 /// sólo si se pide explícitamente, de forma que el riesgo quede registrado en
 /// el arranque y sea visible en los logs.
 fn assert_listener_security_policy(sec: &MllpSecurityConfig) -> anyhow::Result<()> {
-    let env = std::env::var("DMART_ENV").unwrap_or_default();
-    let is_production = matches!(env.as_str(), "production" | "prod");
-    let insecure_opt_in = std::env::var("DMART_MLLP_ALLOW_INSECURE")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
+    let is_production = crate::deployment::is_production();
+    let insecure_opt_in = crate::deployment::flag_enabled("DMART_MLLP_ALLOW_INSECURE");
 
     if is_production && insecure_opt_in {
         return Err(anyhow::anyhow!(
@@ -691,35 +708,43 @@ fn assert_listener_security_policy(sec: &MllpSecurityConfig) -> anyhow::Result<(
         return Ok(());
     }
 
-    if sec.auth_secret.is_none() {
-        return Err(anyhow::anyhow!(
-            "producción exige DMART_MLLP_AUTH_SECRET o mTLS: sin ninguno de los dos el \
-             listener MLLP acepta escritura de PHI sin autenticar"
-        ));
-    }
-    Ok(())
+    // Producción: mTLS o nada. Un secreto compartido en la capa 2 no cambia
+    // que los signos vitales vayan por el cable en claro, así que aceptarlo
+    // aquí dejaría PHI expuesta justo en el despliegue que más importa.
+    // (Esta función sólo se invoca cuando NO hay mTLS configurado.)
+    let _ = sec;
+    Err(anyhow::anyhow!(
+        "producción exige mTLS en el listener MLLP: sin DMART_MLLP_CERT_FILE/KEY_FILE/CA_FILE \
+         + DMART_MLLP_CLIENT_IDS los signos vitales viajarían en claro por TCP. \
+         DMART_MLLP_AUTH_SECRET no es alternativa: autentica el emisor pero no cifra el \
+         transporte. Para pruebas en claro usa DMART_ENV distinto de production."
+    ))
 }
 
 /// Motivo del fallo de handshake TLS, sin filtrar detalles del peer.
 fn tls_reason(e: &std::io::Error) -> String {
-    match e.get_ref().and_then(|inner| inner.downcast_ref::<rustls::Error>()) {
+    match e
+        .get_ref()
+        .and_then(|inner| inner.downcast_ref::<rustls::Error>())
+    {
         Some(rustls::Error::InvalidCertificate(_)) => "certificado de cliente inválido".into(),
-        Some(rustls::Error::NoCertificatesPresented) => {
-            "el cliente no presentó certificado".into()
-        }
+        Some(rustls::Error::NoCertificatesPresented) => "el cliente no presentó certificado".into(),
         Some(rustls::Error::DecryptError) => "fallo de cifrado negotiated".into(),
         _ => "handshake TLS rechazado".into(),
     }
 }
 
-/// Fingerprint SHA-256 (hex) del primer certificado del peer.
-fn peer_cert_fingerprint<S>(stream: &TlsStream<S>) -> Option<String>
+/// DER del primer certificado presentado por el peer.
+///
+/// Se devuelve el DER en vez del fingerprint porque el pin se resuelve
+/// hasheando: pasar el hexadecimal por la misma ruta lo hashearía dos veces.
+fn peer_cert_der<S>(stream: &TlsStream<S>) -> Option<Vec<u8>>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     let (_, conn) = stream.get_ref();
     let certs = conn.peer_certificates()?;
-    certs.first().map(|c| MllpTlsConfig::fingerprint(c.as_ref()))
+    certs.first().map(|c| c.as_ref().to_vec())
 }
 
 /// Adaptador mínimo para unificar `TlsStream` con `TcpStream` en
@@ -965,11 +990,11 @@ mod tests {
         assert!(outcome.is_none());
     }
 
-    /// Política de transporte: con `DMART_ENV=production` el listener no puede
-    /// arrancar en claro, y tampoco aunque se intente el escape hatch.
+    /// Política de transporte: con `DMART_ENV=production` el listener en claro
+    /// no arranca nunca, y el secreto de capa 2 no es una alternativa.
     #[test]
     fn production_policy_refuses_cleartext_listener() {
-        // Sin secreto ni mTLS en producción → error duro.
+        // Sin secreto ni mTLS → error duro que menciona mTLS.
         let cfg = sec(None);
         with_env(
             &[
@@ -979,19 +1004,25 @@ mod tests {
             || {
                 let err = assert_listener_security_policy(&cfg).expect_err("debe fallar");
                 assert!(
-                    err.to_string().contains("DMART_MLLP_AUTH_SECRET"),
+                    err.to_string().contains("mTLS"),
                     "el error debe indicar el control que falta: {err}"
                 );
             },
         );
 
-        // Con secreto configurado en producción → permitido (capa 2).
+        // Con secreto de capa 2 configurado en producción → también falla: el
+        // secreto autentica pero no cifra, y los signos vitales ya están en el
+        // cable antes de que la capa 2 se compruebe.
         let cfg = sec(Some("s3cr3t-s3rv1d0r"));
         with_env(&[("DMART_ENV", "production")], || {
-            assert!(assert_listener_security_policy(&cfg).is_ok());
+            let err = assert_listener_security_policy(&cfg).expect_err("debe fallar");
+            assert!(
+                err.to_string()
+                    .contains("DMART_MLLP_AUTH_SECRET no es alternativa")
+            );
         });
 
-        // El escape hatch NO cuela en producción.
+        // El escape hatch tampoco cuela.
         let cfg = sec(Some("s3cr3t-s3rv1d0r"));
         with_env(
             &[
@@ -1010,31 +1041,22 @@ mod tests {
         });
     }
 
-    /// Aplica un entorno temporal a un cierre. Las pruebas comparten proceso, así
-    /// que se restaura siempre.
+    /// Aplica un entorno temporal a un cierre y lo restaura al salir.
+    ///
+    /// Delega en el guard compartido, que además toma el lock de variables de
+    /// entorno. La versión anterior guardaba y restauraba sin tomar el lock, así
+    /// que estos tests de política podían correr en paralelo con
+    /// `test_master_key_validation` de `crypto`, ambos tocando las mismas
+    /// variables globales del proceso.
     fn with_env(vars: &[(&str, &str)], f: impl FnOnce()) {
-        let previous: Vec<(String, Option<String>)> = vars
+        let _lock = crate::deployment::tests_lock();
+        // Una variable con valor vacío se trata como ausente.
+        let owned: Vec<(String, Option<&str>)> = vars
             .iter()
-            .map(|(k, _)| ((*k).to_string(), std::env::var(k).ok()))
+            .map(|(k, v)| ((*k).to_string(), if v.is_empty() { None } else { Some(*v) }))
             .collect();
-        for (k, v) in vars {
-            unsafe {
-                if v.is_empty() {
-                    std::env::remove_var(k);
-                } else {
-                    std::env::set_var(k, v);
-                }
-            }
-        }
+        let _guard = crate::deployment::EnvGuard::new(&owned);
         f();
-        for (k, v) in previous {
-            unsafe {
-                match v {
-                    Some(value) => std::env::set_var(&k, value),
-                    None => std::env::remove_var(&k),
-                }
-            }
-        }
     }
 
     /// El log del fallo de TLS no debe filtrar detalles del peer.
@@ -1044,10 +1066,7 @@ mod tests {
         assert_eq!(tls_reason(&generic), "handshake TLS rechazado");
         let cert_err = rustls::Error::NoCertificatesPresented;
         let io = std::io::Error::new(std::io::ErrorKind::InvalidData, cert_err);
-        assert_eq!(
-            tls_reason(&io),
-            "el cliente no presentó certificado"
-        );
+        assert_eq!(tls_reason(&io), "el cliente no presentó certificado");
         assert!(!tls_reason(&generic).contains("no secret"));
     }
 

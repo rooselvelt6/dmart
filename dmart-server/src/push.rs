@@ -12,11 +12,11 @@ use std::time::Duration;
 
 use base64::Engine;
 use chrono::Utc;
-use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_128_GCM};
-use ring::agreement::{self, UnparsedPublicKey, ECDH_P256};
+use ring::aead::{AES_128_GCM, Aad, LessSafeKey, Nonce, UnboundKey};
+use ring::agreement::{self, ECDH_P256, UnparsedPublicKey};
 use ring::hkdf;
 use ring::rand::{SecureRandom, SystemRandom};
-use ring::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_ASN1_SIGNING, KeyPair};
+use ring::signature::{ECDSA_P256_SHA256_ASN1_SIGNING, EcdsaKeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use surrealdb::Surreal;
@@ -77,8 +77,8 @@ impl PushService {
     /// Carga las claves VAPID de `push_config` o, si faltan, las genera y
     /// persiste. Los env `DMART_VAPID_*` tienen prioridad.
     pub async fn load_or_generate(db: Surreal<Db>) -> Result<Self, String> {
-        let subject =
-            std::env::var("DMART_VAPID_SUBJECT").unwrap_or_else(|_| VAPID_DEFAULT_SUBJECT.to_string());
+        let subject = std::env::var("DMART_VAPID_SUBJECT")
+            .unwrap_or_else(|_| VAPID_DEFAULT_SUBJECT.to_string());
 
         let (public_key, private_pkcs8) = match (
             std::env::var("DMART_VAPID_PUBLIC_KEY").ok(),
@@ -114,7 +114,9 @@ impl PushService {
         sub: NewSubscription,
     ) -> Result<bool, String> {
         let existing: Vec<PushSubscriptionRow> = db
-            .query("SELECT * FROM push_subscription WHERE user_id = $uid AND endpoint = $ep LIMIT 1")
+            .query(
+                "SELECT * FROM push_subscription WHERE user_id = $uid AND endpoint = $ep LIMIT 1",
+            )
             .bind(("uid", user_id.to_string()))
             .bind(("ep", sub.endpoint.clone()))
             .await
@@ -261,12 +263,15 @@ impl PushService {
             ));
         }
 
-        let url = reqwest::Url::parse(&sub.endpoint).map_err(|e| SendError::Failed(e.to_string()))?;
+        let url =
+            reqwest::Url::parse(&sub.endpoint).map_err(|e| SendError::Failed(e.to_string()))?;
         let audience = url.origin().ascii_serialization();
-        let authorization = self.vapid_authorization(&audience).map_err(SendError::Failed)?;
-
-        let body = encrypt_aes128gcm(payload, &ua_public, &auth_secret)
+        let authorization = self
+            .vapid_authorization(&audience)
             .map_err(SendError::Failed)?;
+
+        let body =
+            encrypt_aes128gcm(payload, &ua_public, &auth_secret).map_err(SendError::Failed)?;
 
         let resp = self
             .client
@@ -283,9 +288,7 @@ impl PushService {
         let status = resp.status();
         if status.is_success() {
             Ok(())
-        } else if status == reqwest::StatusCode::NOT_FOUND
-            || status == reqwest::StatusCode::GONE
-        {
+        } else if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::GONE {
             Err(SendError::Gone)
         } else {
             Err(SendError::Failed(format!("push service status {status}")))
@@ -306,12 +309,9 @@ impl PushService {
         let signing_input = format!("{header_b64}.{claims_b64}");
 
         let rng = SystemRandom::new();
-        let key = EcdsaKeyPair::from_pkcs8(
-            &ECDSA_P256_SHA256_ASN1_SIGNING,
-            &self.private_pkcs8,
-            &rng,
-        )
-        .map_err(|e| format!("VAPID key inválida: {e}"))?;
+        let key =
+            EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &self.private_pkcs8, &rng)
+                .map_err(|e| format!("VAPID key inválida: {e}"))?;
         let sig = key
             .sign(&rng, signing_input.as_bytes())
             .map_err(|e| format!("VAPID sign: {e}"))?;
@@ -470,7 +470,10 @@ pub async fn init_global_push(db: Surreal<Db>) {
     }
     match PushService::load_or_generate(db).await {
         Ok(service) => {
-            tracing::info!("push: VAPID inicializado ({}…)", &service.public_key()[..8.min(service.public_key().len())]);
+            tracing::info!(
+                "push: VAPID inicializado ({}…)",
+                &service.public_key()[..8.min(service.public_key().len())]
+            );
             let _ = GLOBAL_PUSH.set(service);
         }
         Err(e) => tracing::warn!("push: no se pudo inicializar: {e}"),
@@ -539,7 +542,9 @@ mod tests {
     #[test]
     fn vapid_jwt_has_es256_header_and_aud_matching_endpoint() {
         let svc = test_service();
-        let auth = svc.vapid_authorization("https://fcm.googleapis.com").unwrap();
+        let auth = svc
+            .vapid_authorization("https://fcm.googleapis.com")
+            .unwrap();
         assert!(auth.starts_with("vapid t="), "prefijo VAPID: {auth}");
 
         let (_, rest) = auth.split_once("t=").expect("t=");

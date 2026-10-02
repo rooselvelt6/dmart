@@ -379,8 +379,14 @@ mod hl7_mllp_integration {
         let ack = build_ack("MSG001", Some("paciente desconocido"));
         let ack_str = String::from_utf8(ack).expect("utf8");
 
-        assert!(ack_str.contains("ACK^R01"));
+        assert!(ack_str.contains("ACKAR^MSG001"));
         assert!(ack_str.contains("ERR|Ste|paciente desconocido"));
+        // El motivo debe ir dentro del frame MLLP: el peer corta la lectura en
+        // `\x1C\r`, así que un `ERR` colocado después nunca sería recibido.
+        assert!(
+            ack_str.find("ERR|Ste|").unwrap() < ack_str.find(END_BLOCK as char).unwrap(),
+            "el ERR debe preceder al terminador del frame: {ack_str:?}"
+        );
     }
 
     #[test]

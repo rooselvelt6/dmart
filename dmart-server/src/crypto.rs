@@ -11,6 +11,9 @@ use rand::RngCore;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const NONCE_SIZE: usize = 12;
+
+/// Nonce de AES-GCM con el tamaño fijado, para poder nombrarlo en firmas.
+type AesNonceSized = aes_gcm::Nonce<aes_gcm::aes::cipher::consts::U12>;
 pub const KEY_SIZE: usize = 32;
 pub const SALT_SIZE: usize = 16;
 pub const IV_SIZE: usize = 16;
@@ -34,6 +37,9 @@ pub enum CryptoError {
     InvalidFormat,
     #[error("Key management error")]
     KeyManagementError,
+    /// `DMART_MASTER_KEY` ausente en un entorno que la exige.
+    #[error("DMART_MASTER_KEY no configurada")]
+    MissingMasterKey,
 }
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
@@ -316,6 +322,8 @@ pub const PHI_KEY_SIZE: usize = 32;
 const LABEL_PHI: &[u8] = b"dmart-phi-aes256-gcm-v1";
 const LABEL_INDEX: &[u8] = b"dmart-phi-blind-index-v1";
 const LABEL_MAC: &[u8] = b"dmart-phi-subkey-v1";
+/// Dominio del AAD de PHI, versionado junto al esquema de longitudes.
+const AAD_DOMAIN: &[u8] = b"dmart-phi-v2";
 
 /// Identifica el contexto criptográfico de un valor cifrado.
 ///
@@ -344,13 +352,32 @@ impl PhiContext {
         }
     }
 
-    fn aad(&self) -> String {
-        // Separador que no puede aparecer en los identificadores, para que no
-        // haya colisiones entre combinaciones de campos.
+    /// AAD del esquema v1, con newlines como separador.
+    ///
+    /// Se conserva **sólo** para leer envelopes ya escritos; nunca para cifrar.
+    /// Es ambiguo ante identificadores con saltos de línea: dos contextos
+    /// distintos pueden generar el mismo AAD, y el tag GCM dejaría de ligar el
+    /// ciphertext a su tenant y registro.
+    pub(crate) fn legacy_aad(&self) -> String {
         format!(
             "dmart-phi-v1\n{}\n{}\n{}",
             self.tenant_id, self.record_type, self.record_id
         )
+    }
+
+    /// AAD vigente: longitudes prefijadas, sin ambigüedad.
+    pub(crate) fn aad(&self) -> Vec<u8> {
+        // Longitudes prefijadas en vez de un separador: un `tenant_id` con un
+        // salto de línea dentro haría colisionar dos contextos distintos, y el
+        // AAD es lo que impide mover un envelope entre registros. Con el
+        // prefijo de longitud, `("a\nb", "c")` y `("a", "b\nc")` producen AAD
+        // diferente.
+        let mut out = Vec::new();
+        out.extend_from_slice(AAD_DOMAIN);
+        push_len_prefixed(&mut out, self.tenant_id.as_bytes());
+        push_len_prefixed(&mut out, self.record_type.as_bytes());
+        push_len_prefixed(&mut out, self.record_id.as_bytes());
+        out
     }
 }
 
@@ -371,6 +398,12 @@ impl PhiContext {
 pub struct PhiCipher {
     master_key: MasterKey,
     cipher: Aes256Gcm,
+    /// Cifrador con el que se escribieron los envelopes anteriores al
+    /// endurecimiento: clave maestra en crudo y AAD v1.
+    ///
+    /// Existe sólo para **leer** esos registros. Se eliminará cuando no queden
+    /// filas con el esquema antiguo.
+    legacy_cipher: Aes256Gcm,
     index_key: Zeroizing<[u8; PHI_KEY_SIZE]>,
 }
 
@@ -383,34 +416,54 @@ impl std::fmt::Debug for PhiCipher {
 
 impl PhiCipher {
     /// Construye el cifrador a partir de la clave maestra.
+    ///
+    /// La clave maestra **nunca** se usa directamente como clave de AES ni de
+    /// HMAC: se deriva una subclave por dominio. Así, comprometer la clave de
+    /// índices ciegos no permite descifrar, y usar la clave maestra como clave
+    /// de cifrado expandiría su superficie.
     pub fn new(master_key: MasterKey) -> Self {
+        let phi_key = derive_subkey(master_key.as_bytes(), LABEL_PHI);
         let index_key = derive_subkey(master_key.as_bytes(), LABEL_INDEX);
-        let cipher = Aes256Gcm::new_from_slice(master_key.as_bytes())
+        let cipher =
+            Aes256Gcm::new_from_slice(phi_key.as_slice()).expect("AES-256 con clave de 256 bits");
+        let legacy_cipher = Aes256Gcm::new_from_slice(master_key.as_bytes())
             .expect("AES-256 con clave de 256 bits");
         Self {
             master_key,
             cipher,
+            legacy_cipher,
             index_key: Zeroizing::new(index_key),
         }
     }
 
     /// Cifrador desde `DMART_MASTER_KEY`.
     ///
-    /// En producción la clave es obligatoria (fail-closed): sin ella no se
-    /// cifra nada y los registros PHI quedarían en claro por un descuido de
-    /// despliegue. En desarrollo se genera una efímera, con aviso explícito.
-    pub fn from_env() -> Self {
+    /// En producción la clave es obligatoria y el arranque falla si falta
+    /// (fail-closed). Sin este error, un despliegue mal configurado cifraría con
+    /// una clave efímera: los registros ya escritos quedarían ilegibles al
+    /// reiniciar, y parecería que todo funciona hasta el primer restore.
+    ///
+    /// En desarrollo se permite una clave efímera, con aviso explícito.
+    pub fn from_env() -> Result<Self, CryptoError> {
         match std::env::var("DMART_MASTER_KEY") {
             Ok(secret) if !secret.trim().is_empty() => {
                 let key_bytes = Zeroizing::new(secret.trim().as_bytes().to_vec());
-                Self::new(MasterKey::from_password_bytes(key_bytes.as_slice()))
+                Ok(Self::new(MasterKey::from_password_bytes(
+                    key_bytes.as_slice(),
+                )))
+            }
+            _ if crate::deployment::is_production() => {
+                tracing::error!(
+                    "DMART_MASTER_KEY no configurada en producción: no se puede cifrar la PHI"
+                );
+                Err(CryptoError::MissingMasterKey)
             }
             _ => {
                 tracing::warn!(
                     "DMART_MASTER_KEY no configurada: cifrando PHI con clave efímera. Los datos \\
                      serán ilegibles tras reiniciar. OBLIGATORIO en producción."
                 );
-                Self::new(MasterKey::new())
+                Ok(Self::new(MasterKey::new()))
             }
         }
     }
@@ -437,7 +490,7 @@ impl PhiCipher {
                 AesNonce::from_slice(&nonce_bytes),
                 Payload {
                     msg: plaintext,
-                    aad: aad.as_bytes(),
+                    aad: &aad,
                 },
             )
             .map_err(|_| CryptoError::EncryptionFailed)?;
@@ -486,16 +539,35 @@ impl PhiCipher {
         }
 
         let nonce = AesNonce::from_slice(&raw[header..header + NONCE_SIZE]);
-        let aad = ctx.aad();
-        self.cipher
-            .decrypt(
-                nonce,
-                Payload {
-                    msg: &raw[header + NONCE_SIZE..],
-                    aad: aad.as_bytes(),
-                },
-            )
-            .map_err(|_| CryptoError::DecryptionFailed)
+        let msg = &raw[header + NONCE_SIZE..];
+
+        // Se escribe siempre con el AAD v2 (longitudes prefijadas). Se acepta
+        // también el v1 de sólo lectura, para que los envelopes anteriores al
+        // cambio no queden ilegibles. El v1 es ambiguo ante identificadores con
+        // saltos de línea, así que todo registro nuevo queda automáticamente
+        // protegido en cuanto se re-sella al escribirlo.
+        let legacy_aad = ctx.legacy_aad();
+        let current_aad = ctx.aad();
+        // Se intenta en orden de preferencia: el esquema vigente primero, para
+        // que un envelope antiguo no se acepte por una coincidencia del tag.
+        let attempts: [(&Aes256Gcm, &[u8]); 4] = [
+            (&self.cipher, &current_aad),
+            (&self.cipher, legacy_aad.as_bytes()),
+            (&self.legacy_cipher, legacy_aad.as_bytes()),
+            (&self.legacy_cipher, &[]),
+        ];
+        for (i, (cipher, aad)) in attempts.into_iter().enumerate() {
+            if let Ok(p) = cipher.decrypt(nonce, Payload { msg, aad }) {
+                if i > 0 {
+                    tracing::warn!(
+                        "envelope PHI abierto con el esquema anterior (AAD v1 / clave maestra); \
+                         se re-sella al escribir"
+                    );
+                }
+                return Ok(p);
+            }
+        }
+        Err(CryptoError::DecryptionFailed)
     }
 
     /// Índice ciego de un valor buscable (coincidencia **exacta**).
@@ -509,17 +581,17 @@ impl PhiCipher {
             return String::new();
         }
         let key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, self.index_key.as_slice());
-        // Mensaje canónico con separadores no ambiguos:
-        // etiqueta || tenant || '\n' || campo || '\n' || valor normalizado.
+        // Mensaje canónico con longitudes prefijadas: sin ellas, un tenant con
+        // salto de línea podría desplazar los campos y colisionar con otro par
+        // tenant/campo, lo que haría que un índice de `cedula` sirviera para
+        // buscar por `historia_clinica`.
         let mut msg = Vec::with_capacity(
-            LABEL_MAC.len() + tenant_id.len() + field.len() + normalized.len() + 2,
+            LABEL_MAC.len() + tenant_id.len() + field.len() + normalized.len() + 12,
         );
         msg.extend_from_slice(LABEL_MAC);
-        msg.extend_from_slice(tenant_id.as_bytes());
-        msg.push(b'\n');
-        msg.extend_from_slice(field.as_bytes());
-        msg.push(b'\n');
-        msg.extend_from_slice(normalized.as_bytes());
+        push_len_prefixed(&mut msg, tenant_id.as_bytes());
+        push_len_prefixed(&mut msg, field.as_bytes());
+        push_len_prefixed(&mut msg, normalized.as_bytes());
         let tag = hmac_sha256_tag(&key, &msg);
         base64_encode(tag.as_ref())
     }
@@ -529,6 +601,26 @@ impl PhiCipher {
         value
             .map(|v| self.blind_index(tenant_id, field, v))
             .unwrap_or_default()
+    }
+
+    /// Índice ciego **formato legacy** (sin longitudes prefijadas).
+    ///
+    /// Usado para compatibilidad con filas cifradas antes de la migración a
+    /// longitudes prefijadas. Formato: `LABEL_MAC || tenant || field || normalized`.
+    pub fn blind_index_legacy(&self, tenant_id: &str, field: &str, value: &str) -> String {
+        let normalized = normalize_for_index(value);
+        if normalized.is_empty() {
+            return String::new();
+        }
+        let key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, self.index_key.as_slice());
+        let mut msg =
+            Vec::with_capacity(LABEL_MAC.len() + tenant_id.len() + field.len() + normalized.len());
+        msg.extend_from_slice(LABEL_MAC);
+        msg.extend_from_slice(tenant_id.as_bytes());
+        msg.extend_from_slice(field.as_bytes());
+        msg.extend_from_slice(normalized.as_bytes());
+        let tag = hmac_sha256_tag(&key, &msg);
+        base64_encode(tag.as_ref())
     }
 }
 
@@ -545,6 +637,13 @@ pub fn normalize_for_index(value: &str) -> String {
         .filter(|c| !c.is_whitespace() && *c != '-' && *c != '/' && *c != '.' && *c != '_')
         .flat_map(char::to_lowercase)
         .collect()
+}
+
+/// Anexa `len` en big-endian y luego los bytes, de modo que la concatenación de
+/// varios campos nunca sea ambigua.
+fn push_len_prefixed(out: &mut Vec<u8>, bytes: &[u8]) {
+    out.extend_from_slice(&(bytes.len() as u64).to_be_bytes());
+    out.extend_from_slice(bytes);
 }
 
 /// Deriva una clave de 256 bits del maestro con separación de dominio:
@@ -966,6 +1065,146 @@ mod tests {
         assert_ne!(cipher_key, index_key);
         assert_eq!(cipher_key, derive_subkey(master.as_bytes(), LABEL_PHI));
         assert_ne!(&index_key, master.as_bytes());
+    }
+
+    /// El cifrado de producción debe usar la subclave de `LABEL_PHI`, no la
+    /// clave maestra en crudo.
+    ///
+    /// El test anterior sólo comparaba las subclaves entre sí y pasaba aunque
+    /// `PhiCipher::new` ignorara `LABEL_PHI`. Este test ata el comportamiento
+    /// observable: un envelope sellado con la subclave dedicada se abre con el
+    /// cifrador del proceso, y con la clave maestra no.
+    #[test]
+    fn production_cipher_uses_the_phi_subkey() {
+        let master = MasterKey::from_password_bytes(b"clave-256-bits-minimo-para-pruebas!!");
+        let master_bytes = *master.as_bytes();
+        let c = PhiCipher::new(master);
+        let ctx = ctx("hosp-a", "patient", "P-1");
+
+        let sealed = c.seal(&ctx, &phi()).expect("seal");
+        assert!(c.open::<Phi>(&ctx, &sealed).is_ok());
+
+        // Si `new` usara la clave maestra directamente, este descifrado
+        // también tendría éxito; al fallar, queda demostrado que la clave real
+        // es la derivada de LABEL_PHI.
+        let raw_master = Aes256Gcm::new_from_slice(&master_bytes).expect("aes");
+        let bytes = base64_decode(&sealed).expect("b64");
+        let aad = ctx.aad();
+        let start = AES256_MAGIC.len();
+        let nonce = AesNonce::from_slice(&bytes[start..start + NONCE_SIZE]);
+        assert!(
+            raw_master
+                .decrypt(
+                    nonce,
+                    Payload {
+                        msg: &bytes[start + NONCE_SIZE..],
+                        aad: &aad,
+                    }
+                )
+                .is_err(),
+            "la clave maestra no debe descifrar el envelope: LABEL_PHI se ignora"
+        );
+    }
+
+    /// Sin `DMART_MASTER_KEY`, producción falla el arranque y desarrollo usa una
+    /// clave efímera.
+    #[test]
+    fn master_key_is_mandatory_in_production() {
+        // Comparte el lock de variables de entorno con `deployment::tests`, y
+        // usa `DMART_ENV`, que es la variable que documenta el despliegue.
+        let _lock = crate::deployment::tests_lock();
+        let _guard = crate::deployment::EnvGuard::new(&[
+            ("DMART_MASTER_KEY", None::<&str>),
+            ("APP_ENV", None::<&str>),
+        ]);
+
+        unsafe {
+            std::env::set_var("DMART_ENV", "production");
+        }
+        assert!(
+            matches!(PhiCipher::from_env(), Err(CryptoError::MissingMasterKey)),
+            "en producción no debe permitirse una clave efímera"
+        );
+
+        unsafe {
+            std::env::set_var("DMART_ENV", "development");
+        }
+        assert!(
+            PhiCipher::from_env().is_ok(),
+            "desarrollo debe poder arrancar sin DMART_MASTER_KEY"
+        );
+    }
+
+    /// Un envelope sellado con el AAD v1 sigue siendo legible, y al re-sellar
+    /// queda en v2.
+    ///
+    /// Sin este fallback, endurecer el AAD dejaría ilegibles los envelopes ya
+    /// escritos en entornos con PHI real.
+    #[test]
+    fn legacy_aad_envelopes_remain_readable() {
+        let master = MasterKey::from_password_bytes(b"clave-256-bits-minimo-para-pruebas!!");
+        let master_bytes = *master.as_bytes();
+        let _ = &master;
+        let c = PhiCipher::new(master);
+        let ctx = ctx("hosp-a", "patient", "P-1");
+
+        // Sellar como lo hacía la versión anterior: AAD v1.
+        let plaintext = serde_json::to_vec(&phi()).expect("json");
+        let mut nonce_bytes = [0u8; NONCE_SIZE];
+        AesOsRng.fill_bytes(&mut nonce_bytes);
+        let ct = Aes256Gcm::new_from_slice(&master_bytes)
+            .expect("aes")
+            .encrypt(
+                AesNonce::from_slice(&nonce_bytes),
+                Payload {
+                    msg: &plaintext,
+                    aad: ctx.legacy_aad().as_bytes(),
+                },
+            )
+            .expect("encrypt");
+        let mut raw = Vec::new();
+        raw.extend_from_slice(AES256_MAGIC);
+        raw.extend_from_slice(&nonce_bytes);
+        raw.extend_from_slice(&ct);
+
+        // Debe abrir con el cifrador actual.
+        let opened = c
+            .open::<Phi>(&ctx, &base64_encode(&raw))
+            .expect("un envelope v1 debe seguir legible");
+        assert_eq!(opened, phi());
+
+        // Y el AAD v1 no sirve para abrir nada con el esquema nuevo.
+        assert_ne!(ctx.aad(), ctx.legacy_aad().into_bytes());
+
+        // El fallback con AAD vacío (formato anterior sin AAD) también debe
+        // seguir funcionando, y sólo con la clave maestra.
+        let mut nonce2 = [0u8; NONCE_SIZE];
+        AesOsRng.fill_bytes(&mut nonce2);
+        let ct2 = Aes256Gcm::new_from_slice(&master_bytes)
+            .expect("aes")
+            .encrypt(
+                AesNonce::from_slice(&nonce2),
+                Payload {
+                    msg: &plaintext,
+                    aad: &[],
+                },
+            )
+            .expect("encrypt");
+        let mut raw2 = Vec::new();
+        raw2.extend_from_slice(AES256_MAGIC);
+        raw2.extend_from_slice(&nonce2);
+        raw2.extend_from_slice(&ct2);
+        assert_eq!(
+            c.open::<Phi>(&ctx, &base64_encode(&raw2))
+                .expect("legacy sin AAD"),
+            phi()
+        );
+
+        // Un ciphertext corrupto no debe abrirse por ningún camino alternativo.
+        let mut corrupt = raw.clone();
+        let last = corrupt.len() - 1;
+        corrupt[last] ^= 0xff;
+        assert!(c.open::<Phi>(&ctx, &base64_encode(&corrupt)).is_err());
     }
 
     /// Un envelope corrupto o manipulado nunca devuelve datos: falla el tag.

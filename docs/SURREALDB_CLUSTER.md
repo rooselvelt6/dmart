@@ -1,36 +1,74 @@
 # SurrealDB Cluster — Alta Disponibilidad
 
-## Levantar el cluster localmente
+> **Nota**: dMart **no incluye Docker**. El cluster de SurrealDB es infraestructura
+> separada que debe desplegarse independientemente (VMs, Kubernetes, o bare metal).
 
-```bash
-docker compose -f docker-compose.cluster.yml up -d
+---
+
+## Opción A: Kubernetes (recomendado para producción)
+
+El Helm chart en `helm/dmart/` incluye un StatefulSet para SurrealDB.
+
+```yaml
+# values.yaml
+surrealdb:
+  replicas: 3
+  resources:
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  persistence:
+    size: 20Gi
 ```
 
-Esto levanta 3 nodos SurrealDB en un cluster:
+### Pod Disruption Budget
 
-| Nodo | Puerto host | Rol inicial |
-|------|-------------|-------------|
-| surrealdb-node-1 | 8001 | Leader |
-| surrealdb-node-2 | 8002 | Follower |
-| surrealdb-node-3 | 8003 | Follower |
+```yaml
+# PDB para dmart-server (incluido en chart)
+minAvailable: 1
 
-## Verificar salud del cluster
+# PDB adicional para SurrealDB cluster
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: surrealdb-pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: surrealdb
+```
+
+---
+
+## Opción B: Bare metal / VMs (sin Kubernetes)
+
+Consultar la [documentación oficial de SurrealDB clustering](https://surrealdb.com/docs/deployment/clustering):
+
+1. 3+ nodos con `surreal start --bind 0.0.0.0:8000 --cluster`
+2. Configurar `RAFT` peers entre nodos
+3. dMart se conecta via `SURREALDB_URL=ws://node1:8000,ws://node2:8000,ws://node3:8000`
+
+---
+
+## Opción C: Docker Compose (solo desarrollo/testing)
+
+> Requiere Docker instalado — **no usar en producción** si evitas Docker.
 
 ```bash
-# Verificar que los 3 nodos estén corriendo
-docker compose -f docker-compose.cluster.yml ps
+# docker-compose.cluster.yml debe crearse manualmente
+# Ver: https://surrealdb.com/docs/deployment/docker#clustering
+```
 
+---
+
+## Verificación de salud
+
+```bash
 # Health check individual
-echo > /dev/tcp/localhost/8001 && echo "node-1: OK"
-echo > /dev/tcp/localhost/8002 && echo "node-2: OK"
-echo > /dev/tcp/localhost/8003 && echo "node-3: OK"
-```
-
-## Conexión
-
-```bash
-# Conectar a cualquier nodo
-surreal sql --endpoint ws://localhost:8001 --username dmart --password changeme --namespace dmart --database dmart
+curl -sf http://node1:8000/health && echo "node-1: OK"
+curl -sf http://node2:8000/health && echo "node-2: OK"
+curl -sf http://node3:8000/health && echo "node-3: OK"
 ```
 
 ## Failover
@@ -38,35 +76,10 @@ surreal sql --endpoint ws://localhost:8001 --username dmart --password changeme 
 Al caer un nodo, los 2 restantes mantienen quorum y continúan sirviendo.
 El líder fallido es re-electo automáticamente en < 30 segundos.
 
-```bash
-# Simular caída
-docker stop surrealdb-node-1
-
-# Verificar que node-2 o node-3 asumen liderazgo
-docker logs surrealdb-node-2 2>&1 | tail -5
-
-# Restaurar
-docker start surrealdb-node-1
-```
-
-## En Kubernetes (Helm Chart)
-
-El chart `helm/dmart/` incluye un StatefulSet para SurrealDB.
-Para escalar a 3 nodos en K8s, ajustar `surrealdb.replicas: 3` en values.
-
-### Pod Disruption Budget
-
-El chart incluye un PDB con `minAvailable: 1` para dmart-server.
-Para SurrealDB en cluster, configurar PDB adicional con `minAvailable: 2`.
-
-```yaml
-# En values.yaml override
-surrealdb:
-  replicas: 3
-```
+---
 
 ## Referencia
 
 - Spec: `specs/023-surrealdb-cluster.md`
 - Helm Chart: `helm/dmart/templates/statefulset-surrealdb.yaml`
-- Docker Compose: `docker-compose.cluster.yml`
+- Docs oficiales: https://surrealdb.com/docs/deployment/clustering

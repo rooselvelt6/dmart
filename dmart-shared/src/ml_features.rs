@@ -248,13 +248,13 @@ impl MlFeatures {
     }
 
     pub fn validate_against(&self, feature_set: &FeatureSet) -> Result<(), String> {
-        if let Some(hash) = &self.feature_set_hash {
-            if hash != &feature_set.hash {
-                return Err(format!(
-                    "Feature set hash mismatch: expected {}, got {}",
-                    feature_set.hash, hash
-                ));
-            }
+        if let Some(hash) = &self.feature_set_hash
+            && hash != &feature_set.hash
+        {
+            return Err(format!(
+                "Feature set hash mismatch: expected {}, got {}",
+                feature_set.hash, hash
+            ));
         }
         for fdef in &feature_set.features {
             if !self.data.contains_key(&fdef.name) {

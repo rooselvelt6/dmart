@@ -32,9 +32,9 @@ use std::sync::Arc;
 
 use rustls::client::danger::ServerCertVerifier;
 use rustls::crypto::{CryptoProvider, ring};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use sha2::{Digest, Sha256};
 
 /// Suite aceptada para el listener MLLP.
@@ -320,10 +320,11 @@ pub fn client_config(
         return Err(TlsError::NoCerts(PathBuf::from("<cert cliente>")));
     }
     let mut reader = Cursor::new(client_key_pem);
-    let key = pem_key_from(&mut reader, Path::new("<key cliente>")).ok_or_else(|| TlsError::Pem {
-        path: PathBuf::from("<key cliente>"),
-        reason: "no contiene clave privada PEM".into(),
-    })?;
+    let key =
+        pem_key_from(&mut reader, Path::new("<key cliente>")).ok_or_else(|| TlsError::Pem {
+            path: PathBuf::from("<key cliente>"),
+            reason: "no contiene clave privada PEM".into(),
+        })?;
 
     ClientConfig::builder_with_provider(MllpTlsConfig::crypto_provider())
         .with_protocol_versions(ALLOWED_PROTOCOLS)
@@ -398,7 +399,13 @@ impl ServerCertVerifier for PinnedServerVerifier {
         ocsp_response: &[u8],
         now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        self.inner.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)?;
+        self.inner.verify_server_cert(
+            end_entity,
+            intermediates,
+            server_name,
+            ocsp_response,
+            now,
+        )?;
         if MllpTlsConfig::fingerprint(end_entity.as_ref()) != self.expected {
             return Err(rustls::Error::General(
                 "fingerprint del servidor distinto del fijado".into(),
@@ -487,18 +494,19 @@ mod tests {
                 .iter()
                 .any(|s| matches!(s.suite(), rustls::CipherSuite::TLS13_AES_128_GCM_SHA256))
         );
-        assert!(
-            !provider
-                .cipher_suites
-                .iter()
-                .any(|s| matches!(s.suite(), rustls::CipherSuite::TLS13_CHACHA20_POLY1305_SHA256))
-        );
+        assert!(!provider.cipher_suites.iter().any(|s| matches!(
+            s.suite(),
+            rustls::CipherSuite::TLS13_CHACHA20_POLY1305_SHA256
+        )));
     }
 
     #[test]
     fn protocol_policy_is_tls13_only() {
         assert_eq!(ALLOWED_PROTOCOLS.len(), 1);
-        assert_eq!(ALLOWED_PROTOCOLS[0].version, rustls::ProtocolVersion::TLSv1_3);
+        assert_eq!(
+            ALLOWED_PROTOCOLS[0].version,
+            rustls::ProtocolVersion::TLSv1_3
+        );
     }
 
     #[test]
@@ -606,9 +614,7 @@ mod mtls_integration_tests {
         let mut dn = DistinguishedName::new();
         dn.push(DnType::CommonName, cn);
         params.distinguished_name = dn;
-        params.subject_alt_names = vec![SanType::DnsName(
-            cn.try_into().expect("dns ia5"),
-        )];
+        params.subject_alt_names = vec![SanType::DnsName(cn.try_into().expect("dns ia5"))];
 
         let key = KeyPair::generate().expect("monitor key");
         let cert = params
@@ -728,7 +734,9 @@ mod mtls_integration_tests {
                     version,
                     suite.suite(),
                     peer_fp,
-                    tls_cfg.sender_for_cert(certs[0].as_ref()).map(str::to_string),
+                    tls_cfg
+                        .sender_for_cert(certs[0].as_ref())
+                        .map(str::to_string),
                 )
             });
 
@@ -807,7 +815,10 @@ mod mtls_integration_tests {
                 Ok(Ok(_)) => false,
             };
             let server_ok = server.await.expect("join");
-            assert!(!server_ok, "el servidor debe rechazar la conexión sin certificado");
+            assert!(
+                !server_ok,
+                "el servidor debe rechazar la conexión sin certificado"
+            );
             assert!(
                 client_sees_failure,
                 "el cliente no debe poder leer datos del servidor"
@@ -815,7 +826,10 @@ mod mtls_integration_tests {
             server_ok
         });
 
-        assert!(!accepted, "el servidor debe rechazar la conexión sin certificado");
+        assert!(
+            !accepted,
+            "el servidor debe rechazar la conexión sin certificado"
+        );
     }
 
     /// Una identidad fijada a un monitor no autoriza a otro: `MSH.3` se deriva
@@ -838,7 +852,10 @@ mod mtls_integration_tests {
             "los certificados de monitors distintos deben diferir"
         );
         assert_eq!(pinned_first.allowed_fingerprints().len(), 1);
-        assert_eq!(pinned_first.allowed_senders(), vec!["emisor-bed-1".to_string()]);
+        assert_eq!(
+            pinned_first.allowed_senders(),
+            vec!["emisor-bed-1".to_string()]
+        );
         // Y con el DER real del segundo monitor, `sender_for_cert` no resuelve.
         let second_cert = parse_pem_certs(Cursor::new(fx.monitors[1].cert_pem.as_bytes()))
             .expect("certs")
@@ -879,7 +896,10 @@ mod mtls_integration_tests {
             key_path: bad_key,
             ..fx.cfg.clone()
         };
-        assert!(cfg.acceptor().is_err(), "clave y certificado no deben aceptarse");
+        assert!(
+            cfg.acceptor().is_err(),
+            "clave y certificado no deben aceptarse"
+        );
     }
 
     /// Configuración a medias (cert + CA sin clave, p.ej.) falla: nunca hay
@@ -892,5 +912,475 @@ mod mtls_integration_tests {
             ..fx.cfg.clone()
         };
         assert!(matches!(cfg.acceptor(), Err(TlsError::Io { .. })));
+    }
+}
+
+/// Pruebas end-to-end del listener MLLP real sobre mTLS.
+///
+/// Las pruebas de `mtls_integration_tests` validan la negociación TLS aislada.
+/// Éstas arrancan `server_ingest::serve` de verdad, que es donde aparecen los
+/// errores de integración: resolver la identidad con el material equivocado,
+/// no liberar el cupo por IP, o dejar el MLLP accesible sin TLS.
+///
+/// El material TLS se inyecta con `serve_with_security` en vez de por
+/// `DMART_MLLP_*`: esas variables son de proceso, y varias pruebas concurrentes
+/// se pisarían el material unas a otras, haciendo el resultado depender del
+/// orden de ejecución.
+#[cfg(test)]
+mod listener_tests {
+    use super::*;
+    use crate::db::Database;
+    use crate::ingest::{IngestConfig, IngestState};
+    use crate::server_ingest::{MllpSecurityConfig, serve_with_security};
+    use rcgen::{
+        BasicConstraints, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, SanType,
+    };
+    use std::net::SocketAddr;
+    use std::sync::Arc;
+    use surrealdb::Surreal;
+    use surrealdb::engine::local::SurrealKv;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
+    use tokio_rustls::TlsConnector;
+
+    struct Ca {
+        cert: rcgen::Certificate,
+        key: KeyPair,
+        pem: String,
+    }
+
+    fn make_ca() -> Ca {
+        let mut params = CertificateParams::new(Vec::<String>::new()).expect("ca params");
+        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        let mut dn = DistinguishedName::new();
+        dn.push(DnType::CommonName, "dmart-monitor-ca");
+        params.distinguished_name = dn;
+        let key = KeyPair::generate().expect("ca key");
+        let cert = params.self_signed(&key).expect("ca cert");
+        let pem = cert.pem();
+        Ca { cert, key, pem }
+    }
+
+    struct Monitor {
+        cert_pem: String,
+        key_pem: String,
+        fingerprint: String,
+    }
+
+    fn make_monitor(ca: &Ca, cn: &str) -> Monitor {
+        let mut params = CertificateParams::new(vec![cn.to_string()]).expect("monitor params");
+        let mut dn = DistinguishedName::new();
+        dn.push(DnType::CommonName, cn);
+        params.distinguished_name = dn;
+        params.subject_alt_names = vec![SanType::DnsName(cn.try_into().expect("dns ia5"))];
+        let key = KeyPair::generate().expect("monitor key");
+        let cert = params
+            .signed_by(&key, &ca.cert, &ca.key)
+            .expect("firmar monitor");
+        Monitor {
+            cert_pem: cert.pem(),
+            key_pem: key.serialize_pem(),
+            fingerprint: MllpTlsConfig::fingerprint(cert.der().as_ref()),
+        }
+    }
+
+    /// Listener MLLP real, con mTLS completo y una base de datos propia.
+    struct Fixture {
+        addr: SocketAddr,
+        ca_pem: String,
+        monitors: Vec<Monitor>,
+        max_connections_per_ip: u32,
+        _dir: tempfile::TempDir,
+    }
+
+    impl Fixture {
+        async fn start(max_connections_per_ip: u32) -> Self {
+            let ca = make_ca();
+            let dir = tempfile::tempdir().expect("tempdir");
+
+            let mut sp = CertificateParams::new(vec!["localhost".to_string()]).expect("srv params");
+            let mut dn = DistinguishedName::new();
+            dn.push(DnType::CommonName, "localhost");
+            sp.distinguished_name = dn;
+            let server_key = KeyPair::generate().expect("srv key");
+            let server_cert = sp
+                .signed_by(&server_key, &ca.cert, &ca.key)
+                .expect("firmar srv");
+
+            let cert_path = dir.path().join("server.pem");
+            std::fs::write(&cert_path, server_cert.pem()).expect("cert");
+            let key_path = dir.path().join("server.key");
+            std::fs::write(&key_path, server_key.serialize_pem()).expect("key");
+            let ca_path = dir.path().join("ca.pem");
+            std::fs::write(&ca_path, ca.pem.clone()).expect("ca");
+
+            let monitors = vec![
+                make_monitor(&ca, "monitor-bed-1"),
+                make_monitor(&ca, "monitor-bed-2"),
+            ];
+            let identities = monitors
+                .iter()
+                .enumerate()
+                .map(|(i, m)| ClientIdentity {
+                    cert_sha256: m.fingerprint.clone(),
+                    msh_sender: format!("emisor-bed-{}", i + 1),
+                })
+                .collect();
+
+            let tls_cfg = MllpTlsConfig {
+                cert_path,
+                key_path,
+                ca_path,
+                identities,
+            };
+
+            let db_dir = tempfile::tempdir().expect("db dir");
+            let db_path = db_dir.path().join("listener.db");
+            let db = Surreal::new::<SurrealKv>(db_path.to_str().expect("utf8"))
+                .await
+                .expect("db");
+            db.use_ns("dmart").use_db("icu").await.expect("ns/db");
+            crate::migrations::run_migrations(&db)
+                .await
+                .expect("migrations");
+            let db: Database = Arc::new(db);
+
+            // El frame de prueba referencia MRN-TEST; sin este paciente el
+            // pipeline respondería `patient_not_found` y la prueba mediría el
+            // fallo del pipeline, no el del transporte.
+            let mut patient = dmart_shared::models::Patient::new();
+            patient.tenant_id = "dmart".into();
+            patient.historia_clinica = "MRN-TEST".into();
+            patient.nombre = "Test".into();
+            patient.apellido = "Paciente".into();
+            crate::db::create_patient(&db, patient)
+                .await
+                .expect("paciente de la fixture");
+
+            let probe = TcpListener::bind("127.0.0.1:0").await.expect("probe");
+            let addr = probe.local_addr().expect("addr");
+            drop(probe);
+
+            let sec = MllpSecurityConfig {
+                // Sin secreto de capa 2: la identidad la fija el certificado, y
+                // duplicar el secreto en el cable sólo añadiría otro secreto que
+                // proteger.
+                auth_secret: None,
+                allowed_senders: Vec::new(),
+                read_timeout: std::time::Duration::from_secs(5),
+                write_timeout: std::time::Duration::from_secs(5),
+                max_connections: 64,
+                max_connections_per_ip: max_connections_per_ip as usize,
+            };
+
+            let state = Arc::new(IngestState::new(IngestConfig::default()));
+            tokio::spawn(async move {
+                let _ = serve_with_security(addr, db, state, sec, Some(tls_cfg)).await;
+            });
+
+            for _ in 0..200 {
+                if TcpStream::connect(addr).await.is_ok() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            }
+
+            Self {
+                addr,
+                ca_pem: ca.pem,
+                monitors,
+                max_connections_per_ip,
+                _dir: dir,
+            }
+        }
+
+        /// Tope por IP con el que se configuró el listener.
+        fn ip_limit(&self) -> usize {
+            self.max_connections_per_ip as usize
+        }
+
+        /// Cliente mTLS con el certificado pinneado indicado.
+        async fn connect_monitor(&self, idx: usize) -> tokio_rustls::client::TlsStream<TcpStream> {
+            let m = self.monitors.get(idx).expect("monitor registrado");
+            self.connect_with(&m.cert_pem, &m.key_pem).await
+        }
+
+        /// Certificado **no** pinneado: emitido por una CA distinta, que el
+        /// listener no acepta.
+        async fn connect_stranger(&self) -> tokio_rustls::client::TlsStream<TcpStream> {
+            let other_ca = make_ca();
+            let stranger = make_monitor(&other_ca, "monitor-ajeno");
+            self.connect_with(&stranger.cert_pem, &stranger.key_pem)
+                .await
+        }
+
+        async fn connect_with(
+            &self,
+            cert_pem: &str,
+            key_pem: &str,
+        ) -> tokio_rustls::client::TlsStream<TcpStream> {
+            let certs: Vec<rustls_pki_types::CertificateDer<'static>> =
+                rustls_pemfile::certs(&mut cert_pem.as_bytes())
+                    .collect::<Result<_, _>>()
+                    .expect("certs de cliente");
+            let key = rustls_pemfile::private_key(&mut key_pem.as_bytes())
+                .expect("clave de cliente")
+                .expect("clave presente");
+            let cfg = rustls::ClientConfig::builder_with_provider(MllpTlsConfig::crypto_provider())
+                .with_protocol_versions(&[&rustls::version::TLS13])
+                .expect("builder")
+                .with_root_certificates(roots_from_pem(&self.ca_pem))
+                .with_client_auth_cert(certs, key)
+                .expect("cfg de cliente");
+
+            let stream = TcpStream::connect(self.addr).await.expect("connect");
+            // El servidor valida contra "localhost"; el certificado lo firma la
+            // misma CA de pruebas, así que el nombre sí coincide.
+            let name = rustls_pki_types::ServerName::try_from("localhost").expect("server name");
+            TlsConnector::from(Arc::new(cfg))
+                .connect(name, stream)
+                .await
+                .expect("handshake mTLS")
+        }
+
+        /// Lee el ACK MLLP, que termina en `\x1C\r`.
+        async fn read_ack(&self, s: &mut tokio_rustls::client::TlsStream<TcpStream>) -> Vec<u8> {
+            let mut buf = Vec::new();
+            let mut byte = [0u8; 1];
+            for _ in 0..1024 {
+                match tokio::time::timeout(std::time::Duration::from_secs(3), s.read(&mut byte))
+                    .await
+                {
+                    Ok(Ok(0)) => break,
+                    Ok(Ok(_)) => {
+                        buf.push(byte[0]);
+                        if buf.ends_with(&[0x1c, b'\r']) {
+                            break;
+                        }
+                    }
+                    _ => break,
+                }
+            }
+            buf
+        }
+    }
+
+    fn roots_from_pem(pem: &str) -> rustls::RootCertStore {
+        let mut roots = rustls::RootCertStore::empty();
+        for cert in rustls_pemfile::certs(&mut pem.as_bytes()) {
+            roots.add(cert.expect("cert de CA")).expect("añadir CA");
+        }
+        roots
+    }
+
+    /// Frame MLLP `ORU^R01` con el `MSH.3` indicado.
+    ///
+    /// Tiene que ser un `ORU^R01` real: el parser rechaza cualquier otro tipo
+    /// antes de llegar a la comprobación de identidad, y la prueba mide
+    /// precisamente esa comprobación.
+    fn frame_msh3(sender: &str) -> Vec<u8> {
+        let body = format!(
+            "MSH|^~\\&|{sender}|DMART|dmart-monitor|HOSP|20260821141031||ORU^R01|1|P|2.5\r\
+             PID|||MRN-TEST^^^FAC||TEST^PACIENTE||19600415|M\r\
+             OBR|1|||||||20260821141030\r\
+             OBX|1|NM|8867-4^Heart rate^LN||210|bpm\r"
+        );
+        let mut f = vec![0x0b];
+        f.extend_from_slice(body.as_bytes());
+        f.push(0x1c);
+        f.extend_from_slice(b"\r");
+        f
+    }
+
+    /// Bytes MLLP que el listener no debe contestar sin TLS.
+    fn plaintext_probe() -> Vec<u8> {
+        let mut f = vec![0x0b];
+        f.extend_from_slice(b"MSH|^~\\&|MINDRAY|DMART\r");
+        f.push(0x1c);
+        f.extend_from_slice(b"\r");
+        f
+    }
+
+    /// ¿Contiene la sesión un ACK MLLP válido?
+    fn has_ack(bytes: &[u8]) -> bool {
+        bytes.windows(2).any(|w| w == [0x1c, b'\r'])
+    }
+
+    /// ACK de rechazo: `ACKAR^` más el motivo. El servidor responde con un error
+    /// explícito en vez de cerrar en silencio, para que el monitor sepa que su
+    /// mensaje no entró.
+    fn is_rejection(bytes: &[u8], reason: &str) -> bool {
+        let text = String::from_utf8_lossy(bytes);
+        text.contains("ACKAR^") && text.contains(reason)
+    }
+
+    /// El camino completo: mTLS válido, el frame entra al pipeline y el ACK
+    /// vuelve por la sesión cifrada.
+    #[tokio::test]
+    async fn listener_accepts_frame_over_mtls() {
+        let fx = Fixture::start(4).await;
+        let mut tls = fx.connect_monitor(0).await;
+
+        tls.write_all(&frame_msh3("emisor-bed-1"))
+            .await
+            .expect("write");
+        tls.flush().await.expect("flush");
+
+        let ack = fx.read_ack(&mut tls).await;
+        assert!(
+            has_ack(&ack),
+            "debe llegar ACK por la sesión cifrada: {ack:?}"
+        );
+    }
+
+    /// Regresión del doble hash: `serve` pasaba a `sender_for_cert` el
+    /// fingerprint hexadecimal, que la función volvía a hashear. Con ese bug
+    /// ninguna identidad resolvía y **toda** conexión mTLS válida se rechazaba.
+    #[tokio::test]
+    async fn pinned_monitor_is_accepted() {
+        let fx = Fixture::start(4).await;
+        let mut tls = fx.connect_monitor(0).await;
+        tls.write_all(&frame_msh3("emisor-bed-1"))
+            .await
+            .expect("write");
+        let ack = fx.read_ack(&mut tls).await;
+        assert!(
+            has_ack(&ack),
+            "un monitor pinneado debe llegar al pipeline: {ack:?}"
+        );
+    }
+
+    /// Ambos monitores pinneados resuelven a su propia identidad.
+    #[tokio::test]
+    async fn every_pinned_monitor_is_accepted() {
+        let fx = Fixture::start(4).await;
+        for idx in 0..fx.monitors.len() {
+            let sender = format!("emisor-bed-{}", idx + 1);
+            let mut tls = fx.connect_monitor(idx).await;
+            tls.write_all(&frame_msh3(&sender)).await.expect("write");
+            let ack = fx.read_ack(&mut tls).await;
+            assert!(has_ack(&ack), "{sender} pinneado debe aceptarse: {ack:?}");
+        }
+    }
+
+    /// Certificado válido contra la CA pero fuera del pin: se rechaza antes de
+    /// procesar el mensaje.
+    #[tokio::test]
+    async fn unpinned_certificate_is_rejected() {
+        let fx = Fixture::start(4).await;
+        let mut tls = fx.connect_stranger().await;
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            tls.write_all(&frame_msh3("emisor-bed-1")),
+        )
+        .await;
+        let ack = fx.read_ack(&mut tls).await;
+        assert!(
+            !has_ack(&ack),
+            "un certificado fuera del pin no debe recibir ACK: {ack:?}"
+        );
+    }
+
+    /// El `MSH.3` del mensaje debe coincidir con la identidad del certificado.
+    /// Un certificado pinneado no puede hablar en nombre de otro emisor.
+    #[tokio::test]
+    async fn msh3_must_match_the_pinned_identity() {
+        let fx = Fixture::start(4).await;
+        let mut tls = fx.connect_monitor(0).await;
+
+        // El certificado es `emisor-bed-1`; el mensaje dice `emisor-bed-2`.
+        tls.write_all(&frame_msh3("emisor-bed-2"))
+            .await
+            .expect("write");
+        let ack = fx.read_ack(&mut tls).await;
+        assert!(
+            is_rejection(&ack, "sender_not_allowed"),
+            "un MSH.3 ajeno al certificado debe recibir ACK de rechazo: {ack:?}"
+        );
+
+        // Y el mensaje de la identidad legítima sí se acepta, lo que confirma
+        // que el rechazo anterior fue por el MSH.3 y no por el transporte.
+        tls.write_all(&frame_msh3("emisor-bed-1"))
+            .await
+            .expect("write");
+        let ok = fx.read_ack(&mut tls).await;
+        assert!(
+            String::from_utf8_lossy(&ok).contains("ACKAA^"),
+            "el MSH.3 del certificado debe aceptarse: {ok:?}"
+        );
+    }
+
+    /// Sin handshake TLS no hay protocolo MLLP: mandar MLLP en claro no obtiene
+    /// respuesta.
+    #[tokio::test]
+    async fn plaintext_mllp_is_not_answered() {
+        let fx = Fixture::start(4).await;
+        let mut stream = TcpStream::connect(fx.addr).await.expect("connect");
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            stream.write_all(&plaintext_probe()),
+        )
+        .await;
+
+        let mut buf = Vec::new();
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            stream.read_to_end(&mut buf),
+        )
+        .await;
+        assert!(
+            !has_ack(&buf),
+            "no debe haber ACK sobre una conexión sin TLS: {buf:?}"
+        );
+    }
+
+    /// Cliente sin certificado: no completa el handshake y no llega a leerse un
+    /// solo byte de MLLP.
+    #[tokio::test]
+    async fn client_without_certificate_is_rejected() {
+        let fx = Fixture::start(4).await;
+        let mut stream = TcpStream::connect(fx.addr).await.expect("connect");
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            stream.write_all(&frame_msh3("emisor-bed-1")),
+        )
+        .await;
+
+        let mut buf = Vec::new();
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            stream.read_to_end(&mut buf),
+        )
+        .await;
+        assert!(!has_ack(&buf), "sin certificado no debe haber ACK: {buf:?}");
+    }
+
+    /// Regresión del cupo por IP: cada conexión mTLS válida debe liberar su
+    /// hueco al cerrarse. Con el bug, `max_connections_per_ip` conexiones
+    /// sucesivas agotaban el límite y bloqueaban al emisor de forma permanente,
+    /// sin ninguna ruta de recuperación.
+    #[tokio::test]
+    async fn repeated_connections_do_not_exhaust_the_ip_limit() {
+        const TOPE: u32 = 2;
+        let fx = Fixture::start(TOPE).await;
+        assert_eq!(
+            fx.ip_limit(),
+            TOPE as usize,
+            "el listener debe recibir el tope configurado"
+        );
+
+        // Tres veces el tope: sólo es posible si los huecos se liberan.
+        for i in 0..(TOPE * 3) {
+            let mut tls = fx.connect_monitor(0).await;
+            tls.write_all(&frame_msh3("emisor-bed-1"))
+                .await
+                .expect("write");
+            let ack = fx.read_ack(&mut tls).await;
+            assert!(
+                has_ack(&ack),
+                "conexión {i} de {} debe aceptarse: {ack:?}",
+                TOPE * 3
+            );
+        }
     }
 }

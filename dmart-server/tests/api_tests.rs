@@ -2571,6 +2571,73 @@ async fn test_e2e_support_model_swap_action() {
     assert_eq!(json["data"]["details"]["model"], "ews");
 }
 
+/// Regresión: escrituras concurrentes no deben partir la cadena de auditoría.
+///
+/// Antes, `log()` leía `last_hash`, soltaba el lock y sólo entonces insertaba.
+/// Dos escrituras simultáneas leían el mismo `prev_hash`, así que la segunda
+/// creaba una bifurcación: cada log tenía un hash válido, pero
+/// `verify_integrity()` reportaba `chain_valid: false` con todos los hashes
+/// individualmente correctos. Se manifestaba de forma intermitente porque
+/// dependía del entrelazado de los hilos del runner de tests.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_audit_chain_survives_concurrent_writes() {
+    use dmart_server::audit::{AUDIT_GENESIS_HASH, AuditAction, AuditService};
+
+    let (db, _dir) = test_db().await;
+    let service = AuditService::new(db.clone());
+
+    // 40 escrituras simultáneas sobre la misma cadena.
+    let mut handles = Vec::new();
+    for i in 0..40 {
+        let service = service.clone();
+        handles.push(tokio::spawn(async move {
+            service
+                .log(
+                    AuditAction::Read,
+                    "patients",
+                    Some(&format!("p{i}")),
+                    Some("u1"),
+                    Some("admin"),
+                    None,
+                    None,
+                    None,
+                    true,
+                    None,
+                )
+                .await
+                .expect("log");
+        }));
+    }
+    for h in handles {
+        h.await.expect("join");
+    }
+
+    let report = service.verify_integrity().await.expect("verify");
+    assert!(report.chain_valid, "cadena bifurcada: {report:?}");
+    assert_eq!(report.logs_total, 40);
+    assert_eq!(report.logs_valid, 40, "cada log debe tener su hash válido");
+    assert!(report.ok, "integridad rota: {report:?}");
+
+    // Y el encadenamiento debe ser una cadena real: el primero desde el génesis
+    // y cada `prev_hash` igual al `content_hash` del anterior.
+    let logs: Vec<dmart_server::audit::AuditLog> = db
+        .query("SELECT * FROM audit_logs ORDER BY timestamp ASC, uid ASC")
+        .await
+        .expect("q")
+        .take(0)
+        .expect("t");
+    let mut prev = AUDIT_GENESIS_HASH.to_string();
+    for log in &logs {
+        assert_eq!(
+            log.prev_hash.as_deref(),
+            Some(prev.as_str()),
+            "prev_hash no encadena en el log {}",
+            log.uid
+        );
+        prev = log.content_hash.clone().expect("content_hash");
+    }
+}
+
 #[tokio::test]
 async fn test_audit_worm_chain_seal_and_verify() {
     use dmart_server::audit::{AUDIT_GENESIS_HASH, AuditAction, AuditService};

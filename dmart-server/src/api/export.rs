@@ -185,9 +185,25 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     let mut y = page_h - 15.0;
 
     // ===== HEADER =====
-    push_text(&mut ops, left, page_h, y, "SAHUAPA HOSPITAL ANTONIO PATRICIO DE ALCALA", true, 14.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        "SAHUAPA HOSPITAL ANTONIO PATRICIO DE ALCALA",
+        true,
+        14.0,
+    );
     y -= 6.0;
-    push_text(&mut ops, left, page_h, y, "Unidad de Cuidados Intensivos — Registro Clínico", false, 10.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        "Unidad de Cuidados Intensivos — Registro Clínico",
+        false,
+        10.0,
+    );
     y -= 10.0;
 
     // ===== PATIENT INFO — two column grid =====
@@ -205,47 +221,137 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
 
     row!("Historia Clínica:", &patient.historia_clinica);
     row!("Cédula:", &patient.cedula);
-    row!("Paciente:", &format!("{} {}", patient.nombre, patient.apellido));
-    row!("Sexo / Edad:", &format!("{:?} / {} años", patient.sexo, patient.edad));
+    row!(
+        "Paciente:",
+        &format!("{} {}", patient.nombre, patient.apellido)
+    );
+    row!(
+        "Sexo / Edad:",
+        &format!("{:?} / {} años", patient.sexo, patient.edad)
+    );
     row!("Color de Piel:", &patient.color_piel.label());
-    row!("Fecha Nacimiento:", &patient.fecha_nacimiento[..10.min(patient.fecha_nacimiento.len())]);
-    row!("Ingreso Hospital:", &patient.fecha_ingreso_hospital[..19.min(patient.fecha_ingreso_hospital.len())]);
-    row!("Ingreso UCI:", &patient.fecha_ingreso_uci[..19.min(patient.fecha_ingreso_uci.len())]);
+    row!(
+        "Fecha Nacimiento:",
+        &patient.fecha_nacimiento[..10.min(patient.fecha_nacimiento.len())]
+    );
+    row!(
+        "Ingreso Hospital:",
+        &patient.fecha_ingreso_hospital[..19.min(patient.fecha_ingreso_hospital.len())]
+    );
+    row!(
+        "Ingreso UCI:",
+        &patient.fecha_ingreso_uci[..19.min(patient.fecha_ingreso_uci.len())]
+    );
     row!("Tipo Admisión:", &format!("{:?}", patient.tipo_admision));
-    row!("Ventilación Mecánica:", if patient.ventilacion_mecanica { "Sí" } else { "No" });
+    row!(
+        "Ventilación Mecánica:",
+        if patient.ventilacion_mecanica {
+            "Sí"
+        } else {
+            "No"
+        }
+    );
     row!("Diagnóstico Hospital:", &patient.diagnostico_hospital);
     row!("Diagnóstico UCI:", &patient.diagnostico_uci);
 
     if !patient.procesos_invasivos.is_empty() {
-        row!("Procesos Invasivos:", &patient.procesos_invasivos.join(", "));
+        row!(
+            "Procesos Invasivos:",
+            &patient.procesos_invasivos.join(", ")
+        );
     }
 
     y -= 8.0;
 
     // ===== CURRENT SEVERITY STATUS =====
-    push_text(&mut ops, left, page_h, y, "ESTADO DE GRAVEDAD ACTUAL", true, 12.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        "ESTADO DE GRAVEDAD ACTUAL",
+        true,
+        12.0,
+    );
     y -= 7.0;
-    push_text(&mut ops, left, page_h, y, &format!("Nivel: {}", patient.estado_gravedad.label()), true, 14.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        &format!("Nivel: {}", patient.estado_gravedad.label()),
+        true,
+        14.0,
+    );
     y -= 6.5;
-    push_text(&mut ops, left, page_h, y, &format!("APACHE II: {} | GCS: {}", patient.ultimo_apache_score.unwrap_or(0), patient.ultimo_gcs_score.unwrap_or(0)), false, 10.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        &format!(
+            "APACHE II: {} | GCS: {}",
+            patient.ultimo_apache_score.unwrap_or(0),
+            patient.ultimo_gcs_score.unwrap_or(0)
+        ),
+        false,
+        10.0,
+    );
     y -= 5.0;
     if let Some(sofa) = patient.ultimo_sofa_score {
-        push_text(&mut ops, left, page_h, y, &format!("SOFA: {} | SAPS III: {} | NEWS2: {}", sofa, patient.ultimo_saps3_score.unwrap_or(0), patient.ultimo_news2_score.unwrap_or(0)), false, 9.0);
+        push_text(
+            &mut ops,
+            left,
+            page_h,
+            y,
+            &format!(
+                "SOFA: {} | SAPS III: {} | NEWS2: {}",
+                sofa,
+                patient.ultimo_saps3_score.unwrap_or(0),
+                patient.ultimo_news2_score.unwrap_or(0)
+            ),
+            false,
+            9.0,
+        );
         y -= 5.0;
     }
     if let Some(mort) = patient.mortality_risk {
-        push_text(&mut ops, left, page_h, y, &format!("Mortalidad estimada: {:.1}%", mort), false, 10.0);
+        push_text(
+            &mut ops,
+            left,
+            page_h,
+            y,
+            &format!("Mortalidad estimada: {:.1}%", mort),
+            false,
+            10.0,
+        );
         y -= 5.0;
     }
 
     y -= 10.0;
 
     // ===== MEASUREMENTS TABLE =====
-    push_text(&mut ops, left, page_h, y, "EVOLUCIÓN DE ESCALAS CLÍNICAS", true, 12.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        "EVOLUCIÓN DE ESCALAS CLÍNICAS",
+        true,
+        12.0,
+    );
     y -= 8.0;
 
     // Table header
-    push_text(&mut ops, left, page_h, y, "  Fecha/Hora            APACHE II   GCS   SOFA   SAPS III   NEWS2   Severidad     Mortalidad    Temp   PAM   FC   FR   pH    Na    K    Cr   Hct  Leuc  FiO2  SpO2", true, 7.0);
+    push_text(
+        &mut ops,
+        left,
+        page_h,
+        y,
+        "  Fecha/Hora            APACHE II   GCS   SOFA   SAPS III   NEWS2   Severidad     Mortalidad    Temp   PAM   FC   FR   pH    Na    K    Cr   Hct  Leuc  FiO2  SpO2",
+        true,
+        7.0,
+    );
     y -= 5.5;
 
     for m in measurements {
@@ -254,9 +360,25 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
             ops.clear();
             y = page_h - 15.0;
             // Re-draw header on new page
-            push_text(&mut ops, left, page_h, y, "EVOLUCIÓN DE ESCALAS CLÍNICAS (cont.)", true, 12.0);
+            push_text(
+                &mut ops,
+                left,
+                page_h,
+                y,
+                "EVOLUCIÓN DE ESCALAS CLÍNICAS (cont.)",
+                true,
+                12.0,
+            );
             y -= 6.0;
-            push_text(&mut ops, left, page_h, y, "  Fecha/Hora            APACHE II   GCS   SOFA   SAPS III   NEWS2   Severidad     Mortalidad    Temp   PAM   FC   FR   pH    Na    K    Cr   Hct  Leuc  FiO2  SpO2", true, 7.0);
+            push_text(
+                &mut ops,
+                left,
+                page_h,
+                y,
+                "  Fecha/Hora            APACHE II   GCS   SOFA   SAPS III   NEWS2   Severidad     Mortalidad    Temp   PAM   FC   FR   pH    Na    K    Cr   Hct  Leuc  FiO2  SpO2",
+                true,
+                7.0,
+            );
             y -= 5.5;
         }
 

@@ -427,14 +427,8 @@ pub fn build_v1_router(
             "/escalation/{id}/escalate",
             post(crate::api::escalation::escalate_alert),
         )
-        .route(
-            "/push/vapid",
-            get(crate::api::push::vapid_public_key),
-        )
-        .route(
-            "/push/subscribe",
-            post(crate::api::push::subscribe),
-        )
+        .route("/push/vapid", get(crate::api::push::vapid_public_key))
+        .route("/push/subscribe", post(crate::api::push::subscribe))
         .route(
             "/push/unsubscribe",
             axum::routing::delete(crate::api::push::unsubscribe),

@@ -254,10 +254,7 @@ async fn similarity_explain_api(
     }
 }
 
-async fn similarity_status_api(
-    State(db): State<Database>,
-    claims: Claims,
-) -> impl IntoResponse {
+async fn similarity_status_api(State(db): State<Database>, claims: Claims) -> impl IntoResponse {
     let count: Vec<serde_json::Value> = db
         .as_ref()
         .query("SELECT count() as c FROM patient_embedding WHERE tenant_id = $tenant GROUP BY c")
@@ -267,10 +264,13 @@ async fn similarity_status_api(
         .take(0)
         .expect("take");
     let total = count.first().and_then(|v| v["c"].as_u64()).unwrap_or(0) as usize;
-    let patients_count =
-        crate::db::count_patients_for_tenant(db.as_ref(), &claims.tenant_id, crate::db::EstadoFilter::default())
-            .await
-            .unwrap_or(0) as usize;
+    let patients_count = crate::db::count_patients_for_tenant(
+        db.as_ref(),
+        &claims.tenant_id,
+        crate::db::EstadoFilter::default(),
+    )
+    .await
+    .unwrap_or(0) as usize;
     let pct = if patients_count > 0 {
         (total as f64 / patients_count as f64 * 100.0).min(100.0)
     } else {
