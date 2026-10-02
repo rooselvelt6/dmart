@@ -3,11 +3,11 @@ use crate::components::severity_badge::SeverityBadge;
 use crate::components::ui_kit::{ErrorState, LoadingState};
 use dmart_shared::models::Sexo;
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::spawn_local;
 
 /// Altura fija usada por el renderizado virtualizado (px por fila).
 const ROW_HEIGHT: f64 = 72.0;

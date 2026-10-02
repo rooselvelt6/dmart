@@ -67,7 +67,10 @@ pub fn DevicesPage() -> impl IntoView {
             || modelo.get().trim().is_empty()
             || serial.get().trim().is_empty()
         {
-            feedback.set(Some((false, "Complete tipo, fabricante, modelo y serial.".into())));
+            feedback.set(Some((
+                false,
+                "Complete tipo, fabricante, modelo y serial.".into(),
+            )));
             return;
         }
         saving.set(true);

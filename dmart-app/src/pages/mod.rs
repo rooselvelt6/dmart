@@ -1,4 +1,6 @@
 pub mod admin;
+pub mod audit;
+pub mod cds;
 pub mod dashboard;
 pub mod data_quality;
 pub mod devices;
@@ -7,7 +9,9 @@ pub mod login;
 pub mod measurement;
 pub mod patient_detail;
 pub mod patient_edit;
+pub mod patient_timeline;
 pub mod patients;
 pub mod perfil;
 pub mod register;
 pub mod support;
+pub mod tenants;

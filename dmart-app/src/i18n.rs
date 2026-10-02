@@ -1,9 +1,9 @@
 // i18n module for dMart UCI
 // Simple key-value translation with embedded .ftl files (simple key=value format)
 
-use std::sync::OnceLock;
-use std::collections::HashMap;
 use leptos::prelude::*;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Supported languages in order of preference
 const LOCALES: &[&str] = &["es", "en", "pt", "fr"];
@@ -39,36 +39,40 @@ fn detect_lang() -> String {
 
 /// Initialize i18n bundles from embedded .ftl files (simple key=value format)
 pub fn init_i18n() {
-    let bundles: Vec<HashMap<String, String>> = LOCALES.iter().map(|lang| {
-        let ftl_content = match *lang {
-            "es" => include_str!("../locales/es.ftl"),
-            "en" => include_str!("../locales/en.ftl"),
-            "pt" => include_str!("../locales/pt.ftl"),
-            "fr" => include_str!("../locales/fr.ftl"),
-            _ => include_str!("../locales/en.ftl"),
-        };
-        
-        // Simple key=value parsing (one per line, ignoring comments and empty lines)
-        let mut map = HashMap::new();
-        for line in ftl_content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
+    let bundles: Vec<HashMap<String, String>> = LOCALES
+        .iter()
+        .map(|lang| {
+            let ftl_content = match *lang {
+                "es" => include_str!("../locales/es.ftl"),
+                "en" => include_str!("../locales/en.ftl"),
+                "pt" => include_str!("../locales/pt.ftl"),
+                "fr" => include_str!("../locales/fr.ftl"),
+                _ => include_str!("../locales/en.ftl"),
+            };
+
+            // Simple key=value parsing (one per line, ignoring comments and empty lines)
+            let mut map = HashMap::new();
+            for line in ftl_content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some((key, value)) = line.split_once('=') {
+                    let value = value.trim();
+                    // Las .ftl usan comillas alrededor del valor: `key = "texto"`.
+                    let value =
+                        if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+                            &value[1..value.len() - 1]
+                        } else {
+                            value
+                        };
+                    map.insert(key.trim().to_string(), value.to_string());
+                }
             }
-            if let Some((key, value)) = line.split_once('=') {
-                let value = value.trim();
-                // Las .ftl usan comillas alrededor del valor: `key = "texto"`.
-                let value = if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
-                    &value[1..value.len() - 1]
-                } else {
-                    value
-                };
-                map.insert(key.trim().to_string(), value.to_string());
-            }
-        }
-        map
-    }).collect();
-    
+            map
+        })
+        .collect();
+
     BUNDLES.set(bundles).ok();
 }
 
@@ -91,6 +95,15 @@ pub fn set_lang(lang: &str) {
     }
     LocalStorage::set("dmart_lang", lang).ok();
     lang_signal().set(lang.to_string());
+
+    // Update html lang attribute for SEO/accessibility
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            if let Some(html) = document.document_element() {
+                html.set_attribute("lang", lang).ok();
+            }
+        }
+    }
 }
 
 /// Translate a key with optional arguments
@@ -99,12 +112,12 @@ pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -
     if BUNDLES.get().is_none() {
         init_i18n();
     }
-    
+
     let lang = lang_tracked();
     let lang_idx = LOCALES.iter().position(|&l| l == lang).unwrap_or(0);
-    
+
     let bundles = BUNDLES.get().expect("i18n not initialized");
-    
+
     for bundle in &bundles[lang_idx..] {
         if let Some(value) = bundle.get(key) {
             let mut result = value.clone();
@@ -116,7 +129,7 @@ pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -
             return result;
         }
     }
-    
+
     // Fallback to first bundle (usually Spanish)
     if let Some(bundle) = bundles.first() {
         if let Some(value) = bundle.get(key) {
@@ -129,7 +142,7 @@ pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -
             return result;
         }
     }
-    
+
     // Ultimate fallback: return the key itself
     key.to_string()
 }

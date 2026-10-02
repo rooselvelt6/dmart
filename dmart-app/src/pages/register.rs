@@ -3,8 +3,8 @@ use crate::components::{location_picker::LocationPicker, skin_picker::SkinPicker
 use dmart_shared::models::*;
 use leptos::either::Either;
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use leptos_router::hooks::*;
+use wasm_bindgen_futures::spawn_local;
 
 #[component]
 pub fn RegisterPage() -> impl IntoView {

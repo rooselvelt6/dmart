@@ -40,6 +40,8 @@ web-sys = { version = "0.3", features = [
     "Request", "RequestInit", "Headers", "Response",
     "ReadableStream", "ReadableStreamDefaultReader", "ReadableStreamReadResult",
     "console",
+    # SPEC-049: copiar el resumen del export de auditoría al portapapeles.
+    "Clipboard",
     # SPEC-052: Web Push (suscripción del navegador vía Service Worker).
     "Navigator",
     "ServiceWorkerContainer",

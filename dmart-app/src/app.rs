@@ -1,17 +1,18 @@
 use crate::components::toast::ToastContainer;
 use crate::pages::{
-    admin::AdminPage, dashboard::DashboardPage, data_quality::DataQualityPage,
-    devices::DevicesPage, escalation::EscalationPage, login::LoginPage,
-    measurement::MeasurementPage, patient_detail::PatientDetailPage,
-    patient_edit::PatientEditPage, patients::PatientsPage, perfil::PerfilPage,
-    register::RegisterPage, support::SupportConsole,
+    admin::AdminPage, audit::AuditPage, cds::CdsPage, dashboard::DashboardPage,
+    data_quality::DataQualityPage, devices::DevicesPage, escalation::EscalationPage,
+    login::LoginPage, measurement::MeasurementPage, patient_detail::PatientDetailPage,
+    patient_edit::PatientEditPage, patient_timeline::PatientTimelinePage, patients::PatientsPage,
+    perfil::PerfilPage, register::RegisterPage, support::SupportConsole, tenants::TenantsPage,
 };
 use leptos::either::Either;
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use leptos_router::components::{A, Redirect, Route, Router, Routes};
 use leptos_router::hooks::*;
 use leptos_router::path;
+use wasm_bindgen_futures::spawn_local;
+use web_sys::console;
 
 use crate::stores::start_session_refresh;
 use crate::stores::{
@@ -22,7 +23,8 @@ use crate::stores::{
 #[component]
 pub fn App() -> impl IntoView {
     console_error_panic_hook::set_once();
-    
+    console::log_1(&"APP MOUNTED".into());
+
     // Initialize core modules
     crate::i18n::init_i18n();
     crate::theme::init_theme();
@@ -32,7 +34,7 @@ pub fn App() -> impl IntoView {
     provide_context(is_auth);
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
-    
+
     // Use Effect::new to ensure Leptos runtime is initialized before spawning tasks
     Effect::new(move |_| {
         if has_token() {
@@ -87,7 +89,13 @@ pub fn App() -> impl IntoView {
                     <NavSidebar sidebar_open />
                 </Show>
 
-                <main class="w-full md:ml-[260px] p-4 md:p-8" style=move || if is_auth.get() { "" } else { "margin-left: 0; width: 100%" }>
+                <main
+                    class=move || if is_auth.get() {
+                        "w-full md:ml-[280px] p-4 md:p-8 pt-20 md:pt-8"
+                    } else {
+                        "w-full p-4 md:p-8"
+                    }
+                >
                     <Show when=move || is_auth.get()>
                         <button
                             on:click=move |_| sidebar_open.update(|o| *o = !*o)
@@ -211,6 +219,50 @@ pub fn App() -> impl IntoView {
                                 Either::Right(view! { <EscalationPage /> })
                             }
                         } />
+
+                        // SPEC-015: timeline append-only con fingerprint por evento.
+                        <Route path=path!("/patients/:id/timeline") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("patients:read") {
+                                Either::Left(view! { <Redirect path="/"/> })
+                            } else {
+                                Either::Right(view! { <PatientTimelinePage /> })
+                            }
+                        } />
+
+                        // SPEC-016: motor de reglas clínicas (planes de cuidado).
+                        <Route path=path!("/cds") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("patients:read") {
+                                Either::Left(view! { <Redirect path="/"/> })
+                            } else {
+                                Either::Right(view! { <CdsPage /> })
+                            }
+                        } />
+
+                        // SPEC-025: gestión de tenants (solo quien tenga tenants:read).
+                        <Route path=path!("/admin/tenants") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("tenants:read") {
+                                Either::Left(view! { <Redirect path="/"/> })
+                            } else {
+                                Either::Right(view! { <TenantsPage /> })
+                            }
+                        } />
+
+                        // SPEC-049: auditoría forense WORM.
+                        <Route path=path!("/admin/audit") view=move || {
+                            if !is_auth.get() {
+                                Either::Left(view! { <Redirect path="/login"/> })
+                            } else if !user_has("audit:read") {
+                                Either::Left(view! { <Redirect path="/" /> })
+                            } else {
+                                Either::Right(view! { <AuditPage /> })
+                            }
+                        } />
                     </Routes>
                 </main>
             </div>
@@ -325,6 +377,15 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     </A>
                 </Show>
 
+                <Show when=move || user_has("patients:read")>
+                    <A href="/cds" attr:class=move || format!("nav-link {}", if is_active("/cds") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%);">
+                            <i class="fa-solid fa-clipboard-list w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-cds", None)}</span>
+                    </A>
+                </Show>
+
                 <div style="font-size:10px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; padding:20px 10px 8px; font-weight:700;">
                     <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px; font-size:8px;"></i>{move || crate::i18n::tr("nav-section-actions", None)}
                 </div>
@@ -374,6 +435,24 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     </A>
                 </Show>
 
+                <Show when=move || user_has("tenants:read")>
+                    <A href="/admin/tenants" attr:class=move || format!("nav-link {}", if is_active("/admin/tenants") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #0F766E 0%, #115E59 100%);">
+                            <i class="fa-solid fa-building w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-tenants", None)}</span>
+                    </A>
+                </Show>
+
+                <Show when=move || user_has("audit:read")>
+                    <A href="/admin/audit" attr:class=move || format!("nav-link {}", if is_active("/admin/audit") { "active" } else { "" })>
+                        <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #334155 0%, #1E293B 100%);">
+                            <i class="fa-solid fa-clipboard-check w-6 text-center text-lg" style="color:white;"></i>
+                        </div>
+                        <span style="font-weight:500;">{move || crate::i18n::tr("nav-audit", None)}</span>
+                    </A>
+                </Show>
+
                 <A href="/perfil" attr:class=move || format!("nav-link {}", if is_active_exact("/perfil") { "active" } else { "" })>
                     <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #14B8A6 0%, #0D9488 100%);">
                         <i class="fa-solid fa-user-gear w-6 text-center text-lg" style="color:white;"></i>
@@ -401,6 +480,13 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                                     <i class="fa-solid fa-calculator w-6 text-center text-lg" style="color:white;"></i>
                                 </div>
                                 <span style="font-weight:500;">{move || crate::i18n::tr("nav-measure", None)}</span>
+                            </A>
+
+                            <A href=format!("{}/timeline", base) attr:class="nav-link">
+                                <div class="nav-icon-wrapper" style="background: linear-gradient(135deg, #F43F5E 0%, #E11D48 100%);">
+                                    <i class="fa-solid fa-clock-rotate-left w-6 text-center text-lg" style="color:white;"></i>
+                                </div>
+                                <span style="font-weight:500;">{move || crate::i18n::tr("nav-timeline", None)}</span>
                             </A>
                         </div>
                     }

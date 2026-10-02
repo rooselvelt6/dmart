@@ -7,11 +7,11 @@
 /// - Sistema global de toasts para avisar al usuario de nuevos scores sin
 ///   recargar la página.
 use leptos::prelude::*;
+use serde::Deserialize;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{RequestCredentials, Response};
-use serde::Deserialize;
 
 /// Evento de medición publicado por el backend (SSE `measurement`).
 #[derive(Debug, Clone, Deserialize)]
@@ -79,7 +79,9 @@ async fn read_sse_stream(token: &str, event: &RwSignal<Option<MeasurementEvent>>
         Ok(h) => h,
         Err(_) => return StreamResult::Stop,
     };
-    headers.append("Authorization", &format!("Bearer {}", token)).ok();
+    headers
+        .append("Authorization", &format!("Bearer {}", token))
+        .ok();
     headers.append("Accept", "text/event-stream").ok();
 
     let init = web_sys::RequestInit::new();
@@ -131,8 +133,7 @@ async fn read_sse_stream(token: &str, event: &RwSignal<Option<MeasurementEvent>>
             // Cierre normal: reconectar (el servidor hace drop por keep-alive).
             break;
         }
-        let value = js_sys::Reflect::get(&chunk, &"value".into())
-            .unwrap_or(JsValue::UNDEFINED);
+        let value = js_sys::Reflect::get(&chunk, &"value".into()).unwrap_or(JsValue::UNDEFINED);
         if value.is_undefined() {
             continue;
         }

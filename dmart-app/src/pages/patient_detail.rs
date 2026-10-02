@@ -3,8 +3,8 @@ use crate::components::chart::EvolutionChart;
 use crate::components::severity_badge::SeverityBadge;
 use leptos::either::Either;
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use leptos_router::hooks::*;
+use wasm_bindgen_futures::spawn_local;
 
 fn show_alert(msg: &str) {
     web_sys::window().and_then(|w| w.alert_with_message(msg).ok());

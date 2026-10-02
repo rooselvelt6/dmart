@@ -47,7 +47,10 @@ fn authed_delete(url: &str) -> gloo_net::http::RequestBuilder {
 }
 
 /// Limpia sesión local y redirige a login si el servidor responde 401/403.
-async fn check_auth_response<T>(resp: gloo_net::http::Response, err_ctx: &str) -> Result<ApiResponse<T>, String>
+async fn check_auth_response<T>(
+    resp: gloo_net::http::Response,
+    err_ctx: &str,
+) -> Result<ApiResponse<T>, String>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -87,7 +90,9 @@ pub async fn me() -> ApiResult<UserInfo> {
         .await
         .map_err(|e| e.to_string())?;
     let api_resp = check_auth_response::<UserInfo>(resp, "me").await?;
-    api_resp.data.ok_or_else(|| api_resp.error.unwrap_or_default())
+    api_resp
+        .data
+        .ok_or_else(|| api_resp.error.unwrap_or_default())
 }
 
 /// Renueva el access token usando la cookie httpOnly del refresh token.
@@ -98,7 +103,9 @@ pub async fn refresh_session() -> ApiResult<LoginResponse> {
         .await
         .map_err(|e| e.to_string())?;
     let api_resp = check_auth_response::<LoginResponse>(resp, "refresh").await?;
-    api_resp.data.ok_or_else(|| api_resp.error.unwrap_or_default())
+    api_resp
+        .data
+        .ok_or_else(|| api_resp.error.unwrap_or_default())
 }
 
 /// Cierre de sesión real: revoca tokens en servidor y limpia la cookie.
@@ -219,7 +226,11 @@ pub async fn push_public_key() -> ApiResult<String> {
         .await
         .map_err(|e| e.to_string())?;
     resp.data
-        .and_then(|d| d.get("public_key").and_then(|k| k.as_str()).map(String::from))
+        .and_then(|d| {
+            d.get("public_key")
+                .and_then(|k| k.as_str())
+                .map(String::from)
+        })
         .ok_or_else(|| resp.error.unwrap_or_default())
 }
 
@@ -637,10 +648,7 @@ pub async fn export_pdf(patient_id: &str) -> ApiResult<()> {
 
 /// Crea un `web_sys::Blob` a partir del cuerpo de la respuesta (para descargar).
 async fn response_blob(resp: &gloo_net::http::Response) -> ApiResult<web_sys::Blob> {
-    let bytes = resp
-        .binary()
-        .await
-        .map_err(|e| format!("Export: {}", e))?;
+    let bytes = resp.binary().await.map_err(|e| format!("Export: {}", e))?;
     let parts = js_sys::Array::new();
     parts.push(&js_sys::Uint8Array::from(bytes.as_slice()));
     web_sys::Blob::new_with_u8_array_sequence(&parts).map_err(|e| format!("Export: {:?}", e))
@@ -737,13 +745,14 @@ pub async fn get_audit_logs(limit: usize, action: Option<&str>) -> ApiResult<Vec
 }
 
 pub async fn verify_audit_chain() -> ApiResult<IntegrityReport> {
-    let resp: ApiResponse<IntegrityReport> = authed_post(&format!("{}/admin/audit/verify", API_BASE))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let resp: ApiResponse<IntegrityReport> =
+        authed_post(&format!("{}/admin/audit/verify", API_BASE))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
     resp.data.ok_or_else(|| resp.error.unwrap_or_default())
 }
 
@@ -1420,5 +1429,313 @@ pub async fn ack_escalation(id: &str) -> ApiResult<Escalation> {
 }
 
 pub async fn escalate_escalation(id: &str) -> ApiResult<Escalation> {
-    post(&format!("/escalation/{}/escalate", id), serde_json::json!({})).await
+    post(
+        &format!("/escalation/{}/escalate", id),
+        serde_json::json!({}),
+    )
+    .await
+}
+
+// ─── SPEC-015: Timeline del paciente ────────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TimelineEvent {
+    pub patient_id: String,
+    /// Serializado con `rename_all = "PascalCase"` en el servidor.
+    pub event_type: String,
+    /// Epoch-millis, estrictamente creciente por proceso.
+    pub occurred_at: i64,
+    pub payload: Value,
+    pub fingerprint: String,
+    /// `info` | `warning` | `critical`.
+    pub severity: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TimelineResponse {
+    pub events: Vec<TimelineEvent>,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+/// Timeline con filtros opcionales. Los parámetros vacíos se omiten para no
+/// enviar `since=`/`event_type=` en blanco al backend.
+pub async fn patient_timeline(
+    patient_id: &str,
+    event_type: Option<&str>,
+    severity: Option<&str>,
+    since: Option<i64>,
+    until: Option<i64>,
+    cursor: Option<&str>,
+    limit: Option<u32>,
+) -> ApiResult<TimelineResponse> {
+    let mut q: Vec<String> = Vec::new();
+    if let Some(v) = event_type.filter(|s| !s.is_empty()) {
+        q.push(format!("event_type={}", v));
+    }
+    if let Some(v) = severity.filter(|s| !s.is_empty()) {
+        q.push(format!("severity={}", v));
+    }
+    if let Some(v) = since {
+        q.push(format!("since={}", v));
+    }
+    if let Some(v) = until {
+        q.push(format!("until={}", v));
+    }
+    if let Some(v) = cursor.filter(|s| !s.is_empty()) {
+        q.push(format!("cursor={}", v));
+    }
+    if let Some(v) = limit {
+        q.push(format!("limit={}", v));
+    }
+    let suffix = if q.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", q.join("&"))
+    };
+    get(&format!("/patients/{}/timeline{}", patient_id, suffix)).await
+}
+
+// ─── SPEC-016: Motor de reglas clínicas (CDS) ───────────────────────────────
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CdsPlanSummary {
+    pub plan_id: String,
+    pub version: String,
+    pub active: bool,
+    pub fingerprint: String,
+    pub meta: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CdsActionResult {
+    pub activity_id: String,
+    /// `alert` | `order` | `notification` | `protocol` | `referral`.
+    pub kind: String,
+    pub title: String,
+    pub description: String,
+    pub patient_id: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CdsPlanResult {
+    pub plan_id: String,
+    pub plan_version: String,
+    pub triggered: bool,
+    pub actions: Vec<CdsActionResult>,
+    pub evaluated_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CdsCarePlan {
+    pub id: String,
+    pub patient_id: String,
+    pub status: String,
+    pub intent: String,
+    pub activity: Vec<CdsActivityDefinition>,
+    pub created_at: i64,
+}
+
+/// `cds_rules::ActivityDefinition` serializado dentro de un CarePlan. A diferencia
+/// de `CdsActionResult` (acción disparada por un plan) aquí la clave es `id`.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CdsActivityDefinition {
+    pub id: String,
+    /// `alert` | `order` | `notification` | `protocol` | `referral`.
+    pub kind: String,
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CdsEvaluation {
+    pub results: Vec<CdsPlanResult>,
+    pub care_plan: Option<CdsCarePlan>,
+}
+
+pub async fn list_cds_plans() -> ApiResult<Vec<CdsPlanSummary>> {
+    let wrapper: serde_json::Value = get("/cds/plans").await?;
+    Ok(wrapper
+        .get("plans")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default())
+}
+
+pub async fn evaluate_cds(patient_id: &str) -> ApiResult<CdsEvaluation> {
+    post(
+        "/cds/evaluate",
+        serde_json::json!({ "patient_id": patient_id, "context": Value::Null }),
+    )
+    .await
+}
+
+// ─── SPEC-025: Multi-tenancy ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TenantListItem {
+    pub id: String,
+    pub name: String,
+    pub slug: String,
+    pub active: bool,
+    pub patient_count: u64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Tenant {
+    pub slug: String,
+    pub name: String,
+    pub active: bool,
+    /// RFC3339
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TableTenancyAudit {
+    pub table: String,
+    pub total: u64,
+    pub missing_tenant_id: u64,
+    pub orphan_tenant_ids: Vec<String>,
+    pub orphan_count: u64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TenancyAuditReport {
+    pub healthy: bool,
+    pub tables: Vec<TableTenancyAudit>,
+    pub total_records: u64,
+    pub records_at_risk: u64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ImpersonationGrant {
+    pub tenant_id: String,
+    pub expires_at: i64,
+}
+
+pub async fn list_tenants() -> ApiResult<Vec<TenantListItem>> {
+    get("/admin/tenants").await
+}
+
+pub async fn create_tenant(name: &str, slug: &str) -> ApiResult<Tenant> {
+    post(
+        "/admin/tenants",
+        serde_json::json!({ "name": name, "slug": slug }),
+    )
+    .await
+}
+
+/// Auditoría de aislamiento (SEC-025). El servidor responde 409 cuando el
+/// reporte no es sano, así que se acepta cualquier estado y se deserializa el
+/// cuerpo directamente para poder mostrar el detalle del conflicto.
+pub async fn audit_tenancy() -> ApiResult<TenancyAuditReport> {
+    let resp = authed_get(&format!("{}/admin/tenants/audit", API_BASE))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let api_resp: ApiResponse<TenancyAuditReport> = resp.json().await.map_err(|e| e.to_string())?;
+    api_resp
+        .data
+        .ok_or_else(|| api_resp.error.unwrap_or_default())
+}
+
+pub async fn impersonate_tenant(slug: &str) -> ApiResult<ImpersonationGrant> {
+    post(
+        &format!("/admin/tenants/{}/impersonate", slug),
+        serde_json::json!({}),
+    )
+    .await
+}
+
+// ─── SPEC-049: Auditoría WORM forense ───────────────────────────────────────
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct AuditLogEntry {
+    pub uid: String,
+    pub timestamp: String,
+    pub user_id: Option<String>,
+    pub username: Option<String>,
+    pub action: String,
+    pub resource: String,
+    pub resource_id: Option<String>,
+    pub ip_address: Option<String>,
+    pub success: bool,
+    pub error_message: Option<String>,
+    pub prev_hash: Option<String>,
+    pub content_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct AuditBatchSummary {
+    pub batch_id: String,
+    pub sequence: u64,
+    pub count: u64,
+    pub first_ts: String,
+    pub last_ts: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct AuditExport {
+    pub generated_at: String,
+    pub retention_years: i64,
+    pub head_batch_hash: String,
+    pub logs: Vec<AuditLogEntry>,
+    pub batches: Vec<AuditBatchSummary>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct RetentionResponse {
+    pub retention_years: i64,
+    pub deleted_logs: usize,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ScoreAuditEntry {
+    pub patient_id: String,
+    pub measurement_id: String,
+    pub timestamp: String,
+    pub algorithm_version: String,
+    pub fingerprint_guardado: String,
+    pub fingerprint_recalculado: String,
+    pub reproducible: bool,
+}
+
+/// Eventos críticos de auditoría (acceso denegado, fallos de auth, cambios de
+/// configuración). `GET` acepta `limit` y el servidor lo acota a 200.
+pub async fn audit_critical(limit: u32) -> ApiResult<Vec<AuditLogEntry>> {
+    get(&format!("/admin/audit/critical?limit={}", limit)).await
+}
+
+/// Elimina los logs que superan la retención legal. Destructivo: la GUI exige
+/// confirmación explícita antes de invocarlo.
+pub async fn run_audit_retention_cleanup() -> ApiResult<RetentionResponse> {
+    post("/admin/audit/cleanup", serde_json::json!({})).await
+}
+
+pub async fn export_audit(limit: u32) -> ApiResult<AuditExport> {
+    get(&format!("/admin/audit/export?limit={}", limit)).await
+}
+
+/// Reproducibilidad de scores: recalcula el fingerprint de cada medición y lo
+/// compara con el almacenado (SPEC-029).
+pub async fn verify_scores() -> ApiResult<Vec<ScoreAuditEntry>> {
+    get("/admin/audit/scores").await
+}
+
+/// Revoca todas las sesiones del usuario (SPEC-004). El servidor responde
+/// `data: null` (`ApiResponse::ok(())`), así que se valida por status en vez
+/// de por payload. Invalida también el access token en curso.
+pub async fn revoke_all_sessions() -> ApiResult<()> {
+    let resp = authed_post(&format!("{}/auth/revoke-all", API_BASE))
+        .credentials(RequestCredentials::Include)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if resp.ok() {
+        crate::stores::session::clear_session();
+        Ok(())
+    } else {
+        Err(format!("HTTP {}", resp.status()))
+    }
 }

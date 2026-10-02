@@ -1,10 +1,10 @@
 use crate::api;
 use crate::stores::current_user;
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use leptos_router::hooks::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_futures::spawn_local;
 
 const B64URL_TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -51,7 +51,9 @@ async fn push_registration() -> Result<web_sys::ServiceWorkerRegistration, Strin
     let window = web_sys::window().ok_or_else(|| "sin ventana".to_string())?;
     let container = window.navigator().service_worker();
     let promise = container.ready().map_err(|e| format!("{e:?}"))?;
-    let value = JsFuture::from(promise).await.map_err(|e| format!("{e:?}"))?;
+    let value = JsFuture::from(promise)
+        .await
+        .map_err(|e| format!("{e:?}"))?;
     value.dyn_into().map_err(|e| format!("{e:?}"))
 }
 
@@ -186,11 +188,16 @@ pub fn PerfilPage() -> impl IntoView {
                 let options = web_sys::PushSubscriptionOptionsInit::new();
                 options.set_user_visible_only(true);
                 options.set_application_server_key(&key_arr.into());
-                let promise = reg.push_manager().map_err(|e| format!("{e:?}"))?
+                let promise = reg
+                    .push_manager()
+                    .map_err(|e| format!("{e:?}"))?
                     .subscribe_with_options(&options)
                     .map_err(|e| format!("{e:?}"))?;
-                let value = JsFuture::from(promise).await.map_err(|e| format!("{e:?}"))?;
-                let sub: web_sys::PushSubscription = value.dyn_into().map_err(|e| format!("{e:?}"))?;
+                let value = JsFuture::from(promise)
+                    .await
+                    .map_err(|e| format!("{e:?}"))?;
+                let sub: web_sys::PushSubscription =
+                    value.dyn_into().map_err(|e| format!("{e:?}"))?;
                 let endpoint = sub.endpoint();
                 let p256dh = sub
                     .get_key(web_sys::PushEncryptionKeyName::P256dh)
@@ -237,11 +244,16 @@ pub fn PerfilPage() -> impl IntoView {
             let result: Result<(), String> = async {
                 let reg = push_registration().await?;
                 let pm = reg.push_manager().map_err(|e| format!("{e:?}"))?;
-                let value = JsFuture::from(pm.get_subscription().map_err(|e| format!("{e:?}"))?).await.map_err(|e| format!("{e:?}"))?;
+                let value = JsFuture::from(pm.get_subscription().map_err(|e| format!("{e:?}"))?)
+                    .await
+                    .map_err(|e| format!("{e:?}"))?;
                 if !value.is_null() && !value.is_undefined() {
-                    let sub: web_sys::PushSubscription = value.dyn_into().map_err(|e| format!("{e:?}"))?;
+                    let sub: web_sys::PushSubscription =
+                        value.dyn_into().map_err(|e| format!("{e:?}"))?;
                     let endpoint = sub.endpoint();
-                    JsFuture::from(sub.unsubscribe().map_err(|e| format!("{e:?}"))?).await.map_err(|e| format!("{e:?}"))?;
+                    JsFuture::from(sub.unsubscribe().map_err(|e| format!("{e:?}"))?)
+                        .await
+                        .map_err(|e| format!("{e:?}"))?;
                     api::push_unsubscribe(&endpoint).await?;
                 }
                 Ok(())

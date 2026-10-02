@@ -1,4 +1,4 @@
-use dmart_app::{app::App, i18n, theme, shortcuts};
+use dmart_app::{app::App, i18n, shortcuts, theme};
 use leptos::prelude::*;
 
 fn main() {
@@ -13,7 +13,7 @@ fn main() {
     i18n::init_i18n();
     theme::init_theme();
     shortcuts::init_shortcuts();
-    
+
     // Disable Service Worker registration for development
     #[cfg(debug_assertions)]
     {
@@ -25,6 +25,6 @@ fn main() {
         }
         // Don't register service worker in development
     }
-    
+
     mount_to_body(App);
 }

@@ -5,8 +5,8 @@ use dmart_shared::models::*;
 use dmart_shared::scales::{calculate_apache_ii_score, calculate_sofa_score, mortality_risk};
 use leptos::either::Either;
 use leptos::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use leptos_router::hooks::*;
+use wasm_bindgen_futures::spawn_local;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 #[allow(clippy::upper_case_acronyms)]

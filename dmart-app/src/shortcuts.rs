@@ -1,11 +1,11 @@
 // Keyboard shortcuts module for dMart UCI
 // Power-user shortcuts for clinical workflows
 
-use web_sys::{KeyboardEvent, window, HtmlElement};
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen_futures::spawn_local;
 use js_sys;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
+use web_sys::{HtmlElement, KeyboardEvent, window};
 
 /// Shortcut definitions
 pub struct Shortcut {
@@ -84,7 +84,7 @@ pub fn init_shortcuts() {
         let ctrl = ev.ctrl_key();
         let shift = ev.shift_key();
         let key = ev.key();
-        
+
         // Don't trigger shortcuts when typing in inputs
         if let Some(target) = ev.target() {
             if let Ok(element) = target.dyn_into::<web_sys::HtmlElement>() {
@@ -96,7 +96,7 @@ pub fn init_shortcuts() {
                 }
             }
         }
-        
+
         for shortcut in SHORTCUTS.iter() {
             if shortcut.key == key
                 && shortcut.alt == alt
@@ -109,13 +109,13 @@ pub fn init_shortcuts() {
             }
         }
     };
-    
+
     // Convert the closure to a JavaScript function using wasm_bindgen
     let closure = Closure::wrap(Box::new(handler) as Box<dyn FnMut(KeyboardEvent)>);
-    
+
     let window = window().unwrap();
     let _ = window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
-    
+
     // Note: In Leptos, we'd typically use on_cleanup to remove the listener
     // but for global shortcuts we want them for the whole session
     // The closure will be kept alive by leaking it (intentional for app lifetime)
@@ -165,14 +165,14 @@ fn close_modals() {
     // Dispatch escape key event to close any open modals
     let win = window().unwrap();
     let document = win.document().unwrap();
-    
+
     // Create a simple KeyboardEvent for Escape key
     if let Ok(event) = web_sys::KeyboardEvent::new("keydown") {
         // Set the key property via reflection
         js_sys::Reflect::set(&event, &"key".into(), &"Escape".into()).ok();
         let _ = document.dispatch_event(&event);
     }
-    
+
     // Also blur any focused element
     let win2 = window().unwrap();
     let document2 = win2.document().unwrap();
@@ -183,15 +183,24 @@ fn close_modals() {
 
 /// Show shortcuts help modal
 fn show_shortcuts_help() {
-    let shortcuts = SHORTCUTS.iter().map(|s| {
-        let mut keys = Vec::new();
-        if s.alt { keys.push("Alt"); }
-        if s.ctrl { keys.push("Ctrl"); }
-        if s.shift { keys.push("Shift"); }
-        keys.push(s.key);
-        (keys.join(" + "), s.description)
-    }).collect::<Vec<_>>();
-    
+    let shortcuts = SHORTCUTS
+        .iter()
+        .map(|s| {
+            let mut keys = Vec::new();
+            if s.alt {
+                keys.push("Alt");
+            }
+            if s.ctrl {
+                keys.push("Ctrl");
+            }
+            if s.shift {
+                keys.push("Shift");
+            }
+            keys.push(s.key);
+            (keys.join(" + "), s.description)
+        })
+        .collect::<Vec<_>>();
+
     // Create and show help modal
     let modal_html = format!(
         r#"<div class="shortcuts-modal" role="dialog" aria-labelledby="shortcuts-title">
@@ -205,38 +214,52 @@ fn show_shortcuts_help() {
                 </table>
             </div>
         </div>"#,
-        shortcuts.iter().map(|(k, d)| format!("<tr><kbd>{}</kbd><td>{}</td></tr>", k, d)).collect::<Vec<_>>().join("")
+        shortcuts
+            .iter()
+            .map(|(k, d)| format!("<tr><kbd>{}</kbd><td>{}</td></tr>", k, d))
+            .collect::<Vec<_>>()
+            .join("")
     );
-    
-let window = window().unwrap();
+
+    let window = window().unwrap();
     let document = window.document().unwrap();
     let body = document.body().unwrap();
     let div = document.create_element("div").unwrap();
     div.set_inner_html(&modal_html);
     div.set_class_name("shortcuts-modal-overlay");
     let _ = body.append_child(&div);
-    
+
     // Close on overlay click
     let overlay = div.clone();
     let close_handler = move |_: web_sys::Event| {
         let _ = overlay.remove();
     };
     let closure = Closure::wrap(Box::new(close_handler) as Box<dyn FnMut(web_sys::Event)>);
-    div.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).ok();
+    div.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+        .ok();
     closure.forget();
 }
 
 /// Get list of shortcuts for help display
 pub fn get_shortcuts_list() -> Vec<(&'static str, &'static str)> {
-    (*SHORTCUTS).iter().map(|s| {
-        let mut keys = Vec::new();
-        if s.alt { keys.push("Alt"); }
-        if s.ctrl { keys.push("Ctrl"); }
-        if s.shift { keys.push("Shift"); }
-        keys.push(s.key);
-        let combined: &'static str = Box::leak(keys.join(" + ").into_boxed_str());
-        (combined, s.description)
-    }).collect()
+    (*SHORTCUTS)
+        .iter()
+        .map(|s| {
+            let mut keys = Vec::new();
+            if s.alt {
+                keys.push("Alt");
+            }
+            if s.ctrl {
+                keys.push("Ctrl");
+            }
+            if s.shift {
+                keys.push("Shift");
+            }
+            keys.push(s.key);
+            let combined: &'static str = Box::leak(keys.join(" + ").into_boxed_str());
+            (combined, s.description)
+        })
+        .collect()
 }
 
 /// Hook to use shortcuts in components (for local shortcuts)
@@ -246,7 +269,7 @@ pub fn use_shortcuts(shortcuts: Vec<(&'static str, bool, bool, bool, fn())>) {
         let ctrl = ev.ctrl_key();
         let shift = ev.shift_key();
         let key = ev.key();
-        
+
         for (sk, sa, sc, ssh, action) in &shortcuts {
             if sk == &key && *sa == alt && *sc == ctrl && *ssh == shift {
                 ev.prevent_default();
@@ -255,13 +278,13 @@ pub fn use_shortcuts(shortcuts: Vec<(&'static str, bool, bool, bool, fn())>) {
             }
         }
     };
-    
+
     // Convert closure to JavaScript function
     let closure = Closure::wrap(Box::new(handler) as Box<dyn FnMut(KeyboardEvent)>);
-    
+
     let window = window().unwrap();
     let _ = window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
-    
+
     // Keep closure alive for the component lifetime
     // Note: In a real app, you'd want to properly clean up on component unmount
     // but Closure doesn't implement Clone, so we leak it intentionally
