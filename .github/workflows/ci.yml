@@ -176,7 +176,7 @@ jobs:
     name: Load Test (k6)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'push' || github.event.pull_request.labels.*.name contains 'load-test'
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'load-test')
     steps:
       - uses: actions/checkout@v4
       - name: Install k6
@@ -410,23 +410,30 @@ jobs:
   notify:
     name: Notify Result
     runs-on: ubuntu-latest
-    needs: [rust-fmt, rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, fuzz-test, coverage, wasm-build, e2e-test, security-audit, release-build]
+    needs: [spec-lint, rust-fmt, rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, fuzz-test, load-test, coverage, cargo-deny, security-audit, wasm-build, e2e-test, release-build]
     if: always()
     steps:
       - name: Summary
+        # `needs.$job.result` no es una expresión válida (el contexto no admite
+        # indexación dinámica), y por eso GitHub rechazaba el fichero entero.
+        # Se vuelca todo `needs` como JSON y la tabla se genera con jq.
+        env:
+          RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          jobs=("rust-fmt" "rust-clippy" "rust-test-lib" "rust-test-integration" "hl7-integration-test" "prop-test" "fuzz-test" "coverage" "wasm-build" "e2e-test" "cargo-deny" "security-audit" "release-build")
-          for job in "${jobs[@]}"; do
-            result="${{ needs.$job.result }}"
-            if [ "$result" = "success" ]; then
-              echo "✅ $job" >> $GITHUB_STEP_SUMMARY
-            elif [ "$result" = "failure" ]; then
-              echo "❌ $job" >> $GITHUB_STEP_SUMMARY
-            elif [ "$result" = "skipped" ]; then
-              echo "⏭️ $job (skipped)" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "❓ $job ($result)" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
+          echo "| Job | Resultado |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --------- |" >> $GITHUB_STEP_SUMMARY
+          jq -r '
+            to_entries
+            | map(select(.value | type == "object"))
+            | sort_by(.key)[]
+            | "| \(.key) | \(
+                if .value.result == "success" then "✅"
+                elif .value.result == "failure" then "❌"
+                elif .value.result == "cancelled" then "🚫"
+                elif .value.result == "skipped" then "⏭️ skipped"
+                else "❓ \(.value.result)"
+                end
+              ) |"
+          ' <<< "$RESULTS" >> $GITHUB_STEP_SUMMARY
