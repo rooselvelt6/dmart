@@ -235,6 +235,10 @@ jobs:
           # El límite por defecto (100 rpm) devolvería 429 en toda la rampa de
           # carga; el test declara el sobre que quiere medir.
           DMART_RATE_LIMIT_RPM: 100000
+      # k6 no crea el directorio de salida: sin esto falla con
+      # `open results/auth.json: no such file or directory`.
+      - name: Preparar directorio de resultados
+        run: mkdir -p results
       # Las credenciales las lee el script de `__ENV`: deben coincidir con el
       # `DMART_ADMIN_PASSWORD` con el que se sembró el admin.
       - name: Run k6 auth test
