@@ -1,8 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#f0fdf4"/>
-      <stop offset="100%" stop-color="#dcfce7"/>
+    <radialGradient id="mars-bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7f1d1d"/>
+      <stop offset="50%" stop-color="#7f1d1d"/>
+      <stop offset="100%" stop-color="#450a0a"/>
+    </radialGradient>
+    <radialGradient id="mars-planet" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ff5c2a"/>
+      <stop offset="35%" stop-color="#dc2626"/>
+      <stop offset="65%" stop-color="#b91c1c"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
     </radialGradient>
     <radialGradient id="cross-gradient" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="#16a34a"/>
@@ -12,7 +19,12 @@
       <stop offset="0%" stop-color="#ef4444"/>
       <stop offset="100%" stop-color="#dc2626"/>
     </radialGradient>
-    <filter id="soft-glow">
+    <radialGradient id="glow-gradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fca5a5" stop-opacity="0.4"/>
+      <stop offset="70%" stop-color="#ef4444" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#dc2626" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow">
       <feGaussianBlur stdDeviation="3" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
@@ -21,35 +33,80 @@
     </filter>
   </defs>
 
-  <!-- Fondo circular limpio -->
-  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+  <!-- Fondo: Planeta Marte (fondo rojo) -->
+  <circle cx="256" cy="256" r="256" fill="url(#mars-bg)"/>
+  <defs>
+    <radialGradient id="mars-bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7f1d1d"/>
+      <stop offset="100%" stop-color="#450a0a"/>
+    </radialGradient>
+  </defs>
 
-  <!-- Anillo exterior sutil -->
-  <circle cx="256" cy="256" r="248" fill="none" stroke="#16a34a" stroke-width="3" opacity="0.3"/>
+  <!-- Anillo exterior: brillo Marte -->
+  <circle cx="256" cy="256" r="248" fill="none" stroke="#fca5a5" stroke-width="3" opacity="0.5">
+    <animate attributeName="stroke-width" values="2;4;2" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.4;0.8;0.4" dur="2s" repeatCount="indefinite"/>
+  </circle>
 
-  <!-- Cruz médica principal - verde salud -->
+  <!-- Planeta Marte rotativo -->
+  <circle cx="256" cy="256" r="180" fill="url(#mars-planet)">
+    <animateTransform attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="60s" repeatCount="indefinite"/>
+  </circle>
+  <defs>
+    <radialGradient id="mars-planet" cx="35%" cy="35%" r="65%" fx="35%" fy="35%">
+      <stop offset="0%" stop-color="#ff5c2a"/>
+      <stop offset="35%" stop-color="#dc2626"/>
+      <stop offset="65%" stop-color="#b91c1c"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Detalles superficie Marte -->
+  <ellipse cx="320" cy="180" rx="35" ry="24" fill="#b91c1c" opacity="0.7" transform="rotate(-15 320 180)"/>
+  <ellipse cx="200" cy="340" rx="30" ry="20" fill="#991b1b" opacity="0.6" transform="rotate(10 200 340)"/>
+  <ellipse cx="360" cy="350" rx="20" ry="16" fill="#b91c1c" opacity="0.5" transform="rotate(-20 360 350)"/>
+
+  <!-- Cruz médica VERDE centrada (sobre el planeta) -->
   <g transform="translate(256, 256)" filter="url(#glow)">
-    <rect x="-24" y="-80" width="48" height="160" rx="12" fill="url(#cross-gradient)"/>
-    <rect x="-80" y="-24" width="160" height="48" rx="12" fill="url(#cross-gradient)"/>
+    <defs>
+      <radialGradient id="green-cross" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#22c55e"/>
+        <stop offset="100%" stop-color="#16a34a"/>
+      </radialGradient>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge>
+          <feMergeNode in="blur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+
+    <rect x="-28" y="-90" width="56" height="180" rx="14" fill="url(#green-cross)" filter="url(#glow)">
+      <animate attributeName="opacity" values="1;0.85;1" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="-90" y="-28" width="180" height="56" rx="14" fill="url(#green-cross)" filter="url(#glow)">
+      <animate attributeName="opacity" values="1;0.85;1" dur="2s" repeatCount="indefinite"/>
+    </rect>
     
-    <!-- Corazón en el centro de la cruz -->
-    <path d="M0,-10 C-12,-20 -12,-30 0,-20 C12,-30 12,-20 0,-10 Z" 
-          fill="url(#heart-gradient)" opacity="0.95">
-      <animate attributeName="transform" values="scale(1);scale(1.08);scale(1)" dur="1s" repeatCount="indefinite"/>
+    <!-- Corazón en el centro -->
+    <path d="M0,-14 C-16,-24 -16,-36 0,-24 C16,-36 16,-24 0,-14 Z" 
+          fill="#16a34a" opacity="0.95">
+      <animate attributeName="transform" values="scale(1);scale(1.1);scale(1)" dur="1s" repeatCount="indefinite"/>
     </path>
   </g>
 
-  <!-- Anillo de vida -->
-  <circle cx="256" cy="256" r="140" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.3" stroke-dasharray="8 12">
-    <animateTransform attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="40s" repeatCount="indefinite"/>
-  </circle>
-
-  <!-- Pulso vital (EKG) -->
-  <path d="M-120,0 Q-90,-30 -60,0 Q-30,30 0,0 Q30,-30 60,0 Q90,-30 120,0" 
-        fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" filter="url(#glow)">
-    <animate attributeName="stroke-dashoffset" from="600" to="0" dur="2s" repeatCount="indefinite"/>
+  <!-- Pulso vital (EKG) rojo sobre la cruz -->
+  <path d="M-140,0 Q-105,-35 -70,0 Q-35,35 0,0 Q35,-35 70,0 Q105,-35 140,0" 
+        fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" filter="url(#glow)">
+    <animate attributeName="stroke-dashoffset" from="800" to="0" dur="2s" repeatCount="indefinite"/>
   </path>
 
-  <!-- Texto DM -->
-  <text x="256" y="440" font-family="system-ui, sans-serif" font-size="26" font-weight="800" fill="#16a34a" text-anchor="middle" letter-spacing="3" opacity="0.85">DM</text>
+  <!-- Anillo verde de vida -->
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.4" stroke-dasharray="10 15">
+    <animateTransform attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="35s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Texto DM en verde -->
+  <text x="256" y="440" font-family="system-ui, sans-serif" font-size="28" font-weight="800" fill="#16a34a" text-anchor="middle" letter-spacing="3" opacity="0.9">DM</text>
 </svg>
