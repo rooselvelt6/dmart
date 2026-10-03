@@ -22,9 +22,7 @@
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
-use dmart_shared::models::{
-    ApacheIIData, GcsData, Measurement, News2Level, Patient, SeverityLevel,
-};
+use dmart_shared::models::{ApacheIIData, GcsData, Measurement, Patient};
 use serde_json::Value;
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
@@ -1066,6 +1064,7 @@ fn report_ctx(tenant_id: &str, report_id: &str) -> PhiContext {
     PhiContext::new(tenant_id, REPORT_RECORD_TYPE, report_id)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn seal_report(
     report_id: &str,
     tenant_id: &str,
@@ -1232,35 +1231,6 @@ pub async fn update_patient(
         .await
         .context("actualizando paciente cifrado")?;
     Ok(Some(patient))
-}
-
-/// Cláusula SurrealQL de coincidencia exacta sobre índices ciegos.
-///
-/// Cada índice se compara contra **su propio** parámetro: `bi_hc = $bi_hc`. Una
-/// columna `bi_hc = $q` con `$q` siendo el identificador en claro no encontraría
-/// nunca la fila y además metería el MRN en el plan de la consulta.
-///
-/// Los términos `historia_clinica`/`cedula` sólo aplican a filas heredadas, que
-/// aún no tienen `bi_*`. Se pueden retirar cuando la tabla esté migrada.
-fn exact_match_clause(indexes: &[(&str, &str)], legacy_columns: &[&str]) -> String {
-    let by_index = indexes
-        .iter()
-        .map(|(col, param)| format!("{col} = ${param}"))
-        .collect::<Vec<_>>();
-    let legacy = legacy_columns
-        .iter()
-        .map(|c| format!("{c} = $q"))
-        .collect::<Vec<_>>();
-    match (by_index.is_empty(), legacy.is_empty()) {
-        (true, true) => "FALSE".to_string(),
-        (true, false) => legacy.join(" OR "),
-        (false, true) => by_index.join(" OR "),
-        (false, false) => {
-            let mut parts = by_index;
-            parts.extend(legacy);
-            format!("({})", parts.join(" OR "))
-        }
-    }
 }
 
 /// Resuelve pacientes por MRN/cédula con coincidencia exacta, acotados a un
@@ -1509,9 +1479,7 @@ mod tests {
 mod db_tests {
     use super::*;
     use crate::crypto::AES256_MAGIC;
-    use dmart_shared::models::{
-        ApacheIIData, GcsData, Measurement, News2Level, Patient, SeverityLevel,
-    };
+    use dmart_shared::models::Patient;
     use surrealdb::engine::local::SurrealKv;
 
     async fn test_db() -> (Surreal<Db>, tempfile::TempDir) {

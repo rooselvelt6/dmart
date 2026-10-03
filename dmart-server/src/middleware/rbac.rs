@@ -5,10 +5,9 @@
 
 use crate::auth::Claims;
 use crate::db::Database;
-use crate::rbac::ResourceOwner;
 use axum::{
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     middleware::Next,
     response::Response,
 };

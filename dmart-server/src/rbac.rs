@@ -347,6 +347,102 @@ pub fn permission_for(method: &str, path: &str) -> Option<&'static str> {
     }
 }
 
+/// Trait para verificar ownership de un recurso por tenant.
+///
+/// Implementar para cada tipo de recurso (Patient, Measurement, etc.)
+/// para habilitar el middleware `require_tenant_ownership`.
+#[async_trait::async_trait]
+pub trait ResourceOwner: Send + Sync {
+    /// Verifica si el recurso con `resource_id` pertenece al `tenant_id`.
+    async fn check_ownership(
+        db: &crate::db::Database,
+        tenant_id: &str,
+        resource_id: &str,
+    ) -> Result<bool, anyhow::Error>;
+}
+
+/// Implementación para Patient
+pub struct PatientOwner;
+#[async_trait::async_trait]
+impl ResourceOwner for PatientOwner {
+    async fn check_ownership(
+        db: &crate::db::Database,
+        tenant_id: &str,
+        resource_id: &str,
+    ) -> Result<bool, anyhow::Error> {
+        let patient = crate::db::get_patient(db, resource_id).await?;
+        Ok(patient.map(|p| p.tenant_id == tenant_id).unwrap_or(false))
+    }
+}
+
+/// Implementación para Measurement
+pub struct MeasurementOwner;
+#[async_trait::async_trait]
+impl ResourceOwner for MeasurementOwner {
+    async fn check_ownership(
+        db: &crate::db::Database,
+        tenant_id: &str,
+        resource_id: &str,
+    ) -> Result<bool, anyhow::Error> {
+        // Para measurements, el resource_id es el measurement_id
+        // Necesitamos obtener la medición y verificar su tenant_id
+        let measurements: Vec<serde_json::Value> = db
+            .query("SELECT tenant_id FROM measurements WHERE measurement_id = $id LIMIT 1")
+            .bind(("id", resource_id.to_string()))
+            .await?
+            .take(0)?;
+        Ok(measurements
+            .first()
+            .and_then(|v| v["tenant_id"].as_str())
+            .map(|t| t == tenant_id)
+            .unwrap_or(false))
+    }
+}
+
+/// Implementación para Cama
+pub struct CamaOwner;
+#[async_trait::async_trait]
+impl ResourceOwner for CamaOwner {
+    async fn check_ownership(
+        db: &crate::db::Database,
+        tenant_id: &str,
+        resource_id: &str,
+    ) -> Result<bool, anyhow::Error> {
+        let cama: Vec<serde_json::Value> = db
+            .query("SELECT tenant_id FROM camas WHERE cama_id = $id LIMIT 1")
+            .bind(("id", resource_id.to_string()))
+            .await?
+            .take(0)?;
+        Ok(cama
+            .first()
+            .and_then(|v| v["tenant_id"].as_str())
+            .map(|t| t == tenant_id)
+            .unwrap_or(false))
+    }
+}
+
+/// Implementación para DeviceRegistry
+pub struct DeviceOwner;
+#[async_trait::async_trait]
+impl ResourceOwner for DeviceOwner {
+    async fn check_ownership(
+        db: &crate::db::Database,
+        tenant_id: &str,
+        resource_id: &str,
+    ) -> Result<bool, anyhow::Error> {
+        let device: Vec<serde_json::Value> = db
+            .query("SELECT tenant_id FROM device_registry WHERE device_id = $id LIMIT 1")
+            .bind(("id", resource_id.to_string()))
+            .await?
+            .take(0)?;
+        Ok(device
+            .first()
+            .and_then(|v| v["tenant_id"].as_str())
+            .map(|t| t == tenant_id)
+            .unwrap_or(false))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -662,101 +758,5 @@ mod tests {
         assert!(!Role::Doctor.can("audit:read"));
         assert!(!Role::Doctor.can("config:write"));
         assert!(!Role::Nurse.can("users:read"));
-    }
-}
-
-/// Trait para verificar ownership de un recurso por tenant.
-///
-/// Implementar para cada tipo de recurso (Patient, Measurement, etc.)
-/// para habilitar el middleware `require_tenant_ownership`.
-#[async_trait::async_trait]
-pub trait ResourceOwner: Send + Sync {
-    /// Verifica si el recurso con `resource_id` pertenece al `tenant_id`.
-    async fn check_ownership(
-        db: &crate::db::Database,
-        tenant_id: &str,
-        resource_id: &str,
-    ) -> Result<bool, anyhow::Error>;
-}
-
-/// Implementación para Patient
-pub struct PatientOwner;
-#[async_trait::async_trait]
-impl ResourceOwner for PatientOwner {
-    async fn check_ownership(
-        db: &crate::db::Database,
-        tenant_id: &str,
-        resource_id: &str,
-    ) -> Result<bool, anyhow::Error> {
-        let patient = crate::db::get_patient(db, resource_id).await?;
-        Ok(patient.map(|p| p.tenant_id == tenant_id).unwrap_or(false))
-    }
-}
-
-/// Implementación para Measurement
-pub struct MeasurementOwner;
-#[async_trait::async_trait]
-impl ResourceOwner for MeasurementOwner {
-    async fn check_ownership(
-        db: &crate::db::Database,
-        tenant_id: &str,
-        resource_id: &str,
-    ) -> Result<bool, anyhow::Error> {
-        // Para measurements, el resource_id es el measurement_id
-        // Necesitamos obtener la medición y verificar su tenant_id
-        let measurements: Vec<serde_json::Value> = db
-            .query("SELECT tenant_id FROM measurements WHERE measurement_id = $id LIMIT 1")
-            .bind(("id", resource_id.to_string()))
-            .await?
-            .take(0)?;
-        Ok(measurements
-            .first()
-            .and_then(|v| v["tenant_id"].as_str())
-            .map(|t| t == tenant_id)
-            .unwrap_or(false))
-    }
-}
-
-/// Implementación para Cama
-pub struct CamaOwner;
-#[async_trait::async_trait]
-impl ResourceOwner for CamaOwner {
-    async fn check_ownership(
-        db: &crate::db::Database,
-        tenant_id: &str,
-        resource_id: &str,
-    ) -> Result<bool, anyhow::Error> {
-        let cama: Vec<serde_json::Value> = db
-            .query("SELECT tenant_id FROM camas WHERE cama_id = $id LIMIT 1")
-            .bind(("id", resource_id.to_string()))
-            .await?
-            .take(0)?;
-        Ok(cama
-            .first()
-            .and_then(|v| v["tenant_id"].as_str())
-            .map(|t| t == tenant_id)
-            .unwrap_or(false))
-    }
-}
-
-/// Implementación para DeviceRegistry
-pub struct DeviceOwner;
-#[async_trait::async_trait]
-impl ResourceOwner for DeviceOwner {
-    async fn check_ownership(
-        db: &crate::db::Database,
-        tenant_id: &str,
-        resource_id: &str,
-    ) -> Result<bool, anyhow::Error> {
-        let device: Vec<serde_json::Value> = db
-            .query("SELECT tenant_id FROM device_registry WHERE device_id = $id LIMIT 1")
-            .bind(("id", resource_id.to_string()))
-            .await?
-            .take(0)?;
-        Ok(device
-            .first()
-            .and_then(|v| v["tenant_id"].as_str())
-            .map(|t| t == tenant_id)
-            .unwrap_or(false))
     }
 }

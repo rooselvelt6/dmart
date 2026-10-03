@@ -52,10 +52,9 @@ pub async fn auth_middleware(
     // Seguridad: el access token SOLO se acepta en el header `Authorization`.
     // NUNCA en la query string (`?token=...`): quedaría en logs, historial del
     // navegador, referrer y headers de proxy (fuga de sesión).
-    let token = match auth_header.and_then(extract_token_from_header) {
-        Some(t) => Some(t.to_string()),
-        None => None,
-    };
+    let token = auth_header
+        .and_then(extract_token_from_header)
+        .map(|t| t.to_string());
 
     let token = match token {
         Some(t) => t,

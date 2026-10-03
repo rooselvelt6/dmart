@@ -14,9 +14,24 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 #[cfg(feature = "ml-nn")]
-use candle_core::{DType, Device, Tensor};
+use candle_core::Device;
 #[cfg(feature = "ml-nn")]
-use candle_nn::{Linear, Module, VarBuilder, VarMap, linear, ops::softmax};
+use candle_nn::VarMap;
+
+/// `candle_core::Error` no implementa `std::error::Error`, así que `?` no lo
+/// convierte a `anyhow::Error`. Este macro propaga el error manualmente
+/// preservando el mensaje original.
+#[cfg(feature = "ml-nn")]
+#[cfg(feature = "ml-nn")]
+macro_rules! ctry {
+    ($expr:expr) => {{
+        let r: candle_core::Result<_> = $expr;
+        match r {
+            Ok(v) => v,
+            Err(e) => return Err(anyhow!("candle: {e}")),
+        }
+    }};
+}
 
 #[cfg(feature = "ml-nn")]
 use crate::ml_features::MlFeatures;
@@ -56,7 +71,7 @@ type ModelWeights = Option<candle_nn::VarMap>;
 #[cfg(not(feature = "ml-nn"))]
 type ModelWeights = Option<()>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LosNnModel {
     pub config: LosNnConfig,
     pub feature_set: FeatureSet,
@@ -66,6 +81,39 @@ pub struct LosNnModel {
     pub sha256: String,
     pub trained_at: Option<String>,
     pub metrics: Option<LosNnMetrics>,
+}
+
+/// `VarMap` no implementa `Debug`, así que se implementa a mano omitiendo los pesos.
+#[cfg(feature = "ml-nn")]
+impl std::fmt::Debug for LosNnModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LosNnModel")
+            .field("config", &self.config)
+            .field("feature_set", &self.feature_set)
+            .field("normalizer", &self.normalizer)
+            .field(
+                "model_weights",
+                &self.model_weights.as_ref().map(|vm| vm.all_vars().len()),
+            )
+            .field("sha256", &self.sha256)
+            .field("trained_at", &self.trained_at)
+            .field("metrics", &self.metrics)
+            .finish()
+    }
+}
+
+#[cfg(not(feature = "ml-nn"))]
+impl std::fmt::Debug for LosNnModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LosNnModel")
+            .field("config", &self.config)
+            .field("feature_set", &self.feature_set)
+            .field("normalizer", &self.normalizer)
+            .field("sha256", &self.sha256)
+            .field("trained_at", &self.trained_at)
+            .field("metrics", &self.metrics)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,9 +159,18 @@ impl LosNnModel {
     pub fn compute_sha256(&mut self) -> String {
         let mut hasher = Sha256::new();
         if let Some(weights) = &self.model_weights {
-            for (name, tensor) in weights.data() {
-                let bytes = tensor.to_vec1::<f32>().unwrap_or_default();
-                hasher.update(bytemuck::cast_slice(&bytes));
+            // `VarMap::data()` expone el mapa interno tras un Mutex. Se ordenan
+            // las claves porque el orden de iteración de un HashMap no es
+            // determinista y el hash debe ser reproducible.
+            let data = weights.data().lock().unwrap();
+            let mut entries: Vec<(&String, &candle_core::Var)> = data.iter().collect();
+            entries.sort_by(|a, b| a.0.cmp(b.0));
+            for (_, tensor) in entries {
+                // `compute_sha256` devuelve `String`, así que un tensor que no
+                // sea f32 se salta en vez de propagar el error.
+                if let Ok(values) = tensor.to_vec1::<f32>() {
+                    hasher.update(bytemuck::cast_slice(&values));
+                }
             }
         }
         hasher.update(self.feature_set.hash.as_bytes());
@@ -134,34 +191,35 @@ impl LosNnModel {
 
 #[cfg(feature = "ml-nn")]
 impl LosNnModel {
-    pub fn init_model(&mut self, device: &Device) -> Result<()> {
-        let varmap = VarMap::new();
-        let vb = VarBuilder::from_varmap(&varmap, DType::F32, device);
-        self.build_model(vb)?;
-        self.model_weights = Some(varmap);
-        Ok(())
-    }
-
-    fn build_model(&self, vb: VarBuilder) -> Result<Box<dyn LosPredictor>> {
+    fn build_model(&self, varmap: &VarMap, device: &Device) -> Result<Box<dyn LosPredictor>> {
         if self.config.use_lstm {
-            Ok(Box::new(LstmLosPredictor::new(vb, &self.config)?))
+            Ok(Box::new(LstmLosPredictor::new(
+                varmap,
+                &self.config,
+                device,
+            )?))
         } else {
-            Ok(Box::new(MlpLosPredictor::new(vb, &self.config)?))
+            Ok(Box::new(MlpLosPredictor::new(
+                varmap,
+                &self.config,
+                device,
+            )?))
         }
     }
-
     pub fn save(&self, path: &str) -> Result<()> {
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(path, json)?;
         self.normalizer
-            .save_json(&format!("{}.normalizer.json", path))?;
+            .save_json(&format!("{}.normalizer.json", path))
+            .map_err(|e| anyhow!("normalizer: {e}"))?;
         Ok(())
     }
 
     pub fn load(path: &str) -> Result<Self> {
         let json = std::fs::read_to_string(path)?;
         let mut model: Self = serde_json::from_str(&json)?;
-        model.normalizer = Normalizer::load_json(&format!("{}.normalizer.json", path))?;
+        model.normalizer = Normalizer::load_json(&format!("{}.normalizer.json", path))
+            .map_err(|e| anyhow!("normalizer: {e}"))?;
         Ok(model)
     }
 }
@@ -170,12 +228,13 @@ impl LosNnModel {
 impl LosNnModel {
     pub fn init_model(&mut self, device: &Device) -> Result<()> {
         let varmap = VarMap::new();
-        let vb = VarBuilder::from_varmap(&varmap, DType::F32, device);
-        self.build_model(vb)?;
+        // Construir el predictor registra todos los pesos en el VarMap.
+        self.build_model(&varmap, device)?;
         self.model_weights = Some(varmap);
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn train(
         &mut self,
         train_features: &Array2<f32>,
@@ -196,11 +255,12 @@ impl LosNnModel {
         let mut val_features_norm = val_features.clone();
         self.normalizer.transform(&mut val_features_norm);
 
-        let predictor = self.build_model(VarBuilder::from_varmap(
-            self.model_weights.as_ref().unwrap(),
-            DType::F32,
+        let predictor = self.build_model(
+            self.model_weights
+                .as_ref()
+                .context("Model not initialised")?,
             &device,
-        ))?;
+        )?;
 
         predictor.train(
             &train_features_norm,
@@ -213,23 +273,28 @@ impl LosNnModel {
             &device,
         )?;
 
+        // `train` muta los pesos in-place dentro del VarMap compartido, así que
+        // se recuperan aquí para que `compute_sha256` hashee lo entrenado.
+        self.model_weights = Some(predictor.varmap().clone());
+
         self.trained_at = Some(chrono::Utc::now().to_rfc3339());
         self.compute_sha256();
         Ok(())
     }
 
     pub fn predict(&self, features: &MlFeatures) -> Result<LosPrediction> {
-        features.validate_against(&self.feature_set)?;
+        features
+            .validate_against(&self.feature_set)
+            .map_err(|e| anyhow!("feature validation: {e}"))?;
 
         let mut feature_array = features.to_array(&self.feature_set.feature_names());
         self.normalizer.transform_vector(&mut feature_array);
 
         let device = Device::Cpu;
-        let predictor = self.build_model(VarBuilder::from_varmap(
+        let predictor = self.build_model(
             self.model_weights.as_ref().context("Model not trained")?,
-            DType::F32,
             &device,
-        ))?;
+        )?;
 
         predictor.predict(&feature_array)
     }
@@ -247,11 +312,10 @@ impl LosNnModel {
         self.normalizer.transform(&mut test_features_norm);
 
         let device = Device::Cpu;
-        let predictor = self.build_model(VarBuilder::from_varmap(
+        let predictor = self.build_model(
             self.model_weights.as_ref().context("Model not trained")?,
-            DType::F32,
             &device,
-        ))?;
+        )?;
 
         let mut predictions = Vec::with_capacity(test_targets.len());
         for i in 0..test_targets.len() {
@@ -268,6 +332,10 @@ impl LosNnModel {
 
 #[cfg(feature = "ml-nn")]
 pub trait LosPredictor: Send + Sync {
+    /// `VarMap` con los pesos del predictor, para poder persistirlos tras entrenar.
+    fn varmap(&self) -> &VarMap;
+
+    #[allow(clippy::too_many_arguments)]
     fn train(
         &self,
         train_features: &Array2<f32>,
@@ -294,9 +362,10 @@ pub struct LosPrediction {
 mod nn_impl {
     use super::*;
     use candle_core::{DType, Device, Tensor};
-    use candle_nn::{Dropout, LSTM, LSTMConfig, Linear, Module, VarBuilder, linear_no_bias};
+    use candle_nn::{Dropout, LSTM, LSTMConfig, Linear, Module, VarBuilder, linear};
 
     pub struct MlpLosPredictor {
+        varmap: VarMap,
         layers: Vec<Linear>,
         dropout: Dropout,
         output_layer: Linear,
@@ -304,20 +373,26 @@ mod nn_impl {
     }
 
     impl MlpLosPredictor {
-        pub fn new(vb: VarBuilder, config: &LosNnConfig) -> Result<Self> {
+        pub fn new(varmap: &VarMap, config: &LosNnConfig, device: &Device) -> Result<Self> {
+            let vb = VarBuilder::from_varmap(varmap, DType::F32, device);
             let mut layers = Vec::new();
             let mut in_size = config.input_size;
 
             for (i, &hidden_size) in config.hidden_sizes.iter().enumerate() {
-                let layer = linear(in_size, hidden_size, vb.pp(&format!("layer_{}", i)))?;
+                let layer = ctry!(linear(in_size, hidden_size, vb.pp(format!("layer_{}", i))));
                 layers.push(layer);
                 in_size = hidden_size;
             }
 
-            let output_layer = linear(in_size, 1 + config.output_quantiles.len(), vb.pp("output"))?;
+            let output_layer = ctry!(linear(
+                in_size,
+                1 + config.output_quantiles.len(),
+                vb.pp("output")
+            ));
             let dropout = Dropout::new(config.dropout);
 
             Ok(Self {
+                varmap: varmap.clone(),
                 layers,
                 dropout,
                 output_layer,
@@ -325,19 +400,21 @@ mod nn_impl {
             })
         }
 
-        fn forward(&self, x: &Tensor) -> Result<Tensor> {
+        fn forward(&self, x: &Tensor, train: bool) -> Result<Tensor> {
             let mut x = x.clone();
             for layer in &self.layers {
-                x = layer.forward(&x)?;
-                x = x.relu()?;
-                x = self.dropout.forward(&x)?;
+                x = ctry!(layer.forward(&x)).relu()?;
+                x = ctry!(self.dropout.forward(&x, train));
             }
-            let out = self.output_layer.forward(&x)?;
-            Ok(out)
+            Ok(ctry!(self.output_layer.forward(&x)))
         }
     }
 
     impl LosPredictor for MlpLosPredictor {
+        fn varmap(&self) -> &VarMap {
+            &self.varmap
+        }
+
         fn train(
             &self,
             train_features: &Array2<f32>,
@@ -354,29 +431,30 @@ mod nn_impl {
             let n_samples = train_features.nrows();
             let n_features = train_features.ncols();
 
-            let train_x = Tensor::from_slice(
+            let train_x = ctry!(Tensor::from_slice(
                 train_features.as_slice().unwrap(),
                 (n_samples, n_features),
-                device,
-            )?;
-            let train_y =
-                Tensor::from_slice(train_targets.as_slice().unwrap(), (n_samples, 1), device)?;
+                device
+            ));
+            let train_y = ctry!(Tensor::from_slice(
+                train_targets.as_slice().unwrap(),
+                (n_samples, 1),
+                device
+            ));
 
-            let val_x = Tensor::from_slice(
+            let val_x = ctry!(Tensor::from_slice(
                 val_features.as_slice().unwrap(),
                 (val_features.nrows(), n_features),
-                device,
-            )?;
-            let val_y = Tensor::from_slice(
+                device
+            ));
+            let val_y = ctry!(Tensor::from_slice(
                 val_targets.as_slice().unwrap(),
                 (val_targets.len(), 1),
-                device,
-            )?;
+                device
+            ));
 
-            let varmap = VarMap::new();
-            let vb = VarBuilder::from_varmap(&varmap, DType::F32, device);
-            let mut model = MlpLosPredictor::new(vb, &self.config)?;
-            let mut opt = SGD::new(varmap.all_vars(), learning_rate)?;
+            let mut opt = ctry!(SGD::new(self.varmap.all_vars(), learning_rate as f64));
+            let mut last_loss: Option<f32> = None;
 
             for epoch in 0..epochs {
                 let mut indices: Vec<usize> = (0..n_samples).collect();
@@ -389,29 +467,29 @@ mod nn_impl {
                     let batch_indices = &indices[batch_start..batch_end];
                     let batch_size_actual = batch_indices.len();
 
-                    let batch_x = train_x.index_select(
-                        &Tensor::from_slice(batch_indices, batch_size_actual, device)?,
-                        0,
-                    )?;
-                    let batch_y = train_y.index_select(
-                        &Tensor::from_slice(batch_indices, batch_size_actual, device)?,
-                        0,
-                    )?;
+                    // candle no implementa `WithDType` para `usize`; los índices
+                    // de `index_select` deben ser `u32`.
+                    let idx: Vec<u32> = batch_indices.iter().map(|&i| i as u32).collect();
+                    let idx_t = ctry!(Tensor::from_slice(&idx, batch_size_actual, device));
 
-                    let preds = model.forward(&batch_x)?;
-                    let loss = mse(&preds.narrow(1, 0, 1)?, &batch_y)?;
+                    let batch_x = ctry!(train_x.index_select(&idx_t, 0));
+                    let batch_y = ctry!(train_y.index_select(&idx_t, 0));
 
-                    opt.backward_step(&loss)?;
+                    let preds = self.forward(&batch_x, true)?;
+                    let loss = ctry!(mse(&ctry!(preds.narrow(1, 0, 1)), &batch_y));
+
+                    ctry!(opt.backward_step(&loss));
+                    last_loss = Some(ctry!(loss.to_scalar::<f32>()));
                 }
 
                 if epoch % 10 == 0 {
-                    let val_preds = model.forward(&val_x)?;
-                    let val_loss = mse(&val_preds.narrow(1, 0, 1)?, &val_y)?;
+                    let val_preds = self.forward(&val_x, false)?;
+                    let val_loss = ctry!(mse(&ctry!(val_preds.narrow(1, 0, 1)), &val_y));
                     println!(
                         "Epoch {}: train_loss={:.4}, val_loss={:.4}",
                         epoch,
-                        loss.to_scalar::<f32>()?,
-                        val_loss.to_scalar::<f32>()?
+                        last_loss.unwrap_or(f32::NAN),
+                        ctry!(val_loss.to_scalar::<f32>())
                     );
                 }
             }
@@ -421,14 +499,18 @@ mod nn_impl {
 
         fn predict(&self, features: &Array1<f32>) -> Result<LosPrediction> {
             let device = Device::Cpu;
-            let x = Tensor::from_slice(features.as_slice().unwrap(), (1, features.len()), &device)?;
-            let out = self.forward(&x)?;
+            let x = ctry!(Tensor::from_slice(
+                features.as_slice().unwrap(),
+                (1, features.len()),
+                &device
+            ));
+            let out = self.forward(&x, false)?;
 
-            let los_hours = out.narrow(1, 0, 1)?.to_scalar::<f32>()?.max(0.0);
+            let los_hours = ctry!(ctry!(out.narrow(1, 0, 1)).to_scalar::<f32>()).max(0.0);
             let mut quantiles = HashMap::new();
             for (i, q) in self.config.output_quantiles.iter().enumerate() {
                 let key = format!("q{}", (q * 100.0) as u32);
-                let val = out.narrow(1, 1 + i, 1)?.to_scalar::<f32>()?.max(0.0);
+                let val = ctry!(ctry!(out.narrow(1, 1 + i, 1)).to_scalar::<f32>()).max(0.0);
                 quantiles.insert(key, val);
             }
 
@@ -443,31 +525,41 @@ mod nn_impl {
         }
     }
 
+    /// El predictor LSTM registra sus pesos en el `VarMap` al construirse, pero
+    /// `train`/`predict` aún no están implementados, de ahí el `allow`.
+    #[allow(dead_code)]
     pub struct LstmLosPredictor {
+        varmap: VarMap,
         lstm: LSTM,
         output_layer: Linear,
         config: LosNnConfig,
     }
 
     impl LstmLosPredictor {
-        pub fn new(vb: VarBuilder, config: &LosNnConfig) -> Result<Self> {
+        pub fn new(varmap: &VarMap, config: &LosNnConfig, device: &Device) -> Result<Self> {
+            let vb = VarBuilder::from_varmap(varmap, DType::F32, device);
+
+            // candle solo soporta una capa: `LSTMConfig` no tiene `num_layers`,
+            // usa `layer_idx` + `direction`. `lstm_num_layers` se ignora y el
+            // entrenamiento LSTM sigue sin implementarse.
             let lstm_config = LSTMConfig {
-                num_layers: config.lstm_num_layers,
+                layer_idx: 0,
                 ..Default::default()
             };
-            let lstm = LSTM::new(
+            let lstm = ctry!(LSTM::new(
                 config.input_size,
                 config.lstm_hidden_size,
                 lstm_config,
                 vb.pp("lstm"),
-            )?;
-            let output_layer = linear(
+            ));
+            let output_layer = ctry!(linear(
                 config.lstm_hidden_size,
                 1 + config.output_quantiles.len(),
                 vb.pp("output"),
-            )?;
+            ));
 
             Ok(Self {
+                varmap: varmap.clone(),
                 lstm,
                 output_layer,
                 config: config.clone(),
@@ -476,6 +568,10 @@ mod nn_impl {
     }
 
     impl LosPredictor for LstmLosPredictor {
+        fn varmap(&self) -> &VarMap {
+            &self.varmap
+        }
+
         fn train(
             &self,
             _train_features: &Array2<f32>,
@@ -515,6 +611,8 @@ mod nn_stub {
     }
 
     pub trait LosPredictor: Send + Sync {
+        fn varmap(&self) -> &();
+
         #[allow(clippy::too_many_arguments)]
         fn train(
             &self,
@@ -537,26 +635,35 @@ mod nn_stub {
 
     pub struct MlpLosPredictor;
     impl MlpLosPredictor {
-        pub fn new(_vb: &dyn std::any::Any, _config: &LosNnConfig) -> Result<Self> {
+        pub fn new(_varmap: &(), _config: &LosNnConfig, _device: &Device) -> Result<Self> {
             Err(anyhow::anyhow!("ml-nn feature not enabled"))
         }
     }
-    impl LosPredictor for MlpLosPredictor {}
+    impl LosPredictor for MlpLosPredictor {
+        fn varmap(&self) -> &() {
+            &()
+        }
+    }
 
     pub struct LstmLosPredictor;
     impl LstmLosPredictor {
-        pub fn new(_vb: &dyn std::any::Any, _config: &LosNnConfig) -> Result<Self> {
+        pub fn new(_varmap: &(), _config: &LosNnConfig, _device: &Device) -> Result<Self> {
             Err(anyhow::anyhow!("ml-nn feature not enabled"))
         }
     }
-    impl LosPredictor for LstmLosPredictor {}
+    impl LosPredictor for LstmLosPredictor {
+        fn varmap(&self) -> &() {
+            &()
+        }
+    }
 }
 
 #[cfg(not(feature = "ml-nn"))]
 #[allow(unused_imports)]
 use nn_stub::{LstmLosPredictor, MlpLosPredictor};
 
-#[cfg(feature = "ml-nn")]
+/// Sin `ml-nn` solo la usan los tests del módulo.
+#[cfg_attr(not(feature = "ml-nn"), allow(dead_code))]
 fn compute_metrics(predictions: &[f32], targets: &[f32]) -> LosNnMetrics {
     let n = predictions.len() as f32;
     let mut mae = 0.0;
@@ -624,7 +731,8 @@ fn compute_metrics(predictions: &[f32], targets: &[f32]) -> LosNnMetrics {
     }
 }
 
-#[cfg(feature = "ml-nn")]
+/// Sin `ml-nn` solo la usan los tests del módulo.
+#[cfg_attr(not(feature = "ml-nn"), allow(dead_code))]
 fn bootstrap_ci<F>(predictions: &[f32], targets: &[f32], metric_fn: F) -> (f32, f32)
 where
     F: Fn(&[f32], &[f32]) -> f32,
@@ -707,7 +815,6 @@ pub fn generate_synthetic_los_data(n_samples: usize) -> (Array2<f32>, Array1<f32
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{Array1, Array2};
 
     #[test]
     fn test_los_nn_config_default() {
@@ -747,7 +854,7 @@ mod tests {
         let metrics = compute_metrics(&preds, &targets);
         assert!(metrics.mae > 0.0);
         assert!(metrics.rmse > 0.0);
-        assert!(metrics.binned_acc_24h >= 0.0 && metrics.binned_acc_24h <= 1.0);
+        assert!((0.0..=1.0).contains(&metrics.binned_acc_24h));
     }
 
     #[test]
@@ -756,8 +863,33 @@ mod tests {
         let config = LosNnConfig::default();
         let device = Device::Cpu;
         let varmap = VarMap::new();
-        let vb = VarBuilder::from_varmap(&varmap, DType::F32, &device);
-        let predictor = MlpLosPredictor::new(vb, &config);
+        let predictor = MlpLosPredictor::new(&varmap, &config, &device);
         assert!(predictor.is_ok());
+        assert!(!varmap.all_vars().is_empty());
+    }
+
+    #[test]
+    #[cfg(feature = "ml-nn")]
+    fn test_init_model_registers_weights() {
+        let mut model = LosNnModel::new(LosNnConfig::default());
+        model.init_model(&Device::Cpu).expect("init_model");
+        let weights = model.model_weights.as_ref().expect("weights");
+        assert!(
+            !weights.all_vars().is_empty(),
+            "init_model debe registrar los pesos en el VarMap"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "ml-nn")]
+    fn test_compute_sha256_is_deterministic() {
+        let mut model = LosNnModel::new(LosNnConfig::default());
+        model.init_model(&Device::Cpu).expect("init_model");
+        let first = model.compute_sha256();
+        let second = model.compute_sha256();
+        assert_eq!(
+            first, second,
+            "el hash debe ser reproducible: las claves del VarMap se ordenan"
+        );
     }
 }

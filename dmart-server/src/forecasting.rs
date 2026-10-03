@@ -303,13 +303,15 @@ impl ForecastService {
         // Si hay URL de sidecar, registramos TimesFM
         let timesfm_url = std::env::var("DMART_TIMESFM_URL").unwrap_or_default();
         if !timesfm_url.is_empty() {
-            let mut config = TimesFmConfig::default();
-            config.url = timesfm_url;
-            if let Ok(v) = std::env::var("DMART_TIMESFM_TIMEOUT") {
-                if let Ok(t) = v.parse() {
-                    config.timeout_secs = t;
-                }
-            }
+            let timeout_secs = std::env::var("DMART_TIMESFM_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or_else(|| TimesFmConfig::default().timeout_secs);
+            let config = TimesFmConfig {
+                url: timesfm_url,
+                timeout_secs,
+                ..Default::default()
+            };
             registry.register("timesfm", Arc::new(TimesFmClient::new(config)));
         }
 

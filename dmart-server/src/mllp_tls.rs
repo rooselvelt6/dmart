@@ -21,17 +21,17 @@
 //!   - un monitor no puede hacerse pasar por otro: si el pin dice `monitor-bed-1`
 //!     y el frame dice `ventilador-9`, el frame se rechaza.
 //!
-//! Claves privadas: se leen con [`rustls_pemfile::read_all`] y se envuelven en
-//! tipos de clave de `rustls` que no exponen copias intermedias en un `Vec` sin
-//! limpiar.
+//! Claves privadas: se leen con `PemObject` de `rustls-pki-types` y se envuelven
+//! en tipos de clave de `rustls` que no exponen copias intermedias en un `Vec`
+//! sin limpiar.
 
-use std::fs::File;
-use std::io::{BufReader, Cursor};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use rustls::client::danger::ServerCertVerifier;
 use rustls::crypto::{CryptoProvider, ring};
+use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -262,12 +262,11 @@ fn root_store(roots: Vec<CertificateDer<'static>>) -> Result<RootCertStore, TlsE
 }
 
 fn load_certs(path: &Path) -> Result<Vec<CertificateDer<'static>>, TlsError> {
-    let file = File::open(path).map_err(|source| TlsError::Io {
+    let pem = std::fs::read(path).map_err(|source| TlsError::Io {
         path: path.to_path_buf(),
         source,
     })?;
-    let mut reader = BufReader::new(file);
-    rustls_pemfile::certs(&mut reader)
+    CertificateDer::pem_slice_iter(&pem)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TlsError::Pem {
             path: path.to_path_buf(),
@@ -275,26 +274,13 @@ fn load_certs(path: &Path) -> Result<Vec<CertificateDer<'static>>, TlsError> {
         })
 }
 
-fn pem_key_from(reader: &mut impl std::io::BufRead, path: &Path) -> Option<PrivateKeyDer<'static>> {
-    for item in rustls_pemfile::read_all(reader) {
-        match item.ok()? {
-            rustls_pemfile::Item::Pkcs8Key(k) => return Some(PrivateKeyDer::Pkcs8(k)),
-            rustls_pemfile::Item::Pkcs1Key(k) => return Some(PrivateKeyDer::Pkcs1(k)),
-            rustls_pemfile::Item::Sec1Key(k) => return Some(PrivateKeyDer::Sec1(k)),
-            _ => continue,
-        }
-    }
-    let _ = path;
-    None
-}
-
 fn load_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, TlsError> {
-    let file = File::open(path).map_err(|source| TlsError::Io {
+    // `PemObject` acepta PKCS#8, PKCS#1 y SEC1 indistintamente.
+    let pem = std::fs::read(path).map_err(|source| TlsError::Io {
         path: path.to_path_buf(),
         source,
     })?;
-    let mut reader = BufReader::new(file);
-    pem_key_from(&mut reader, path).ok_or_else(|| TlsError::Pem {
+    PrivateKeyDer::from_pem_slice(&pem).map_err(|_| TlsError::Pem {
         path: path.to_path_buf(),
         reason: "no contiene una clave privada PEM (PKCS#8, PKCS#1 o SEC1)".into(),
     })
@@ -319,12 +305,10 @@ pub fn client_config(
     if certs.is_empty() {
         return Err(TlsError::NoCerts(PathBuf::from("<cert cliente>")));
     }
-    let mut reader = Cursor::new(client_key_pem);
-    let key =
-        pem_key_from(&mut reader, Path::new("<key cliente>")).ok_or_else(|| TlsError::Pem {
-            path: PathBuf::from("<key cliente>"),
-            reason: "no contiene clave privada PEM".into(),
-        })?;
+    let key = PrivateKeyDer::from_pem_slice(client_key_pem).map_err(|_| TlsError::Pem {
+        path: PathBuf::from("<key cliente>"),
+        reason: "no contiene clave privada PEM".into(),
+    })?;
 
     ClientConfig::builder_with_provider(MllpTlsConfig::crypto_provider())
         .with_protocol_versions(ALLOWED_PROTOCOLS)
@@ -335,8 +319,7 @@ pub fn client_config(
 }
 
 fn parse_pem_certs(cursor: Cursor<&[u8]>) -> Result<Vec<CertificateDer<'static>>, TlsError> {
-    let mut reader = BufReader::new(cursor);
-    rustls_pemfile::certs(&mut reader)
+    CertificateDer::pem_slice_iter(cursor.get_ref())
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| TlsError::Pem {
             path: PathBuf::from("<memoria>"),
@@ -477,7 +460,6 @@ mod tests {
     }
 
     const FP_A: &str = "aa000000000000000000000000000000000000000000000000000000000000bb";
-    const FP_B: &str = "cc000000000000000000000000000000000000000000000000000000000000dd";
 
     #[test]
     fn cipher_policy_is_aes256_only() {
@@ -1120,12 +1102,10 @@ mod listener_tests {
             key_pem: &str,
         ) -> tokio_rustls::client::TlsStream<TcpStream> {
             let certs: Vec<rustls_pki_types::CertificateDer<'static>> =
-                rustls_pemfile::certs(&mut cert_pem.as_bytes())
+                CertificateDer::pem_slice_iter(cert_pem.as_bytes())
                     .collect::<Result<_, _>>()
                     .expect("certs de cliente");
-            let key = rustls_pemfile::private_key(&mut key_pem.as_bytes())
-                .expect("clave de cliente")
-                .expect("clave presente");
+            let key = PrivateKeyDer::from_pem_slice(key_pem.as_bytes()).expect("clave de cliente");
             let cfg = rustls::ClientConfig::builder_with_provider(MllpTlsConfig::crypto_provider())
                 .with_protocol_versions(&[&rustls::version::TLS13])
                 .expect("builder")
@@ -1167,7 +1147,7 @@ mod listener_tests {
 
     fn roots_from_pem(pem: &str) -> rustls::RootCertStore {
         let mut roots = rustls::RootCertStore::empty();
-        for cert in rustls_pemfile::certs(&mut pem.as_bytes()) {
+        for cert in CertificateDer::pem_slice_iter(pem.as_bytes()) {
             roots.add(cert.expect("cert de CA")).expect("añadir CA");
         }
         roots

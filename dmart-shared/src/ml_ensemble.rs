@@ -662,7 +662,6 @@ pub fn generate_synthetic_mortality_data(n_samples: usize) -> (Array2<f32>, Arra
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{Array1, Array2};
 
     #[test]
     fn test_ensemble_config_default() {
@@ -685,7 +684,7 @@ mod tests {
         let targets = vec![0, 0, 1, 1, 1];
         assert!(cal.fit_platt(&preds, &targets).is_ok());
         let calibrated = cal.calibrate(0.5);
-        assert!(calibrated >= 0.0 && calibrated <= 1.0);
+        assert!((0.0..=1.0).contains(&calibrated));
     }
 
     #[test]
@@ -695,7 +694,7 @@ mod tests {
         let targets = vec![0, 0, 0, 1, 1, 1];
         assert!(cal.fit_isotonic(&preds, &targets).is_ok());
         let calibrated = cal.calibrate(0.5);
-        assert!(calibrated >= 0.0 && calibrated <= 1.0);
+        assert!((0.0..=1.0).contains(&calibrated));
     }
 
     #[test]
@@ -711,7 +710,7 @@ mod tests {
         let probs = vec![0.1, 0.4, 0.35, 0.8, 0.9, 0.2];
         let targets = vec![0, 0, 1, 1, 1, 0];
         let auprc = compute_auprc(&probs, &targets);
-        assert!(auprc >= 0.0 && auprc <= 1.0);
+        assert!((0.0..=1.0).contains(&auprc));
     }
 
     #[test]

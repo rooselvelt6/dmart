@@ -7,6 +7,9 @@ db-urls = ["https://github.com/RustSec/advisory-db.git"]
 db-path = "advisory-db"
 # Ignorar advisories específicos si son falsos positivos y están documentados
 # Unmaintained transitive dependencies (no direct security vulns, monitoring for alternatives)
+# `cargo audit` no lee este archivo: el job de Security Audit extrae los
+# IDs de aquí y se los pasa con `--ignore`, así que la lista vive en un
+# único sitio.
 ignore = [
     "RUSTSEC-2024-0370",  # proc-macro-error unmaintained (via utoipa-gen -> utoipa -> utoipa-swagger-ui)
     "RUSTSEC-2026-0173",  # proc-macro-error2 unmaintained (via leptos_macro -> leptos)
@@ -14,6 +17,15 @@ ignore = [
     "RUSTSEC-2021-0153",  # encoding unmaintained (via surrealdb)
     "RUSTSEC-2024-0384",  # instant unmaintained (via surrealdb)
     "RUSTSEC-2024-0436",  # paste unmaintained (via surrealdb)
+    "RUSTSEC-2023-0089",  # atomic-polyfill unmaintained (via heapless, target embebido)
+    "RUSTSEC-2025-0119",  # number_prefix unmaintained (via indicatif -> tokenizers -> candle)
+    # lru 0.12.5: `IterMut` viola Stacked Borrows. Vía surrealkv ->
+    # surrealdb-core -> surrealdb. dmart no usa `LruCache` directamente;
+    # pendiente de resolver subiendo surrealdb a una versión con `lru` parcheado.
+    "RUSTSEC-2026-0002",
+    # lru 0.12.5: `LruCache::pop()` sin panic safety (posible use-after-free).
+    # Misma cadena de dependencias; ver RUSTSEC-2026-0002.
+    "RUSTSEC-2026-0253",
 ]
 
 [licenses]

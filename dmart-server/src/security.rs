@@ -286,18 +286,23 @@ fn bearer_sub(req: &Request) -> Option<String> {
 /// un mismo usuario no bloquea a toda la NAT.
 fn throttle_key(req: &Request, path: &str, ip: &str, body: &[u8]) -> String {
     if path.ends_with("/auth/login") {
-        if let Ok(value) = serde_json::from_slice::<serde_json::Value>(body) {
-            if let Some(u) = value.get("username").and_then(|v| v.as_str()) {
-                let u = u.trim().to_lowercase();
-                if !u.is_empty() {
-                    return format!("{}|{}", ip, u);
-                }
+        let username = serde_json::from_slice::<serde_json::Value>(body)
+            .ok()
+            .and_then(|v| {
+                v.get("username")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned)
+            });
+        if let Some(u) = username {
+            let u = u.trim().to_lowercase();
+            if !u.is_empty() {
+                return format!("{}|{}", ip, u);
             }
         }
-    } else if path.ends_with("/auth/mfa/verify") {
-        if let Some(sub) = bearer_sub(req) {
-            return format!("{}|{}", ip, sub);
-        }
+    } else if path.ends_with("/auth/mfa/verify")
+        && let Some(sub) = bearer_sub(req)
+    {
+        return format!("{}|{}", ip, sub);
     }
     ip.to_string()
 }

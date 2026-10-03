@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use std::sync::{Arc, OnceLock};
 use surrealdb::Surreal;
 use surrealdb::engine::local::Db;
-use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
+use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
 pub const AUDIT_RETENTION_YEARS: i64 = 6;
@@ -49,7 +49,6 @@ pub struct ChainState {
 /// Es asíncrono y no `std::sync::Mutex` a propósito: el guard tiene que
 /// sobrevivir a un `.await` (la escritura en la base de datos) para que dos
 /// escrituras concurrentes no puedan leer el mismo `prev_hash`.
-
 fn to_hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     let mut out = String::with_capacity(bytes.len() * 2);

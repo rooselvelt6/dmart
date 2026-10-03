@@ -180,7 +180,6 @@ fn generate_pdf(patient: &Patient, measurements: &[Measurement]) -> anyhow::Resu
     let mut ops: Vec<Op> = Vec::new();
     let left = Mm(15.0);
     let page_h = 297.0_f32;
-    let right = 195.0; // A4 width 210 - 15 margin
 
     let mut y = page_h - 15.0;
 
