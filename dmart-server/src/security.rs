@@ -131,7 +131,7 @@ pub fn security_headers() -> Vec<(header::HeaderName, HeaderValue)> {
                 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; \
                 font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; \
                 img-src 'self' data:; \
-                connect-src 'self' https://fonts.googleapis.com; \
+                connect-src 'self' https://fonts.googleapis.com ws: wss: chrome-extension:; \
                 frame-ancestors 'none';",
             ),
         ),
