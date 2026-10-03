@@ -1,7 +1,7 @@
 # PLAN 39 — De 6,5 a 10
 
 > **Estado de partida**: 7 commits el 2 de octubre (`225899b`..`9cd0254`), 83 archivos,
-> +6435/−1760. Último run completo: **13 de 14 jobs verdes**.
+> +6435/−1760. El CI volvió a estar verde después de arreglarlo (ver más abajo).
 > **Evaluación honesta hoy: 6,5/10.** Este documento es el camino a 10.
 >
 > Regla de este plan: cada punto dice **qué está roto hoy**, **por qué importa** y
@@ -92,11 +92,11 @@ faltantes por archivo. El `locale` del usuario cambia el menú y no el contenido
 
 **Por qué importa.** Es visible al minuto de usar la app y rompe la promesa de las
 4 linguas. Un hospital no italiano recibe la interfaz en italiano con todo el cuerpo
-clinical en español.
+clínico en español.
 
 **Cómo se hace.** Un `t!()` por string visible, con claves en
 `dmart-app/locales/{es,en,pt,fr}.ftl`. Los términos clínicos (APACHE, SOFA, NEWS2,
-SAPS III) **no se traducen**: son nombres de escala clinical registradas.
+SAPS III) **no se traducen**: son nombres de escala clínica registrada.
 
 **Comprobación.** Un test que itere los 4 locales y falle si ninguna clave falta en
 ninguno. Sin ese test, el siguiente hardcodeo reintroduce el bug.
@@ -142,7 +142,7 @@ cae, no que haya un dashboard que nadie mira. Hoy un fallo de PHI o de ingestió
 MLLP se descubre cuando un médico pregunta.
 
 **Cómo se hace.**
-1. Reglas de alerta mínimo: ingestión MLLP en cero (señalFHIR caída), latencia p95 de
+1. Reglas de alerta mínimo: ingestión MLLP en cero (señal FHIR caída), latencia p95 de
    API, error rate, `cache unavailable` sostenido, y **uso de PHI sin auditar**.
 2. Fallo de la cadena WORM de auditoría → alerta inmediata (es el control legal).
 3. `cache: unavailable` pasa a ser unhealthy después de N intentos, no un warning
@@ -160,7 +160,7 @@ subir y la que más evita sustos.
 **Qué está roto.** `DMART_MASTER_KEY` es una sola clave para todo el PHI. Rotarla
 significa descifrar todo y recifrar, sin poder parar la UCI.
 
-**Por qué importa.** Una clave filtrada (o comprometida por un backed) obliga a
+**Por qué importa.** Una clave filtrada (o expuesta en un backup) obliga a
 re-cifrar el histórico completo. Sin procedimiento, no hay plan de respuesta.
 
 **Cómo se hace.**
@@ -172,8 +172,7 @@ re-cifrar el histórico completo. Sin procedimiento, no hay plan de respuesta.
 **Comprobación.** Test que cifra con clave A, rota a B, lee correctamente lo cifrado
 con A, re-cifra, y verifica que al final todo se lee solo con B.
 
-**Esfuerzo.** 1 día. **Ganancia.** Seguridad 9.5→10, y cierra la última Tangerina
-alta.
+**Esfuerzo.** 1 día. **Ganancia.** Seguridad 9.5→10, y cierra la última alta abierta de seguridad.
 
 ### P1.4 Idempotencia de reintentos en ingestión HL7
 
@@ -236,9 +235,40 @@ volar a ciegas.
   detectó tarde).
 - **`permissions:` least-privilege** en cada job de `ci.yml`.
 - **Revocar el PAT de GitHub** que sigue expuesto (`gh auth logout -h github.com` +
-  Settings → Tokens). ⏳ 5 min manual, sigue abierto desde `PLAN.md`.
+  Settings → Tokens). ⏳ 5 min manual, sigue abierto desde el hardening de octubre.
 
 **Esfuerzo.** 3 h. **Ganancia.** Supply chain 6→8.
+
+### P2.5 Pendientes heredados del plan anterior
+
+Estos vienen de `PLAN.md` (eliminado el 2 de octubre al quedar supersedido por este
+documento). Ninguno estaba allí desde el principio: varios son deuda de diseño del
+servidor, no ausencia de trabajo.
+
+| ID | Qué falta | Por qué sigue abierto | Esfuerzo |
+|----|-----------|----------------------|----------|
+| **F1.3** | SSO/OIDC: `state`, `nonce`, PKCE, validación de `issuer` y `audience`; rechazar `id_token` sin `nonce` | Hoy solo hay login local con JWT propio. OIDC es lo que permite SSO con el IdP del hospital en vez de rehacerlo por centro | 3–4 días |
+| **F2.4** | TLS saliente estricto + anti-SSRF: `webpki-roots`, deny-list de CIDR privados | Cualquier petición saliente a un host controlado por un atacante (o un `metadata` endpoint en la nube) es SSRF | 1–2 días |
+| **F2.5** | Eliminar `panic!`/`unwrap`/`expect` en handlers; errores genéricos al cliente + logging estructurado | Un panic en un handler con PHI en juego es una fuga por stack trace y una caída de réplica | 2–3 días |
+| **F4.x** | Conectar módulos huérfanos: alerts, files, ML inference, ES256 | Código escrito, revisión, cableado pendiente. Sin conectar es deuda que se pudre | 2 días |
+| **F5.x** | Rendimiento: índices SurrealDB, cache distribuida, pooling de conexiones | La UCI tiene 8–24 camas y picos; el diseño aguanta pero no está medido bajo carga sostenida | 2 días |
+
+**Orden.** F2.5 va después de P0.2 y P1.1 (toca los mismos handlers). F1.3 es el más
+grande de todos y el único que puede cambiar el modelo de identidad entero: merece su
+propio plan, no una fila.
+
+### P2.6 Despliegue nativo (pendiente heredado, sin cerrar)
+
+Tras quitar Docker del repo no quedó ruta de despliegue documentada. Antes del
+release hace falta:
+
+1. Unidad `systemd` para `dmart-server`, con `EnvironmentFile` y hardening:
+   `NoNewPrivileges`, `ProtectSystem`, `ProtectHome`, `PrivateTmp`.
+2. Reverse proxy nativo (Caddyfile o nginx) sustituyendo a `Dockerfile.caddy`.
+3. Guía de despliegue, upgrade y rollback.
+4. Decidir qué sobrevive del chart Helm:
+   `helm/dmart/templates/statefulset-surrealdb.yaml` sigue siendo válido para
+   SurrealDB externo, pero hay que revisar si el resto presupone imágenes.
 
 ---
 
@@ -263,11 +293,22 @@ SIGUIENTE (2 días) → 9,5
   P1.2  alerting + runbooks .......... 1 día
   P1.1  rate limit distribuido ...... 4-6 h
 
-CIERRE (2 días) → 10
+CIERRE (3 días) → 10
   P1.3  rotación de claves sin downtime
-  auditoría de despliegue nativo (systemd, reverse proxy) — pendiente de PLAN.md
+  P2.6  despliegue nativo (systemd, reverse proxy, upgrade/rollback)
   informe final actualizado
+
+POST-10 — fuera del alcance de este plan, sin fecha
+  P2.5  F2.5 sin panic!/unwrap en handlers ..... 2-3 días
+  P2.5  F2.4 TLS saliente + anti-SSRF ........ 1-2 días
+  P2.5  F5.x  índices, cache, pooling ....... 2 días
+  P2.5  F4.x  conectar módulos huérfanos .... 2 días
+  P2.5  F1.3  SSO/OIDC ...................... 3-4 días  (plan propio)
 ```
+
+> Los P2.5 están fuera del 10 porque son deuda de alcance, no huecos de calidad: el
+> sistema funciona y es seguro sin ellos. El SSO sí cambia el modelo de identidad
+> entero y merece decisión propia, no una fila en una tabla.
 
 ---
 

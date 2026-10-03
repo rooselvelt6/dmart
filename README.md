@@ -188,7 +188,10 @@ de `cargo audit` los extrae de ahí.
 
 - **[PLAN39.md](PLAN39.md)** — evaluación honesta (6,5/10) y camino a 10, con el
   comando que comprueba cada punto.
-- **[PLAN.md](PLAN.md)** — hardening post-roadmap histórico (F0–F5).
+- **[PLAN39.md](PLAN39.md)** incluye los pendientes heredados del antiguo
+  `PLAN.md` (eliminado el 2/oct, ya supersedido): F1.1 KMS/HSM, F1.2 rate limiting
+  distribuido, F1.3 SSO/OIDC, F2.4 anti-SSRF, F2.5 `panic!`/`unwrap` en handlers,
+  F4.x módulos desconectados, F5.x rendimiento y el despliegue nativo sin documentar.
 
 **Lo que sigue, en orden:**
 
