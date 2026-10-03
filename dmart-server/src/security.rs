@@ -426,8 +426,19 @@ pub fn sanitize_internal_error(detail: &dyn std::fmt::Display) -> String {
 
 /// Create global security state
 pub fn create_security_state() -> SecurityState {
-    // 100 requests per minute for general endpoints
-    let rate_limiter = Arc::new(RateLimiter::new(100, 60));
+    // Requests por ventana para endpoints generales. El valor por defecto es
+    // conservador (100 rpm) y solo se sube explícitamente: el job de load test
+    // necesita declarar el sobre que mide, y con el límite de producción
+    // cualquier carga devolvería 429 en vez de medir nada.
+    let max_requests: u32 = std::env::var("DMART_RATE_LIMIT_RPM")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(100);
+    let window_secs: u64 = std::env::var("DMART_RATE_LIMIT_WINDOW_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(60);
+    let rate_limiter = Arc::new(RateLimiter::new(max_requests, window_secs));
     // 5 failed logins before 5 minute lockout
     let login_throttle = Arc::new(LoginThrottle::new(5, 300));
     // 3 failed TOTP codes before 5 minute lockout (brute-force protection)

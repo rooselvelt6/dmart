@@ -200,7 +200,10 @@ jobs:
       - name: Build backend server
         run: cargo build --release --bin dmart-server
         env:
-          DMART_MASTER_KEY: test-master-key-for-ci-32-bytes!
+          # `validate_secret_strength` es fail-closed: >= 32 chars, no hex
+          # (o 64 hex) y sin marcadores placeholder. Ambos son de CI.
+          DMART_MASTER_KEY: dmart-ci-only-master-key-7f3a9c2e4b6d8f1a3c5e
+          JWT_SECRET: dmart-ci-only-jwt-secret-2b8d4f6a1c3e5g7h9k2m
           DMART_ADMIN_PASSWORD: testadmin123
       - name: Start backend server
         run: |
@@ -224,12 +227,26 @@ jobs:
           cat server.log
           exit 1
         env:
-          DMART_MASTER_KEY: test-master-key-for-ci-32-bytes!
+          # `validate_secret_strength` es fail-closed: >= 32 chars, no hex
+          # (o 64 hex) y sin marcadores placeholder. Ambos son de CI.
+          DMART_MASTER_KEY: dmart-ci-only-master-key-7f3a9c2e4b6d8f1a3c5e
+          JWT_SECRET: dmart-ci-only-jwt-secret-2b8d4f6a1c3e5g7h9k2m
           DMART_ADMIN_PASSWORD: testadmin123
+          # El límite por defecto (100 rpm) devolvería 429 en toda la rampa de
+          # carga; el test declara el sobre que quiere medir.
+          DMART_RATE_LIMIT_RPM: 100000
+      # Las credenciales las lee el script de `__ENV`: deben coincidir con el
+      # `DMART_ADMIN_PASSWORD` con el que se sembró el admin.
       - name: Run k6 auth test
         run: k6 run tests/load/auth.js --out json=results/auth.json
+        env:
+          ADMIN_USERNAME: admin
+          ADMIN_PASSWORD: testadmin123
       - name: Run k6 scales test
         run: k6 run tests/load/scales.js --out json=results/scales.json
+        env:
+          ADMIN_USERNAME: admin
+          ADMIN_PASSWORD: testadmin123
       - name: Upload k6 results
         uses: actions/upload-artifact@v4
         with:
@@ -316,7 +333,10 @@ jobs:
       - name: Build backend (sirve el frontend)
         run: cargo build --release --bin dmart-server
         env:
-          DMART_MASTER_KEY: test-master-key-for-ci-32-bytes!
+          # `validate_secret_strength` es fail-closed: >= 32 chars, no hex
+          # (o 64 hex) y sin marcadores placeholder. Ambos son de CI.
+          DMART_MASTER_KEY: dmart-ci-only-master-key-7f3a9c2e4b6d8f1a3c5e
+          JWT_SECRET: dmart-ci-only-jwt-secret-2b8d4f6a1c3e5g7h9k2m
           DMART_ADMIN_PASSWORD: testadmin123
           DMART_DIST_PATH: dist
       - name: Start backend (sirve el frontend)
@@ -341,7 +361,10 @@ jobs:
           cat server.log
           exit 1
         env:
-          DMART_MASTER_KEY: test-master-key-for-ci-32-bytes!
+          # `validate_secret_strength` es fail-closed: >= 32 chars, no hex
+          # (o 64 hex) y sin marcadores placeholder. Ambos son de CI.
+          DMART_MASTER_KEY: dmart-ci-only-master-key-7f3a9c2e4b6d8f1a3c5e
+          JWT_SECRET: dmart-ci-only-jwt-secret-2b8d4f6a1c3e5g7h9k2m
           DMART_ADMIN_PASSWORD: testadmin123
           DMART_DIST_PATH: dist
       - name: Run Playwright tests

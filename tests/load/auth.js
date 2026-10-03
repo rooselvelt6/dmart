@@ -1,4 +1,8 @@
-// k6 load test: Autenticación y login
+// k6 load test: Autenticación y endpoints autenticados de lectura
+//
+// El login lleva anti-brute-force por diseño (429), así que autenticar en cada
+// iteración mediría el throttle en vez del servidor. Se entra una vez en
+// `setup` y la carga se mide sobre los endpoints que consumen el token.
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
@@ -22,54 +26,51 @@ export const options = {
 
 const BASE_URL = 'http://127.0.0.1:3000/api';
 
-export default function () {
-  // Test login endpoint
-  const loginPayload = JSON.stringify({
-    email: 'admin@uci.local',
-    password: 'admin123',
-  });
+// El endpoint /auth/login espera `username` (no `email`); el admin que
+// siembra `seed_default_admin` se llama `admin`.
+const ADMIN_USERNAME = __ENV.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || 'admin123';
 
-  const params = {
+export function setup() {
+  const res = http.post(
+    `${BASE_URL}/auth/login`,
+    JSON.stringify({ username: ADMIN_USERNAME, password: ADMIN_PASSWORD }),
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+
+  const ok = check(res, {
+    'login status 200': (r) => r.status === 200,
+    'has token': (r) => r.json('data.access_token') !== undefined,
+  });
+  loginFailRate.add(!ok);
+
+  const token = res.json('data.access_token');
+  if (!token) {
+    throw new Error(`setup: login falló (HTTP ${res.status}): ${res.body}`);
+  }
+  return { token };
+}
+
+export default function (data) {
+  const authHeaders = {
     headers: {
+      Authorization: `Bearer ${data.token}`,
       'Content-Type': 'application/json',
     },
   };
 
-  const loginRes = http.post(`${BASE_URL}/auth/login`, loginPayload, params);
-  
-  const loginOk = check(loginRes, {
-    'login status 200': (r) => r.status === 200,
-    'has token': (r) => r.json('access_token') !== undefined,
-    'response time < 500ms': (r) => r.timings.duration < 500,
+  const patientsRes = http.get(`${BASE_URL}/patients`, authHeaders);
+  check(patientsRes, {
+    'patients status 200': (r) => r.status === 200,
+    'patients devuelve items': (r) => Array.isArray(r.json('data.items')),
   });
 
-  loginFailRate.add(!loginOk);
-
-  if (loginOk) {
-    const token = loginRes.json('access_token');
-    
-    // Test authenticated endpoints
-    const authHeaders = {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    };
-
-    // Test /patients
-    const patientsRes = http.get(`${BASE_URL}/patients`, authHeaders);
-    check(patientsRes, {
-      'patients status 200': (r) => r.status === 200,
-      'patients array': (r) => Array.isArray(r.json()),
-    });
-
-    // Test /patients/stats
-    const statsRes = http.get(`${BASE_URL}/patients/stats`, authHeaders);
-    check(statsRes, {
-      'stats status 200': (r) => r.status === 200,
-      'has kpis': (r) => r.json('egresados') !== undefined,
-    });
-  }
+  const statsRes = http.get(`${BASE_URL}/stats`, authHeaders);
+  check(statsRes, {
+    'stats status 200': (r) => r.status === 200,
+    'stats con totales': (r) => r.json('data.total_pacientes') !== undefined,
+    'stats con promedios': (r) => r.json('data.promedios') !== undefined,
+  });
 
   sleep(1);
 }

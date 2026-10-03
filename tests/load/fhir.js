@@ -22,11 +22,16 @@ export const options = {
 
 const BASE_URL = 'http://127.0.0.1:3000';
 
+// El endpoint /auth/login espera `username` (no `email`); el admin que
+// siembra `seed_default_admin` se llama `admin`.
+const ADMIN_USERNAME = __ENV.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || 'admin123';
+
 export default function () {
   // Login
   const loginPayload = JSON.stringify({
-    email: 'admin@uci.local',
-    password: 'admin123',
+    username: ADMIN_USERNAME,
+    password: ADMIN_PASSWORD,
   });
 
   const loginParams = { headers: { 'Content-Type': 'application/json' } };
