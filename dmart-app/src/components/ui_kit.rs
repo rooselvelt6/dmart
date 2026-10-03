@@ -8,18 +8,23 @@ pub fn Spinner() -> impl IntoView {
 }
 
 /// Estado de carga reutilizable (accesible).
+///
+/// `#[prop(into)]` acepta tanto `&'static str` (los ~23 call sites legacy) como
+/// `String` (necesario porque `i18n::tr()` devuelve `String`, no `&'static str`).
 #[component]
-pub fn LoadingState(label: &'static str) -> impl IntoView {
+pub fn LoadingState(#[prop(into)] label: String) -> impl IntoView {
+    let label_for_aria = label.clone();
+    let label_for_text = label.clone();
     view! {
         <div
             class="flex items-center justify-center gap-3 p-10"
             style="color:var(--uci-muted);"
             role="status"
             aria-live="polite"
-            aria-label=move || label
+            aria-label=move || label_for_aria.clone()
         >
             <Spinner />
-            <span style="font-size:14px;">{label}</span>
+            <span style="font-size:14px;">{move || label_for_text.clone()}</span>
         </div>
     }
 }

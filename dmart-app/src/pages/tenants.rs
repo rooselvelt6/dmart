@@ -47,10 +47,7 @@ pub fn TenantsPage() -> impl IntoView {
     let submit = move |_| {
         let (n, s) = (name.get(), slug.get());
         if n.trim().len() < 3 || s.len() < 3 {
-            feedback.set(Some((
-                false,
-                "El nombre y el slug deben tener al menos 3 caracteres.".to_string(),
-            )));
+            feedback.set(Some((false, crate::i18n::tr("tenants-err-min-len", None))));
             return;
         }
         busy.set(true);
@@ -58,7 +55,12 @@ pub fn TenantsPage() -> impl IntoView {
         spawn_local(async move {
             match api::create_tenant(&n, &s).await {
                 Ok(t) => {
-                    feedback.set(Some((true, format!("Tenant creado: {}", t.name))));
+                    let mut args = std::collections::HashMap::new();
+                    args.insert("name".to_string(), t.name.clone());
+                    feedback.set(Some((
+                        true,
+                        crate::i18n::tr("tenants-ok-created", Some(&args)),
+                    )));
                     name.set(String::new());
                     slug.set(String::new());
                     form_open.set(false);
@@ -77,12 +79,12 @@ pub fn TenantsPage() -> impl IntoView {
             match api::impersonate_tenant(&slug).await {
                 Ok(g) => {
                     let mins = ((g.expires_at - now_secs()) / 60).max(0);
+                    let mut args = std::collections::HashMap::new();
+                    args.insert("tenant".to_string(), g.tenant_id.clone());
+                    args.insert("min".to_string(), mins.to_string());
                     feedback.set(Some((
                         true,
-                        format!(
-                            "Impersonación concedida para '{}' por {} min. La acción quedó auditada.",
-                            g.tenant_id, mins
-                        ),
+                        crate::i18n::tr("tenants-ok-impersonated", Some(&args)),
                     )));
                 }
                 Err(e) => feedback.set(Some((false, e))),
@@ -96,10 +98,10 @@ pub fn TenantsPage() -> impl IntoView {
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-building mr-2"></i>"Tenants"
+                        <i class="fa-solid fa-building mr-2"></i>{move || crate::i18n::tr("nav-tenants", None)}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Aislamiento por organización y auditoría de registros en riesgo (SPEC-025)"
+                        {move || crate::i18n::tr("tenants-subtitle", None)}
                     </p>
                 </div>
                 <div class="flex gap-2">
@@ -108,7 +110,7 @@ pub fn TenantsPage() -> impl IntoView {
                             class="btn-primary px-4 h-10 text-sm"
                             on:click=move |_| form_open.update(|o| *o = !*o)
                         >
-                            <i class="fa-solid fa-plus mr-2"></i>"Nuevo tenant"
+                            <i class="fa-solid fa-plus mr-2"></i>{move || crate::i18n::tr("tenants-new", None)}
                         </button>
                     </Show>
                     <button
@@ -116,7 +118,7 @@ pub fn TenantsPage() -> impl IntoView {
                         style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                         on:click=move |_| reload.update(|n| *n += 1)
                     >
-                        <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                        <i class="fa-solid fa-rotate mr-2"></i>{move || crate::i18n::tr("action-refresh", None)}
                     </button>
                 </div>
             </div>
@@ -139,12 +141,12 @@ pub fn TenantsPage() -> impl IntoView {
             <Show when=move || form_open.get() && can_manage>
                 <div class="glass-card p-4 mb-5">
                     <h2 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-building-circle-check mr-2" style="color:#10B981;"></i>"Alta de organización"
+                        <i class="fa-solid fa-building-circle-check mr-2" style="color:#10B981;"></i>{move || crate::i18n::tr("tenants-create-title", None)}
                     </h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                         <div>
                             <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">
-                                "Nombre (3-100 chars)"
+                                {move || crate::i18n::tr("tenants-field-name", None)}
                             </label>
                             <input
                                 type="text"
@@ -156,7 +158,7 @@ pub fn TenantsPage() -> impl IntoView {
                         </div>
                         <div>
                             <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">
-                                "Slug [a-z0-9-] (3-50 chars)"
+                                {move || crate::i18n::tr("tenants-field-slug", None)}
                             </label>
                             <input
                                 type="text"
@@ -173,43 +175,51 @@ pub fn TenantsPage() -> impl IntoView {
                             style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
                             on:click=move |_| form_open.set(false)
                         >
-                            "Cancelar"
+                            {move || crate::i18n::tr("action-cancel", None)}
                         </button>
                         <button
                             class="btn-primary px-4 h-9 text-sm"
                             on:click=submit
                             disabled=move || busy.get()
                         >
-                            {move || if busy.get() { "Creando..." } else { "Crear" }}
+                            {move || if busy.get() {
+                                crate::i18n::tr("tenants-creating", None)
+                            } else {
+                                crate::i18n::tr("tenants-create", None)
+                            }}
                         </button>
                     </div>
                 </div>
             </Show>
 
             <h2 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-text);">
-                <i class="fa-solid fa-list mr-2" style="color:#3B82F6;"></i>"Organizaciones registradas"
+                <i class="fa-solid fa-list mr-2" style="color:#3B82F6;"></i>{move || crate::i18n::tr("tenants-list-title", None)}
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Cargando tenants..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("tenants-loading", None) /> }>
                 {move || match tenants.get() {
                     Some(Ok(list)) => view! {
                         <TenantsTable tenants=list on_impersonate=impersonate busy=busy />
                     }
                     .into_any(),
-                    Some(Err(e)) => view! {
+                    Some(Err(e)) => {
+                        let mut args = std::collections::HashMap::new();
+                        args.insert("error".to_string(), e.to_string());
+                        view! {
                         <ErrorState
-                            message=format!("No se pudieron cargar los tenants: {}", e)
+                            message=crate::i18n::tr("tenants-load-error", Some(&args))
                             on_retry=Some(Callback::new(move |()| reload.update(|n| *n += 1)))
                         />
                     }
-                    .into_any(),
+                        .into_any()
+                    }
                     None => view! {}.into_any(),
                 }}
             </Suspense>
 
             <h2 class="text-sm font-bold uppercase mt-6 mb-3" style="color:var(--uci-text);">
-                <i class="fa-solid fa-shield-halved mr-2" style="color:#8B5CF6;"></i>"Auditoría de aislamiento"
+                <i class="fa-solid fa-shield-halved mr-2" style="color:#8B5CF6;"></i>{move || crate::i18n::tr("tenants-audit-title", None)}
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Auditando aislamiento..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("tenants-auditing", None) /> }>
                 {move || match tenancy_audit.get() {
                     Some(Ok(report)) => view! { <IsolationReport report=report /> }.into_any(),
                     Some(Err(e)) => view! {
@@ -220,7 +230,7 @@ pub fn TenantsPage() -> impl IntoView {
                         >
                             <p class="text-sm font-bold" style="color:var(--uci-text);">
                                 <i class="fa-solid fa-triangle-exclamation mr-2" style="color:#DC2626;"></i>
-                                "Aislamiento comprometido"
+                                {move || crate::i18n::tr("tenants-isolation-broken", None)}
                             </p>
                             <p class="text-xs mt-1" style="color:var(--uci-muted);">{e}</p>
                         </div>
@@ -247,7 +257,7 @@ fn TenantsTable(
         return view! {
             <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                 <i class="fa-solid fa-building-circle-exclamation text-2xl mb-2" style="color:#94A3B8;"></i>
-                <p>"No hay tenants registrados"</p>
+                <p>{move || crate::i18n::tr("tenants-empty", None)}</p>
             </div>
         }
         .into_any();
@@ -261,19 +271,19 @@ fn TenantsTable(
                 <thead>
                     <tr style="border-bottom:1px solid var(--uci-border);">
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Organización"
+                            {move || crate::i18n::tr("tenants-col-org", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Slug"
+                            {move || crate::i18n::tr("tenants-col-slug", None)}
                         </th>
                         <th class="text-right px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Pacientes"
+                            {move || crate::i18n::tr("tenants-col-patients", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Estado"
+                            {move || crate::i18n::tr("equipment-status", None)}
                         </th>
                         <th class="text-right px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Acción"
+                            {move || crate::i18n::tr("tenants-col-action", None)}
                         </th>
                     </tr>
                 </thead>
@@ -296,9 +306,15 @@ fn TenantsTable(
                             <td class="px-4 py-3">
                                 <Show
                                     when=move || active
-                                    fallback=|| view! { <span class="severity-moderate">"Inactivo"</span> }
+                                    fallback=|| view! {
+                                        <span class="severity-moderate">
+                                            {move || crate::i18n::tr("status-inactive", None)}
+                                        </span>
+                                    }
                                 >
-                                    <span class="severity-low">"Activo"</span>
+                                    <span class="severity-low">
+                                        {move || crate::i18n::tr("status-active", None)}
+                                    </span>
                                 </Show>
                             </td>
                             <td class="px-4 py-3 text-right">
@@ -314,7 +330,8 @@ fn TenantsTable(
                                         disabled=move || busy.get()
                                         on:click=move |_| on_impersonate.run(slug.get_value())
                                     >
-                                        <i class="fa-solid fa-user-secret mr-1"></i>"Impersonar"
+                                        <i class="fa-solid fa-user-secret mr-1"></i>
+                                        {move || crate::i18n::tr("tenants-impersonate", None)}
                                     </button>
                                 </Show>
                             </td>
@@ -331,11 +348,14 @@ fn TenantsTable(
 
 #[component]
 fn IsolationReport(report: TenancyAuditReport) -> impl IntoView {
-    let (color, icon, headline) = if report.healthy {
-        ("#10B981", "fa-circle-check", "Aislamiento sano")
+    let healthy = report.healthy;
+    let (color, icon) = if healthy {
+        ("#10B981", "fa-circle-check")
     } else {
-        ("#DC2626", "fa-triangle-exclamation", "Registros en riesgo")
+        ("#DC2626", "fa-triangle-exclamation")
     };
+    let total_records = report.total_records;
+    let records_at_risk = report.records_at_risk;
 
     let table_rows = StoredValue::new(report.tables.clone());
 
@@ -347,18 +367,26 @@ fn IsolationReport(report: TenancyAuditReport) -> impl IntoView {
                     style=format!("background:{color}1A; color:{color}; border:1px solid {color}55;")
                 >
                     <i class=format!("fa-solid {icon} text-[10px]")></i>
-                    {headline}
+                    {move || if healthy {
+                        crate::i18n::tr("tenants-isolation-ok", None)
+                    } else {
+                        crate::i18n::tr("tenants-isolation-at-risk", None)
+                    }}
                 </span>
-                <span class="text-xs" style="color:var(--uci-muted);">
-                    <span class="tabular-nums font-semibold" style="color:var(--uci-text);">
-                        {report.total_records}
-                    </span>
-                    " registros escaneados"
+                <span class="text-xs tabular-nums" style="color:var(--uci-muted);">
+                    {move || {
+                        let mut args = std::collections::HashMap::new();
+                        args.insert("count".to_string(), total_records.to_string());
+                        crate::i18n::tr("tenants-records-scanned", Some(&args))
+                    }}
                 </span>
-                <Show when=move || report.records_at_risk != 0>
-                    <span class="text-xs" style="color:#DC2626;">
-                        <span class="tabular-nums font-semibold">{report.records_at_risk}</span>
-                        " en riesgo de fuga cross-tenant"
+                <Show when=move || records_at_risk != 0>
+                    <span class="text-xs tabular-nums" style="color:#DC2626;">
+                        {move || {
+                            let mut args = std::collections::HashMap::new();
+                            args.insert("count".to_string(), records_at_risk.to_string());
+                            crate::i18n::tr("tenants-records-at-risk", Some(&args))
+                        }}
                     </span>
                 </Show>
             </div>
@@ -368,16 +396,16 @@ fn IsolationReport(report: TenancyAuditReport) -> impl IntoView {
                     <thead>
                         <tr style="border-bottom:1px solid var(--uci-border);">
                             <th class="text-left px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                                "Tabla"
+                                {move || crate::i18n::tr("tenants-col-table", None)}
                             </th>
                             <th class="text-right px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                                "Total"
+                                {move || crate::i18n::tr("tenants-col-total", None)}
                             </th>
                             <th class="text-right px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                                "Sin tenant_id"
+                                {move || crate::i18n::tr("tenants-col-missing-tenant", None)}
                             </th>
                             <th class="text-left px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                                "Tenant_ids huérfanos"
+                                {move || crate::i18n::tr("tenants-col-orphan-ids", None)}
                             </th>
                         </tr>
                     </thead>

@@ -19,23 +19,26 @@ fn action_color(action: &str) -> &'static str {
     }
 }
 
-fn action_label(action: &str) -> &'static str {
+/// Etiqueta traducida por `AuditAction` (serde usa el nombre de la variante tal
+/// cual). Devuelve `String` porque `i18n::tr()` no devuelve `&'static str`;
+/// llámala dentro del `move ||` que la renderiza.
+fn action_label(action: &str) -> String {
     match action {
-        "Login" => "Login",
-        "Logout" => "Logout",
-        "LoginFailed" => "Login fallido",
-        "LogoutFailed" => "Logout fallido",
-        "Create" => "Creación",
-        "Read" => "Lectura",
-        "Update" => "Actualización",
-        "Delete" => "Eliminación",
-        "Export" => "Exportación",
-        "ConfigChange" => "Cambio de config",
-        "AuthChange" => "Cambio de auth",
-        "AccessDenied" => "Acceso denegado",
-        "DataAccess" => "Acceso a datos",
-        "DataModification" => "Modificación de datos",
-        _ => "Acción",
+        "Login" => "Login".to_string(),
+        "Logout" => "Logout".to_string(),
+        "LoginFailed" => crate::i18n::tr("audit-action-login-failed", None),
+        "LogoutFailed" => crate::i18n::tr("audit-action-logout-failed", None),
+        "Create" => crate::i18n::tr("audit-action-create", None),
+        "Read" => crate::i18n::tr("audit-action-read", None),
+        "Update" => crate::i18n::tr("audit-action-update", None),
+        "Delete" => crate::i18n::tr("audit-action-delete", None),
+        "Export" => crate::i18n::tr("audit-action-export", None),
+        "ConfigChange" => crate::i18n::tr("audit-action-config-change", None),
+        "AuthChange" => crate::i18n::tr("audit-action-auth-change", None),
+        "AccessDenied" => crate::i18n::tr("error-forbidden", None),
+        "DataAccess" => crate::i18n::tr("audit-action-data-access", None),
+        "DataModification" => crate::i18n::tr("audit-action-data-modification", None),
+        _ => crate::i18n::tr("audit-action-other", None),
     }
 }
 
@@ -66,14 +69,16 @@ pub fn AuditPage() -> impl IntoView {
         spawn_local(async move {
             match api::export_audit(200).await {
                 Ok(e) => {
+                    let mut args = std::collections::HashMap::new();
+                    args.insert("events".to_string(), e.logs.len().to_string());
+                    args.insert("batches".to_string(), e.batches.len().to_string());
+                    args.insert(
+                        "head".to_string(),
+                        e.head_batch_hash.chars().take(12).collect::<String>(),
+                    );
                     feedback.set(Some((
                         true,
-                        format!(
-                            "Export generado: {} eventos, {} lotes, head {}.",
-                            e.logs.len(),
-                            e.batches.len(),
-                            &e.head_batch_hash.chars().take(12).collect::<String>()
-                        ),
+                        crate::i18n::tr("audit-ok-export", Some(&args)),
                     )));
                     export.set(Some(e));
                 }
@@ -94,12 +99,12 @@ pub fn AuditPage() -> impl IntoView {
         spawn_local(async move {
             match api::run_audit_retention_cleanup().await {
                 Ok(r) => {
+                    let mut args = std::collections::HashMap::new();
+                    args.insert("years".to_string(), r.retention_years.to_string());
+                    args.insert("count".to_string(), r.deleted_logs.to_string());
                     feedback.set(Some((
                         true,
-                        format!(
-                            "Retención aplicada ({} años): {} registros eliminados.",
-                            r.retention_years, r.deleted_logs
-                        ),
+                        crate::i18n::tr("audit-ok-retention", Some(&args)),
                     )));
                     reload.update(|x| *x += 1);
                 }
@@ -115,10 +120,10 @@ pub fn AuditPage() -> impl IntoView {
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-clipboard-check mr-2"></i>"Auditoría forense"
+                        <i class="fa-solid fa-clipboard-check mr-2"></i>{move || crate::i18n::tr("audit-title", None)}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Cadena WORM encadenada por hash, eventos críticos y reproducibilidad de scores (SPEC-049 / SPEC-029)"
+                        {move || crate::i18n::tr("audit-subtitle", None)}
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -127,7 +132,7 @@ pub fn AuditPage() -> impl IntoView {
                         style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                         on:click=move |_| reload.update(|n| *n += 1)
                     >
-                        <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                        <i class="fa-solid fa-rotate mr-2"></i>{move || crate::i18n::tr("action-refresh", None)}
                     </button>
                     <button
                         class="px-4 h-10 text-sm rounded-lg"
@@ -135,7 +140,7 @@ pub fn AuditPage() -> impl IntoView {
                         on:click=load_export
                         disabled=move || busy.get()
                     >
-                        <i class="fa-solid fa-file-export mr-2"></i>"Exportar"
+                        <i class="fa-solid fa-file-export mr-2"></i>{move || crate::i18n::tr("action-export", None)}
                     </button>
                     <Show when=move || can_configure>
                         <button
@@ -150,9 +155,9 @@ pub fn AuditPage() -> impl IntoView {
                         >
                             <i class="fa-solid fa-broom mr-2"></i>
                             {move || if confirm_cleanup.get() {
-                                "¿Confirmar borrado? Pulsa otra vez"
+                                crate::i18n::tr("audit-confirm-delete", None)
                             } else {
-                                "Aplicar retención"
+                                crate::i18n::tr("audit-apply-retention", None)
                             }}
                         </button>
                     </Show>
@@ -176,36 +181,44 @@ pub fn AuditPage() -> impl IntoView {
 
             <h2 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-text);">
                 <i class="fa-solid fa-triangle-exclamation mr-2" style="color:#DC2626;"></i>
-                "Eventos críticos"
+                {move || crate::i18n::tr("audit-critical-title", None)}
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Cargando eventos críticos..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("audit-loading-critical", None) /> }>
                 {move || match critical.get() {
                     Some(Ok(logs)) => view! { <CriticalTable logs=logs /> }.into_any(),
-                    Some(Err(e)) => view! {
+                    Some(Err(e)) => {
+                        let mut args = std::collections::HashMap::new();
+                        args.insert("error".to_string(), e.to_string());
+                        view! {
                         <ErrorState
-                            message=format!("No se pudieron cargar los eventos críticos: {}", e)
+                            message=crate::i18n::tr("audit-load-critical-error", Some(&args))
                             on_retry=Some(Callback::new(move |()| reload.update(|n| *n += 1)))
                         />
                     }
-                    .into_any(),
+                        .into_any()
+                    }
                     None => view! {}.into_any(),
                 }}
             </Suspense>
 
             <h2 class="text-sm font-bold uppercase mt-6 mb-3" style="color:var(--uci-text);">
                 <i class="fa-solid fa-fingerprint mr-2" style="color:#8B5CF6;"></i>
-                "Reproducibilidad de scores"
+                {move || crate::i18n::tr("audit-scores-title", None)}
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Verificando scores..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("audit-loading-scores", None) /> }>
                 {move || match scores.get() {
                     Some(Ok(entries)) => view! { <ScoresTable entries=entries /> }.into_any(),
-                    Some(Err(e)) => view! {
+                    Some(Err(e)) => {
+                        let mut args = std::collections::HashMap::new();
+                        args.insert("error".to_string(), e.to_string());
+                        view! {
                         <ErrorState
-                            message=format!("No se pudo verificar la reproducibilidad: {}", e)
+                            message=crate::i18n::tr("audit-scores-error", Some(&args))
                             on_retry=Some(Callback::new(move |()| reload.update(|n| *n += 1)))
                         />
                     }
-                    .into_any(),
+                        .into_any()
+                    }
                     None => view! {}.into_any(),
                 }}
             </Suspense>
@@ -247,7 +260,7 @@ fn CriticalTable(logs: Vec<AuditLogEntry>) -> impl IntoView {
         return view! {
             <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                 <i class="fa-solid fa-shield-halved text-2xl mb-2" style="color:#10B981;"></i>
-                <p>"Sin eventos críticos. Ningún acceso denegado ni fallo de autenticación."</p>
+                <p>{move || crate::i18n::tr("audit-no-critical", None)}</p>
             </div>
         }
         .into_any();
@@ -264,13 +277,13 @@ fn CriticalTable(logs: Vec<AuditLogEntry>) -> impl IntoView {
                             "Timestamp"
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Acción"
+                            {move || crate::i18n::tr("audit-col-action", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Usuario"
+                            {move || crate::i18n::tr("login-username", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Recurso"
+                            {move || crate::i18n::tr("audit-col-resource", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
                             "IP"
@@ -286,6 +299,7 @@ fn CriticalTable(logs: Vec<AuditLogEntry>) -> impl IntoView {
                             let has_rid = rid_flag(&log);
                             let rid = log.resource_id.clone().unwrap_or_default();
                             let hash = short_hash(&log);
+                            let log_action = StoredValue::new(log.action.clone());
                             view! {
                         <tr style="border-bottom:1px solid var(--uci-border);">
                             <td class="px-4 py-3 text-xs tabular-nums" style="color:var(--uci-muted); white-space:nowrap;">
@@ -300,7 +314,7 @@ fn CriticalTable(logs: Vec<AuditLogEntry>) -> impl IntoView {
                                         action_color(&log.action),
                                     )
                                 >
-                                    {action_label(&log.action)}
+                                    {move || action_label(&log_action.get_value())}
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-xs">
@@ -345,29 +359,40 @@ fn ScoresTable(entries: Vec<ScoreAuditEntry>) -> impl IntoView {
     let has_rows = !entries.is_empty();
     let entries = StoredValue::new(entries);
 
-    view! {
+view! {
         <div class="glass-card p-5">
             <div class="flex flex-wrap items-center gap-3 mb-4">
-                <span
-                    class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase"
-                    style="background:rgba(16,185,129,0.14); color:#10B981; border:1px solid rgba(16,185,129,0.4);"
+                <Show
+                    when=move || ok_count != 0
+                    fallback=|| ()
                 >
-                    <i class="fa-solid fa-circle-check text-[10px]"></i>
-                    <span class="tabular-nums">{ok_count}</span>
-                    " reproducibles"
-                </span>
+                    <span
+                        class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tabular-nums"
+                        style="background:rgba(16,185,129,0.14); color:#10B981; border:1px solid rgba(16,185,129,0.4);"
+                    >
+                        <i class="fa-solid fa-circle-check text-[10px]"></i>
+                        {move || {
+                                let mut args = std::collections::HashMap::new();
+                                args.insert("count".to_string(), ok_count.to_string());
+                                crate::i18n::tr("audit-reproducible", Some(&args))
+                            }}
+                    </span>
+                </Show>
                 <Show when=move || bad_count != 0>
                     <span
-                        class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase"
+                        class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tabular-nums"
                         style="background:rgba(220,38,38,0.14); color:#DC2626; border:1px solid rgba(220,38,38,0.4);"
                     >
                         <i class="fa-solid fa-circle-exclamation text-[10px]"></i>
-                        <span class="tabular-nums">{bad_count}</span>
-                        " no reproducibles"
+                        {move || {
+                            let mut args = std::collections::HashMap::new();
+                            args.insert("count".to_string(), bad_count.to_string());
+                            crate::i18n::tr("audit-not-reproducible", Some(&args))
+                        }}
                     </span>
                 </Show>
                 <span class="text-xs ml-auto" style="color:var(--uci-muted);">
-                    "Se recalcula el fingerprint desde los datos crudos y se compara con el almacenado."
+                    {move || crate::i18n::tr("audit-fingerprint-hint", None)}
                 </span>
             </div>
 
@@ -375,7 +400,7 @@ fn ScoresTable(entries: Vec<ScoreAuditEntry>) -> impl IntoView {
                 when=move || has_rows
                 fallback=|| view! {
                     <p class="text-sm py-4 text-center" style="color:var(--uci-muted);">
-                        "No hay mediciones registradas para verificar."
+                        {move || crate::i18n::tr("audit-no-measurements", None)}
                     </p>
                 }
             >
@@ -384,19 +409,19 @@ fn ScoresTable(entries: Vec<ScoreAuditEntry>) -> impl IntoView {
                         <thead>
                             <tr style="border-bottom:1px solid var(--uci-border);">
                                 <th class="text-left px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                                    "Paciente"
+                                    {move || crate::i18n::tr("audit-col-patient", None)}
                                 </th>
                                 <th class="text-left px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
                                     "Timestamp"
                                 </th>
                                 <th class="text-left px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                                    "Algoritmo"
+                                    {move || crate::i18n::tr("audit-col-algorithm", None)}
                                 </th>
                                 <th class="text-left px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
                                     "Fingerprint"
                                 </th>
                                 <th class="text-left px-3 py-2 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                                    "Estado"
+                                    {move || crate::i18n::tr("equipment-status", None)}
                                 </th>
                             </tr>
                         </thead>
@@ -421,9 +446,15 @@ fn ScoresTable(entries: Vec<ScoreAuditEntry>) -> impl IntoView {
                                     <td class="px-3 py-2">
                                         <Show
                                             when=move || e.reproducible
-                                            fallback=|| view! { <span class="severity-critical">"Alterado"</span> }
+                                            fallback=|| view! {
+                                                <span class="severity-critical">
+                                                    {move || crate::i18n::tr("audit-tampered", None)}
+                                                </span>
+                                            }
                                         >
-                                            <span class="severity-low">"Íntegro"</span>
+                                            <span class="severity-low">
+                                                {move || crate::i18n::tr("audit-intact", None)}
+                                            </span>
                                         </Show>
                                     </td>
                                 </tr>
@@ -461,20 +492,33 @@ fn ExportModal(export: AuditExport) -> impl IntoView {
                 style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.55);"
                 role="dialog"
                 aria-modal="true"
-                aria-label="Export de auditoría"
+                aria-label=move || crate::i18n::tr("audit-export-aria", None)
             >
                 <div class="glass-card" style="max-width:720px; width:92%; padding:24px;">
                     <h3 class="text-lg font-bold mb-1" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-file-export mr-2"></i>"Export de auditoría"
+                        <i class="fa-solid fa-file-export mr-2"></i>
+                        {move || crate::i18n::tr("audit-export-title", None)}
                     </h3>
                     <p class="text-xs mb-4" style="color:var(--uci-muted);">
-                        "Snapshot encadenado de la cadena WORM para custodia externa."
+                        {move || crate::i18n::tr("audit-export-subtitle", None)}
                     </p>
                     <dl class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                        <Stat label="Generado" value=export.generated_at.clone() />
-                        <Stat label="Retención (años)" value=export.retention_years.to_string() />
-                        <Stat label="Eventos" value=export.logs.len().to_string() />
-                        <Stat label="Lotes" value=export.batches.len().to_string() />
+                        <Stat
+                            label=crate::i18n::tr("audit-stat-generated", None)
+                            value=export.generated_at.clone()
+                        />
+                        <Stat
+                            label=crate::i18n::tr("audit-stat-retention", None)
+                            value=export.retention_years.to_string()
+                        />
+                        <Stat
+                            label=crate::i18n::tr("audit-stat-events", None)
+                            value=export.logs.len().to_string()
+                        />
+                        <Stat
+                            label=crate::i18n::tr("audit-stat-batches", None)
+                            value=export.batches.len().to_string()
+                        />
                     </dl>
                     <div class="mb-4">
                         <div class="text-[10px] uppercase font-bold mb-1" style="color:var(--uci-muted);">
@@ -493,13 +537,14 @@ fn ExportModal(export: AuditExport) -> impl IntoView {
                             style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                             on:click=copy
                         >
-                            <i class="fa-solid fa-copy mr-1"></i>"Copiar resumen"
+                            <i class="fa-solid fa-copy mr-1"></i>
+                            {move || crate::i18n::tr("audit-copy-summary", None)}
                         </button>
                         <button
                             class="btn-primary px-4 h-9 text-sm"
                             on:click=move |_| close.set(true)
                         >
-                            "Cerrar"
+                            {move || crate::i18n::tr("action-close", None)}
                         </button>
                     </div>
                 </div>
@@ -509,11 +554,11 @@ fn ExportModal(export: AuditExport) -> impl IntoView {
 }
 
 #[component]
-fn Stat(label: &'static str, value: String) -> impl IntoView {
+fn Stat(#[prop(into)] label: String, value: String) -> impl IntoView {
     view! {
         <div class="p-3 rounded-lg" style="background:var(--uci-bg); border:1px solid var(--uci-border);">
             <dt class="text-[10px] uppercase font-bold" style="color:var(--uci-muted);">
-                {label}
+                {move || label.clone()}
             </dt>
             <dd class="text-sm font-semibold mt-0.5 truncate tabular-nums" style="color:var(--uci-text);">
                 {value}

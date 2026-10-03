@@ -438,11 +438,63 @@ pub fn create_security_state() -> SecurityState {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(60);
-    let rate_limiter = Arc::new(RateLimiter::new(max_requests, window_secs));
-    // 5 failed logins before 5 minute lockout
-    let login_throttle = Arc::new(LoginThrottle::new(5, 300));
-    // 3 failed TOTP codes before 5 minute lockout (brute-force protection)
-    let mfa_throttle = Arc::new(LoginThrottle::new(3, 300));
+
+    // Disable rate limiter in dev mode if explicitly set
+    let disable_rate_limit = std::env::var("DMART_DISABLE_RATE_LIMIT")
+        .ok()
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let rate_limiter = if disable_rate_limit {
+        Arc::new(RateLimiter::new(u32::MAX, 1))
+    } else {
+        Arc::new(RateLimiter::new(max_requests, window_secs))
+    };
+
+    // Login throttle configuration
+    // DMART_DISABLE_LOGIN_THROTTLE=true -> disables login throttle entirely
+    // DMART_LOGIN_THROTTLE_MAX_ATTEMPTS=N -> max failed attempts before lockout (default 5, 0 = disabled)
+    // DMART_LOGIN_THROTTLE_LOCKOUT_SECS=N -> lockout duration in seconds (default 300)
+    let disable_login_throttle = std::env::var("DMART_DISABLE_LOGIN_THROTTLE")
+        .ok()
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let login_max_attempts: u32 = std::env::var("DMART_LOGIN_THROTTLE_MAX_ATTEMPTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5);
+    let login_lockout_secs: u64 = std::env::var("DMART_LOGIN_THROTTLE_LOCKOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(300);
+
+    let login_throttle = if disable_login_throttle || login_max_attempts == 0 {
+        Arc::new(LoginThrottle::new(u32::MAX, 1))
+    } else {
+        Arc::new(LoginThrottle::new(login_max_attempts, login_lockout_secs))
+    };
+
+    // MFA throttle configuration
+    // DMART_DISABLE_MFA_THROTTLE=true -> disables MFA throttle
+    // DMART_MFA_THROTTLE_MAX_ATTEMPTS=N -> max failed attempts (default 3, 0 = disabled)
+    // DMART_MFA_THROTTLE_LOCKOUT_SECS=N -> lockout duration (default 300)
+    let disable_mfa_throttle = std::env::var("DMART_DISABLE_MFA_THROTTLE")
+        .ok()
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let mfa_max_attempts: u32 = std::env::var("DMART_MFA_THROTTLE_MAX_ATTEMPTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3);
+    let mfa_lockout_secs: u64 = std::env::var("DMART_MFA_THROTTLE_LOCKOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(300);
+
+    let mfa_throttle = if disable_mfa_throttle || mfa_max_attempts == 0 {
+        Arc::new(LoginThrottle::new(u32::MAX, 1))
+    } else {
+        Arc::new(LoginThrottle::new(mfa_max_attempts, mfa_lockout_secs))
+    };
 
     SecurityState {
         rate_limiter,
@@ -506,6 +558,14 @@ mod tests {
 
     #[test]
     fn test_mfa_throttle_is_stricter_than_login() {
+        // Test with default values
+        std::env::set_var("DMART_DISABLE_LOGIN_THROTTLE", "false");
+        std::env::set_var("DMART_LOGIN_THROTTLE_MAX_ATTEMPTS", "5");
+        std::env::set_var("DMART_LOGIN_THROTTLE_LOCKOUT_SECS", "300");
+        std::env::set_var("DMART_DISABLE_MFA_THROTTLE", "false");
+        std::env::set_var("DMART_MFA_THROTTLE_MAX_ATTEMPTS", "3");
+        std::env::set_var("DMART_MFA_THROTTLE_LOCKOUT_SECS", "300");
+        
         let state = create_security_state();
         // 3 failed attempts allowed for the MFA challenge flow
         assert_eq!(state.mfa_throttle.max_attempts, 3);

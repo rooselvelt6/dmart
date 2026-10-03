@@ -42,6 +42,7 @@ pub mod mllp_tls;
 pub mod observability;
 #[allow(dead_code)] // SPEC-015: Patient Timeline API (ejercitado por test patient_timeline)
 pub mod patient_timeline;
+pub mod phi_backfill;
 pub mod phi_store;
 #[allow(dead_code)] // SPEC-052: Web Push VAPID (tarea 3.9)
 pub mod push;

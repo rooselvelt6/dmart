@@ -87,6 +87,18 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "050_phi_envelope",
         include_str!("../migrations/050_phi_envelope.surql"),
     ),
+    // P0.2: sin `051` la columna `phi` de `measurements` no está declarada y el
+    // backfill no puede cerrarse para esa tabla.
+    (
+        "051_phi_measurements",
+        include_str!("../migrations/051_phi_measurements.surql"),
+    ),
+    // P0.2: `push_subscription` es SCHEMAFULL (`049_web_push.surql:5`), así que
+    // sin `055` un `content()` con `phi` se descarta en silencio.
+    (
+        "055_phi_push",
+        include_str!("../migrations/055_phi_push.surql"),
+    ),
 ];
 
 pub async fn applied_versions(db: &Surreal<Db>) -> Result<Vec<u64>> {

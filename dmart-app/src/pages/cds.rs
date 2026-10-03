@@ -7,14 +7,39 @@ use crate::components::ui_kit::{ErrorState, LoadingState};
 use crate::stores::user_has;
 
 /// Icono + color por `ActionKind` (serde `lowercase` en el servidor).
-fn action_meta(kind: &str) -> (&'static str, &'static str, &'static str) {
+/// La etiqueta se traduce: llámala dentro del `move ||` que la renderiza.
+fn action_meta(kind: &str) -> (&'static str, &'static str, String) {
     match kind {
-        "alert" => ("fa-triangle-exclamation", "#EF4444", "Alerta"),
-        "order" => ("fa-file-prescription", "#3B82F6", "Orden"),
-        "notification" => ("fa-bell", "#F59E0B", "Notificación"),
-        "protocol" => ("fa-list-check", "#8B5CF6", "Protocolo"),
-        "referral" => ("fa-hand-point-right", "#14B8A6", "Derivación"),
-        _ => ("fa-circle", "#94A3B8", "Acción"),
+        "alert" => (
+            "fa-triangle-exclamation",
+            "#EF4444",
+            crate::i18n::tr("cds-action-alert", None),
+        ),
+        "order" => (
+            "fa-file-prescription",
+            "#3B82F6",
+            crate::i18n::tr("cds-action-order", None),
+        ),
+        "notification" => (
+            "fa-bell",
+            "#F59E0B",
+            crate::i18n::tr("cds-action-notification", None),
+        ),
+        "protocol" => (
+            "fa-list-check",
+            "#8B5CF6",
+            crate::i18n::tr("cds-action-protocol", None),
+        ),
+        "referral" => (
+            "fa-hand-point-right",
+            "#14B8A6",
+            crate::i18n::tr("cds-action-referral", None),
+        ),
+        _ => (
+            "fa-circle",
+            "#94A3B8",
+            crate::i18n::tr("cds-action-other", None),
+        ),
     }
 }
 
@@ -42,7 +67,10 @@ pub fn CdsPage() -> impl IntoView {
     let evaluate = move |_| {
         let pid = selected.get();
         if pid.is_empty() {
-            feedback.set(Some((false, "Selecciona un paciente.".to_string())));
+            feedback.set(Some((
+                false,
+                crate::i18n::tr("cds-err-select-patient", None),
+            )));
             return;
         }
         evaluating.set(true);
@@ -51,13 +79,12 @@ pub fn CdsPage() -> impl IntoView {
             match api::evaluate_cds(&pid).await {
                 Ok(r) => {
                     let triggered = r.results.iter().filter(|x| x.triggered).count();
+                    let mut args = std::collections::HashMap::new();
+                    args.insert("triggered".to_string(), triggered.to_string());
+                    args.insert("total".to_string(), r.results.len().to_string());
                     feedback.set(Some((
                         true,
-                        format!(
-                            "Evaluación completa: {} de {} planes disparados.",
-                            triggered,
-                            r.results.len()
-                        ),
+                        crate::i18n::tr("cds-ok-evaluated", Some(&args)),
                     )));
                     result.set(Some(r));
                 }
@@ -72,10 +99,10 @@ pub fn CdsPage() -> impl IntoView {
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-clipboard-list mr-2"></i>"Soporte de decisión clínica"
+                        <i class="fa-solid fa-clipboard-list mr-2"></i>{move || crate::i18n::tr("cds-title", None)}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Planes FHIR PlanDefinition versionados y evaluación de condiciones CEL (SPEC-016)"
+                        {move || crate::i18n::tr("cds-subtitle", None)}
                     </p>
                 </div>
                 <button
@@ -83,7 +110,7 @@ pub fn CdsPage() -> impl IntoView {
                     style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                     on:click=move |_| reload.update(|n| *n += 1)
                 >
-                    <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                    <i class="fa-solid fa-rotate mr-2"></i>{move || crate::i18n::tr("action-refresh", None)}
                 </button>
             </div>
 
@@ -105,18 +132,18 @@ pub fn CdsPage() -> impl IntoView {
             <Show when=move || can_evaluate fallback=|| ()>
                 <div class="glass-card p-4 mb-5">
                     <h2 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-stethoscope mr-2" style="color:#3B82F6;"></i>"Evaluar planes para un paciente"
+                        <i class="fa-solid fa-stethoscope mr-2" style="color:#3B82F6;"></i>{move || crate::i18n::tr("cds-evaluate-title", None)}
                     </h2>
                     <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
                         <div>
                             <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">
-                                "Buscar paciente"
+                                {move || crate::i18n::tr("cds-search-patient", None)}
                             </label>
                             <input
                                 type="text"
                                 class="form-input"
                                 style="padding-top:9px; padding-bottom:9px; font-size:14px;"
-                                placeholder="Nombre o cédula..."
+                                placeholder=move || crate::i18n::tr("cds-search-placeholder", None)
                                 prop:value=move || patient_query.get()
                                 on:input=move |ev| patient_query.set(event_target_value(&ev))
                             />
@@ -126,13 +153,17 @@ pub fn CdsPage() -> impl IntoView {
                             on:click=evaluate
                             disabled=move || evaluating.get()
                         >
-                            {move || if evaluating.get() { "Evaluando..." } else { "Evaluar" }}
+                            {move || if evaluating.get() {
+                                crate::i18n::tr("cds-evaluating", None)
+                            } else {
+                                crate::i18n::tr("cds-evaluate", None)
+                            }}
                         </button>
                     </div>
 
                     <Show when=move || !patient_query.get().is_empty() fallback=|| ()>
                         <div class="mt-3 max-h-56 overflow-y-auto">
-                            <Suspense fallback=move || view! { <LoadingState label="Buscando..." /> }>
+                            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("cds-searching", None) /> }>
                                 {move || match patients.get() {
                                     Some(Ok(list)) => {
                                         let q = patient_query.get().to_lowercase();
@@ -148,7 +179,7 @@ pub fn CdsPage() -> impl IntoView {
                                         if hits.is_empty() {
                                             view! {
                                                 <p class="text-sm py-3" style="color:var(--uci-muted);">
-                                                    "Sin coincidencias"
+                                                    {move || crate::i18n::tr("cds-no-matches", None)}
                                                 </p>
                                             }.into_any()
                                         } else {
@@ -208,18 +239,22 @@ pub fn CdsPage() -> impl IntoView {
             </Show>
 
             <h2 class="text-sm font-bold uppercase mt-6 mb-3" style="color:var(--uci-text);">
-                <i class="fa-solid fa-layer-group mr-2" style="color:#8B5CF6;"></i>"Planes activos"
+                <i class="fa-solid fa-layer-group mr-2" style="color:#8B5CF6;"></i>{move || crate::i18n::tr("cds-plans-title", None)}
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Cargando planes..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("cds-loading-plans", None) /> }>
                 {move || match plans.get() {
                     Some(Ok(list)) => view! { <PlansTable plans=list /> }.into_any(),
-                    Some(Err(e)) => view! {
+                    Some(Err(e)) => {
+                        let mut args = std::collections::HashMap::new();
+                        args.insert("error".to_string(), e.to_string());
+                        view! {
                         <ErrorState
-                            message=format!("No se pudieron cargar los planes: {}", e)
+                            message=crate::i18n::tr("cds-load-error", Some(&args))
                             on_retry=Some(Callback::new(move |()| reload.update(|n| *n += 1)))
                         />
                     }
-                    .into_any(),
+                        .into_any()
+                    }
                     None => view! {}.into_any(),
                 }}
             </Suspense>
@@ -246,7 +281,7 @@ fn EvaluationResult(ev: CdsEvaluation) -> impl IntoView {
         <div class="glass-card p-5 mb-5">
             <div class="flex flex-wrap items-center gap-3 mb-4">
                 <h2 class="text-sm font-bold uppercase" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-microscope mr-2" style="color:#EC4899;"></i>"Resultado"
+                    <i class="fa-solid fa-microscope mr-2" style="color:#EC4899;"></i>{move || crate::i18n::tr("cds-result-title", None)}
                 </h2>
                 <Show when=move || triggered_count != 0>
                     <span
@@ -254,8 +289,11 @@ fn EvaluationResult(ev: CdsEvaluation) -> impl IntoView {
                         style="background:rgba(220,38,38,0.14); color:#DC2626; border:1px solid rgba(220,38,38,0.35);"
                     >
                         <i class="fa-solid fa-triangle-exclamation mr-1"></i>
-                        {triggered_count}
-                        " plan(es) disparados"
+                        {move || {
+                            let mut args = std::collections::HashMap::new();
+                            args.insert("count".to_string(), triggered_count.to_string());
+                            crate::i18n::tr("cds-triggered-plans", Some(&args))
+                        }}
                     </span>
                 </Show>
             </div>
@@ -265,9 +303,11 @@ fn EvaluationResult(ev: CdsEvaluation) -> impl IntoView {
                 fallback=|| view! {
                     <div class="p-6 text-center">
                         <i class="fa-solid fa-circle-check text-2xl mb-2" style="color:#10B981;"></i>
-                        <p style="color:var(--uci-text); font-weight:600;">"Ningún plan disparado"</p>
+                        <p style="color:var(--uci-text); font-weight:600;">
+                            {move || crate::i18n::tr("cds-none-triggered", None)}
+                        </p>
                         <p class="text-xs mt-1" style="color:var(--uci-muted);">
-                            "Los umbrales clínicos evaluados no se cumplen para este paciente."
+                            {move || crate::i18n::tr("cds-thresholds-not-met", None)}
                         </p>
                     </div>
                 }
@@ -294,7 +334,8 @@ fn EvaluationResult(ev: CdsEvaluation) -> impl IntoView {
                                 let:action
                             >
                                 {
-                                    let (icon, color, label) = action_meta(&action.kind);
+                                    let (icon, color, _) = action_meta(&action.kind);
+                                    let kind = StoredValue::new(action.kind.clone());
                                     let has_desc = !action.description.is_empty();
                                     view! {
                                         <div class="flex items-start gap-3 py-2">
@@ -303,7 +344,7 @@ fn EvaluationResult(ev: CdsEvaluation) -> impl IntoView {
                                                 style=format!("background:{color}22; color:{color};")
                                             >
                                                 <i class=format!("fa-solid {icon} text-[9px]")></i>
-                                                {label}
+                                                {move || action_meta(&kind.get_value()).2}
                                             </span>
                                             <div class="min-w-0">
                                                 <p class="text-sm font-semibold" style="color:var(--uci-text);">
@@ -327,9 +368,11 @@ fn EvaluationResult(ev: CdsEvaluation) -> impl IntoView {
             <Show when=move || clean_count != 0>
                 <details class="mt-4">
                     <summary class="text-xs cursor-pointer" style="color:var(--uci-muted);">
-                        "Planes evaluados sin disparo ("
-                        {clean_count}
-                        ")"
+                        {move || {
+                            let mut args = std::collections::HashMap::new();
+                            args.insert("count".to_string(), clean_count.to_string());
+                            crate::i18n::tr("cds-clean-summary", Some(&args))
+                        }}
                     </summary>
                     <ul class="mt-2 flex flex-wrap gap-2">
                         <For each=move || clean.get_value() key=|r| r.plan_id.clone() let:plan>
@@ -350,7 +393,7 @@ fn EvaluationResult(ev: CdsEvaluation) -> impl IntoView {
                     style="border-top:1px solid var(--uci-border); color:var(--uci-muted);"
                 >
                     <i class="fa-solid fa-file-circle-check mr-1" style="color:#10B981;"></i>
-                    "CarePlan FHIR generado y listo para auditoría (SPEC-029)."
+                    {move || crate::i18n::tr("cds-careplan-note", None)}
                 </div>
             </Show>
         </div>
@@ -363,7 +406,7 @@ fn PlansTable(plans: Vec<CdsPlanSummary>) -> impl IntoView {
         return view! {
             <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                 <i class="fa-solid fa-folder-open text-2xl mb-2" style="color:#94A3B8;"></i>
-                <p>"No hay planes registrados. Ejecuta el seed de PlanDefinition."</p>
+                <p>{move || crate::i18n::tr("cds-plans-empty", None)}</p>
             </div>
         }
         .into_any();
@@ -377,13 +420,13 @@ fn PlansTable(plans: Vec<CdsPlanSummary>) -> impl IntoView {
                 <thead>
                     <tr style="border-bottom:1px solid var(--uci-border);">
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Plan"
+                            {move || crate::i18n::tr("cds-col-plan", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Versión"
+                            {move || crate::i18n::tr("cds-col-version", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
-                            "Estado"
+                            {move || crate::i18n::tr("equipment-status", None)}
                         </th>
                         <th class="text-left px-4 py-3 text-xs font-bold uppercase" style="color:var(--uci-muted);">
                             "Fingerprint"
@@ -410,10 +453,14 @@ fn PlansTable(plans: Vec<CdsPlanSummary>) -> impl IntoView {
                                         <Show
                                             when=move || active
                                             fallback=|| view! {
-                                                <span class="severity-moderate">"Inactivo"</span>
+                                                <span class="severity-moderate">
+                                                    {move || crate::i18n::tr("status-inactive", None)}
+                                                </span>
                                             }
                                         >
-                                            <span class="severity-low">"Activo"</span>
+                                            <span class="severity-low">
+                                                {move || crate::i18n::tr("status-active", None)}
+                                            </span>
                                         </Show>
                                     </td>
                                     <td

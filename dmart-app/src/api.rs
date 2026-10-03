@@ -46,7 +46,8 @@ fn authed_delete(url: &str) -> gloo_net::http::RequestBuilder {
     }
 }
 
-/// Limpia sesión local y redirige a login si el servidor responde 401/403.
+/// Limpia sesión local y devuelve error si el servidor responde 401/403.
+/// El router (via is_auth signal) maneja la redirección a /login.
 async fn check_auth_response<T>(
     resp: gloo_net::http::Response,
     err_ctx: &str,
@@ -56,8 +57,6 @@ where
 {
     if resp.status() == 401 || resp.status() == 403 {
         crate::stores::session::clear_session();
-        let window = web_sys::window().expect("window");
-        let _ = window.location().set_href("/login");
         return Err("Sesión expirada".into());
     }
     let api_resp: ApiResponse<T> = resp

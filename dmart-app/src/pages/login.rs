@@ -9,8 +9,8 @@ pub fn LoginPage() -> impl IntoView {
     let (password, set_password) = signal(String::new());
     let (error, set_error) = signal(false);
     let (loading, set_loading) = signal(false);
+    let (show_password, set_show_password) = signal(false);
 
-    // Reto MFA (segundo factor)
     let (challenge, set_challenge) = signal(String::new());
     let (code, set_code) = signal(String::new());
     let (use_backup, set_use_backup) = signal(false);
@@ -19,17 +19,25 @@ pub fn LoginPage() -> impl IntoView {
     let navigate_submit = navigate.clone();
     let navigate_mfa = navigate.clone();
     let set_is_auth = use_context::<WriteSignal<bool>>();
-    let is_auth_read = use_context::<ReadSignal<bool>>();
-    let nav_authed = navigate.clone();
 
-    // Tras una recarga el access token (solo en memoria) no existe; el boot
-    // intenta `/auth/refresh` con la cookie httpOnly. Si reanuda la sesión
-    // mientras la URL es `/login`, redirige al dashboard.
-    Effect::new(move |_| {
-        if is_auth_read.is_some_and(|a| a.get()) {
-            nav_authed("/", Default::default());
-        }
-    });
+    let login_username = crate::i18n::tr("login-username", None);
+    let login_password = crate::i18n::tr("login-password", None);
+    let login_forgot = crate::i18n::tr("login-forgot", None);
+    let login_submit = crate::i18n::tr("login-submit", None);
+    let login_show_password = crate::i18n::tr("login-show-password", None);
+    let login_hide_password = crate::i18n::tr("login-hide-password", None);
+    let login_invalid = crate::i18n::tr("login-invalid", None);
+    let login_invalid_mfa = crate::i18n::tr("login-invalid-mfa", None);
+    let login_mfa_title = crate::i18n::tr("login-mfa-title", None);
+    let login_mfa_backup_hint = crate::i18n::tr("login-mfa-backup-hint", None);
+    let login_mfa_hint = crate::i18n::tr("login-mfa-hint", None);
+    let login_mfa_backup_code = crate::i18n::tr("login-mfa-backup-code", None);
+    let login_mfa_code = crate::i18n::tr("login-mfa-code", None);
+    let login_mfa_verify = crate::i18n::tr("login-mfa-verify", None);
+    let login_mfa_use_totp = crate::i18n::tr("login-mfa-use-totp", None);
+    let login_mfa_use_backup = crate::i18n::tr("login-mfa-use-backup", None);
+    let action_back = crate::i18n::tr("action-back", None);
+    let login_version = crate::i18n::tr("login-version", None);
 
     let on_submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();
@@ -44,7 +52,6 @@ pub fn LoginPage() -> impl IntoView {
         spawn_local(async move {
             match api::login(&u, &p).await {
                 Ok(response) if response.mfa_required => {
-                    // Primer factor correcto: el token es de reto, aún sin sesión.
                     set_challenge.set(response.token);
                     set_code.set(String::new());
                     set_loading.set(false);
@@ -100,159 +107,168 @@ pub fn LoginPage() -> impl IntoView {
     };
 
     view! {
-            <div class="min-h-screen flex items-center justify-center p-6 bg-uci-bg relative overflow-hidden">
-                // Fondo decorativo con gradientes médicos
-                <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-uci-accent/10 blur-[120px] rounded-full"></div>
-                <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-uci-accent2/10 blur-[120px] rounded-full"></div>
+        <div class="min-h-screen flex items-center justify-center p-6 bg-uci-bg relative overflow-hidden">
+            <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-uci-accent/10 blur-[120px] rounded-full"></div>
+            <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-uci-accent2/10 blur-[120px] rounded-full"></div>
 
-                <div class="glass-card w-full max-w-md p-10 relative z-10 animate-fade-in">
-                    <div class="text-center mb-10">
-                        <div class="w-20 h-20 bg-gradient-to-br from-[#e34a27] to-[#9b2a14] rounded-full mx-auto flex items-center justify-center shadow-lg shadow-[#e34a27]/40 mb-6 group transition-transform hover:scale-105 duration-300">
-                            <span class="text-4xl text-white font-black group-hover:rotate-12 transition-transform">"D"</span>
-                        </div>
-                        <h1 class="text-5xl font-extrabold tracking-widest">
-                            <span class="text-white drop-shadow-md">"D"</span>
-                            <span class="text-[#e34a27] drop-shadow-md">"MART"</span>
-                        </h1>
+            <div class="glass-card w-full max-w-md p-10 relative z-10 page-enter">
+                <div class="text-center mb-10">
+                    <div class="w-20 h-20 bg-gradient-to-br from-[#e34a27] to-[#9b2a14] rounded-full mx-auto flex items-center justify-center shadow-lg shadow-[#e34a27]/40 mb-6 group transition-transform hover:scale-105 duration-300">
+                        <span class="text-4xl text-white font-black group-hover:rotate-12 transition-transform">"D"</span>
                     </div>
+                    <h1 class="text-5xl font-extrabold tracking-widest">
+                        <span class="text-white drop-shadow-md">"D"</span>
+                        <span class="text-[#e34a27] drop-shadow-md">"MART"</span>
+                    </h1>
+                </div>
 
-                    {move || error.get().then(|| view! {
-                        <div role="alert" class="bg-uci-critical/10 border border-uci-critical/30 p-4 rounded-xl mb-6 text-uci-critical text-xs font-semibold">
-    {move || if challenge.get().is_empty() {
-                                crate::i18n::tr("login-invalid", None)
-                            } else {
-                                crate::i18n::tr("login-invalid-mfa", None)
-                            }}
-                        </div>
-                    })}
+                {move || error.get().then(|| view! {
+                    <div role="alert" class="bg-uci-critical/10 border border-uci-critical/30 p-4 rounded-xl mb-6 text-uci-critical text-xs font-semibold">
+                        {if challenge.get().is_empty() { login_invalid.clone() } else { login_invalid_mfa.clone() }}
+                    </div>
+                })}
 
-                    // Formulario de credenciales (primer factor)
-                    <form
-                        on:submit=on_submit
-                        class=move || if challenge.get().is_empty() { "space-y-6" } else { "hidden" }
-                    >
-                        <div>
-                            <label for="login-username" class="form-label">{crate::i18n::tr("login-username", None)}</label>
-                            <input
-                                id="login-username"
-                                type="text"
-                                class="form-input py-3 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
-                                placeholder="admin_uci"
-                                autocomplete="username"
-                                prop:value=username
-                                on:input=move |ev| set_username.set(event_target_value(&ev))
-                                required
-                            />
+                <form on:submit=on_submit class=move || if challenge.get().is_empty() { "space-y-6" } else { "hidden" }>
+                    <div>
+                        <label for="login-username" class="form-label">{login_username}</label>
+                        <input
+                            id="login-username"
+                            type="text"
+                            class="form-input py-3 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
+                            placeholder="admin_uci"
+                            autocomplete="username"
+                            prop:value=username
+                            on:input=move |ev| set_username.set(event_target_value(&ev))
+                            required
+                        />
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="login-password" class="form-label mb-0">{login_password}</label>
+                            <a href="#" class="text-[10px] text-uci-accent hover:underline">{login_forgot}</a>
                         </div>
-                        <div>
-                            <div class="flex justify-between items-center mb-2">
-                                <label for="login-password" class="form-label mb-0">{crate::i18n::tr("login-password", None)}</label>
-                                <a href="#" class="text-[10px] text-uci-accent hover:underline">{crate::i18n::tr("login-forgot", None)}</a>
-                            </div>
+                        <div class="relative">
                             <input
                                 id="login-password"
                                 type="password"
-                                class="form-input py-3 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
+                                class="form-input py-3 pr-12 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
                                 placeholder="••••••••"
                                 autocomplete="current-password"
                                 prop:value=password
                                 on:input=move |ev| set_password.set(event_target_value(&ev))
                                 required
+                                class:hidden=move || show_password.get()
                             />
-                        </div>
-
-                        <button
-                            type="submit"
-                            class="btn-primary w-full py-4 text-base font-bold tracking-wide mt-4 relative overflow-hidden group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                            disabled=loading
-                            aria-busy=loading
-                        >
-                            <span class=move || if loading.get() { "opacity-0" } else { "opacity-100" }>
-                                {crate::i18n::tr("login-submit", None)}
-                            </span>
-                            {move || loading.get().then(|| view! {
-                                <div class="absolute inset-0 flex items-center justify-center">
-                                    <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                </div>
-                            })}
-                        </button>
-                    </form>
-
-                    // Formulario del segundo factor (TOTP / código de respaldo)
-                    <form
-                        on:submit=on_mfa_submit
-                        class=move || if challenge.get().is_empty() { "hidden" } else { "space-y-6" }
-                    >
-                        <div class="text-center">
-                            <h2 class="text-lg font-bold text-white">{crate::i18n::tr("login-mfa-title", None)}</h2>
-                            <p class="text-xs text-uci-muted mt-1">
-    {move || if use_backup.get() {
-                                    crate::i18n::tr("login-mfa-backup-hint", None)
-                                } else {
-                                    crate::i18n::tr("login-mfa-hint", None)
-                                }}
-                            </p>
-                        </div>
-                        <div>
-                            <label for="login-mfa-code" class="form-label">
-                                {move || if use_backup.get() { crate::i18n::tr("login-mfa-backup-code", None) } else { crate::i18n::tr("login-mfa-code", None) }}
-                            </label>
                             <input
-                                id="login-mfa-code"
+                                id="login-password-visible"
                                 type="text"
-                                inputmode=move || if use_backup.get() { "text" } else { "numeric" }
-                                autocomplete="one-time-code"
-                                class="form-input py-3 text-center tracking-[0.4em] font-mono focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
-                                placeholder=move || if use_backup.get() { "XXXXXXXX" } else { "000000" }
-                                prop:value=code
-                                on:input=move |ev| set_code.set(event_target_value(&ev))
+                                class="form-input py-3 pr-12 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
+                                placeholder="••••••••"
+                                autocomplete="current-password"
+                                prop:value=password
+                                on:input=move |ev| set_password.set(event_target_value(&ev))
                                 required
+                                class:hidden=move || !show_password.get()
                             />
-                        </div>
-
-                        <button
-                            type="submit"
-                            class="btn-primary w-full py-4 text-base font-bold tracking-wide relative overflow-hidden group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                            disabled=loading
-                            aria-busy=loading
-                        >
-                            <span class=move || if loading.get() { "opacity-0" } else { "opacity-100" }>
-                                {crate::i18n::tr("login-mfa-verify", None)}
-                            </span>
-                            {move || loading.get().then(|| view! {
-                                <div class="absolute inset-0 flex items-center justify-center">
-                                    <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                </div>
-                            })}
-                        </button>
-
-                        <div class="flex items-center justify-between text-[10px]">
                             <button
                                 type="button"
-                                class="text-uci-accent hover:underline"
-                                on:click=move |_| set_use_backup.update(|b| *b = !*b)
+                                class="absolute inset-y-0 right-3 flex items-center text-uci-muted hover:text-uci-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                                on:click=move |_| set_show_password.update(|v| *v = !*v)
+                                aria-label=move || if show_password.get() { login_hide_password.clone() } else { login_show_password.clone() }
                             >
-                                {move || if use_backup.get() { crate::i18n::tr("login-mfa-use-totp", None) } else { crate::i18n::tr("login-mfa-use-backup", None) }}
-                            </button>
-                            <button
-                                type="button"
-                                class="text-uci-muted hover:underline"
-                                on:click=move |_| {
-                                    set_challenge.set(String::new());
-                                    set_error.set(false);
-                                }
-                            >
-                                {crate::i18n::tr("action-back", None)}
+                                {move || if show_password.get() {
+                                    view! { <i class="fa-solid fa-eye-slash text-lg"></i> }
+                                } else {
+                                    view! { <i class="fa-solid fa-eye text-lg"></i> }
+                                }}
                             </button>
                         </div>
-                    </form>
+                    </div>
 
-                    <div class="mt-8 pt-8 border-t border-uci-border/50 text-center">
-                        <p class="text-[10px] text-uci-muted uppercase tracking-widest font-bold">
-                            {crate::i18n::tr("login-version", None)}
+                    <button
+                        type="submit"
+                        class="btn-primary w-full py-4 text-base font-bold tracking-wide mt-4 relative overflow-hidden group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                        disabled=loading
+                        aria-busy=loading
+                    >
+                        <span class=move || if loading.get() { "opacity-0" } else { "opacity-100" }>
+                            {login_submit}
+                        </span>
+                        {move || loading.get().then(|| view! {
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            </div>
+                        })}
+                    </button>
+                </form>
+
+                <form on:submit=on_mfa_submit class=move || if challenge.get().is_empty() { "hidden" } else { "space-y-6" }>
+                    <div class="text-center">
+                        <h2 class="text-lg font-bold text-white">{login_mfa_title}</h2>
+                        <p class="text-xs text-uci-muted mt-1">
+                            {move || if use_backup.get() { login_mfa_backup_hint.clone() } else { login_mfa_hint.clone() }}
                         </p>
                     </div>
+                    <div>
+                        <label for="login-mfa-code" class="form-label">
+                            {move || if use_backup.get() { crate::i18n::tr("login-mfa-backup-code", None) } else { crate::i18n::tr("login-mfa-code", None) }}
+                        </label>
+                        <input
+                            id="login-mfa-code"
+                            type="text"
+                            inputmode=move || if use_backup.get() { "text" } else { "numeric" }
+                            autocomplete="one-time-code"
+                            class="form-input py-3 text-center tracking-[0.4em] font-mono focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
+                            placeholder=move || if use_backup.get() { "XXXXXXXX" } else { "000000" }
+                            prop:value=code
+                            on:input=move |ev| set_code.set(event_target_value(&ev))
+                            required
+                        />
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="btn-primary w-full py-4 text-base font-bold tracking-wide relative overflow-hidden group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                        disabled=loading
+                        aria-busy=loading
+                    >
+                        <span class=move || if loading.get() { "opacity-0" } else { "opacity-100" }>
+                            {login_mfa_verify}
+                        </span>
+                        {move || loading.get().then(|| view! {
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            </div>
+                        })}
+                    </button>
+
+                    <div class="flex items-center justify-between text-[10px]">
+                        <button
+                            type="button"
+                            class="text-uci-accent hover:underline"
+                            on:click=move |_| set_use_backup.update(|b| *b = !*b)
+                        >
+                            {move || if use_backup.get() { crate::i18n::tr("login-mfa-use-totp", None) } else { crate::i18n::tr("login-mfa-use-backup", None) }}
+                        </button>
+                        <button
+                            type="button"
+                            class="text-uci-muted hover:underline"
+                            on:click=move |_| {
+                                set_challenge.set(String::new());
+                                set_error.set(false);
+                            }
+                        >
+                            {action_back}
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-8 pt-8 border-t border-uci-border/50 text-center">
+                    <p class="text-[10px] text-uci-muted uppercase tracking-widest font-bold">
+                        {login_version}
+                    </p>
                 </div>
             </div>
-        }
+        </div>
+    }
 }

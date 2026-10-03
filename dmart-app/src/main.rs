@@ -9,11 +9,6 @@ fn main() {
     // any_spawner panics with "no global 'spawn_local' function configured".
     let _ = any_spawner::Executor::init_wasm_bindgen();
 
-    // Initialize i18n, theme, and shortcuts
-    i18n::init_i18n();
-    theme::init_theme();
-    shortcuts::init_shortcuts();
-
     // Disable Service Worker registration for development
     #[cfg(debug_assertions)]
     {

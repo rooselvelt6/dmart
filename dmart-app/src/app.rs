@@ -64,15 +64,15 @@ pub fn App() -> impl IntoView {
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
 
-    // Use Effect::new to ensure Leptos runtime is initialized before spawning tasks
+    // Efecto de montaje: solo si ya hay token en memoria, arrancar refresh periódico
+    // y recuperar identidad si falta. NO intentar refresh automático sin token
+    // (evita ciclo: montaje → refresh → is_auth=true → redirect → remount → loop).
     Effect::new(move |_| {
         if has_token() {
             start_session_refresh();
-            // Las sesiones creadas antes del gating solo guardaban el token: si no
-            // hay identidad, se recupera con `/auth/me` (y valida que el token
-            // siga vigente). La recarga hace que el gating por rol se reevalúe.
-            spawn_local(async move {
-                if current_user().is_none() {
+            // Recuperar identidad si solo hay token en memoria
+            if current_user().is_none() {
+                spawn_local(async move {
                     match crate::api::me().await {
                         Ok(u) => save_user(&u),
                         Err(_) => {
@@ -80,31 +80,11 @@ pub fn App() -> impl IntoView {
                             set_is_auth.set(false);
                         }
                     }
-                    window().location().reload().unwrap_or_default();
-                }
-            });
-        } else {
-            // El access token vive solo en memoria: tras una recarga ya no hay
-            // token. La sesión se reanuda con `/auth/refresh` (cookie httpOnly).
-            //
-            // Se intenta siempre, no solo cuando quedó una identidad en
-            // `localStorage`: si el usuario borró el almacenamiento local pero la
-            // cookie sigue viva, la sesión era recuperable y sin este intento la
-            // app lo expulsaba a `/login` teniendo una sesión válida. En un
-            // visitante sin cookie es una llamada fallida sin consecuencias.
-            spawn_local(async move {
-                match crate::api::refresh_session().await {
-                    Ok(resp) => {
-                        save_session(&resp);
-                        set_is_auth.set(true);
-                        // Devuelve al usuario a la ruta que pidió antes del rebote.
-                        let target = pending_path().get();
-                        use_navigate()(&target, Default::default());
-                    }
-                    Err(_) => clear_session(),
-                }
-            });
+                });
+            }
         }
+        // Si no hay token: NO intentar refresh automático.
+        // El usuario hará login manual y el backend setea la cookie httpOnly.
     });
 
     // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).

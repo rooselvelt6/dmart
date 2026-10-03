@@ -15,19 +15,21 @@ const ADMIN_USERNAME = __ENV.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || 'admin123';
 
 const scaleFailRate = new Rate('scales_failures');
+const scaleReqFailRate = new Rate('scales_req_failures');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 10 },   // Ramp up
-    { duration: '1m', target: 50 },    // Stay at 50 users
-    { duration: '30s', target: 100 },  // Ramp up to 100
-    { duration: '1m', target: 100 },   // Stay at 100
-    { duration: '30s', target: 0 },    // Ramp down
+    { duration: '30s', target: 10 },
+    { duration: '1m', target: 50 },
+    { duration: '30s', target: 100 },
+    { duration: '1m', target: 100 },
+    { duration: '30s', target: 0 },
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
     http_req_failed: ['rate<0.05'],
     scales_failures: ['rate<0.05'],
+    scales_req_failures: ['rate<0.05'],
   },
 };
 
@@ -190,7 +192,7 @@ export default function (data) {
   const a = randomApacheData();
 
   const apacheRes = http.post(`${base}/apache`, JSON.stringify({ data: a, notas: 'Load test' }), headers);
-  check(apacheRes, {
+  const apacheChecks = check(apacheRes, {
     'apache 2xx': (r) => r.status === 200 || r.status === 201,
     'apache score 0-71': (r) => {
       const s = r.json('data.apache_score');
@@ -199,17 +201,19 @@ export default function (data) {
   });
 
   const sofaRes = http.post(`${base}/sofa`, JSON.stringify(sofaData(a)), headers);
-  check(sofaRes, { 'sofa 2xx': (r) => r.status === 200 || r.status === 201 });
+  const sofaChecks = check(sofaRes, { 'sofa 2xx': (r) => r.status === 200 || r.status === 201 });
 
   const news2Res = http.post(`${base}/news2`, JSON.stringify(news2Data(a)), headers);
-  check(news2Res, { 'news2 2xx': (r) => r.status === 200 || r.status === 201 });
+  const news2Checks = check(news2Res, { 'news2 2xx': (r) => r.status === 200 || r.status === 201 });
 
   const saps3Res = http.post(`${base}/saps3`, JSON.stringify(saps3Data(a)), headers);
-  check(saps3Res, { 'saps3 2xx': (r) => r.status === 200 || r.status === 201 });
+  const saps3Checks = check(saps3Res, { 'saps3 2xx': (r) => r.status === 200 || r.status === 201 });
 
   const gcsRes = http.post(`${base}/gcs`, JSON.stringify(gcsData(a)), headers);
-  check(gcsRes, { 'gcs 2xx': (r) => r.status === 200 || r.status === 201 });
+  const gcsChecks = check(gcsRes, { 'gcs 2xx': (r) => r.status === 200 || r.status === 201 });
 
-  scaleFailRate.add(false);
+  const allChecks = apacheChecks && sofaChecks && news2Checks && saps3Checks && gcsChecks;
+  scaleFailRate.add(!allChecks);
+  scaleReqFailRate.add(!apacheChecks || !sofaChecks || !news2Checks || !saps3Checks || !gcsChecks);
   sleep(0.2);
 }

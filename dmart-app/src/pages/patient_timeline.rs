@@ -16,27 +16,72 @@ fn fmt_ts(ms: i64) -> String {
 }
 
 /// Icono + color por tipo de evento (serde `PascalCase` en el servidor).
-fn event_meta(kind: &str) -> (&'static str, &'static str, &'static str) {
+/// La etiqueta se traduce: llámala dentro del `move ||` que la renderiza.
+fn event_meta(kind: &str) -> (&'static str, &'static str, String) {
     match kind {
-        "Admission" => ("fa-door-open", "#10B981", "Ingreso"),
-        "VitalSigns" => ("fa-heart-pulse", "#EF4444", "Signos vitales"),
-        "ScoreCalculated" => ("fa-calculator", "#3B82F6", "Score calculado"),
-        "Intervention" => ("fa-hand-holding-medical", "#8B5CF6", "Intervención"),
-        "Medication" => ("fa-pills", "#14B8A6", "Medicamento"),
-        "Procedure" => ("fa-stethoscope", "#0EA5E9", "Procedimiento"),
-        "Note" => ("fa-note-sticky", "#64748B", "Nota"),
-        "Discharge" => ("fa-door-open", "#6B7280", "Egreso"),
-        "Alert" => ("fa-triangle-exclamation", "#F59E0B", "Alerta"),
-        "CdsAction" => ("fa-clipboard-list", "#EC4899", "Acción CDS"),
-        _ => ("fa-circle", "#94A3B8", "Evento"),
+        "Admission" => (
+            "fa-door-open",
+            "#10B981",
+            crate::i18n::tr("timeline-event-admission", None),
+        ),
+        "VitalSigns" => (
+            "fa-heart-pulse",
+            "#EF4444",
+            crate::i18n::tr("timeline-event-vitals", None),
+        ),
+        "ScoreCalculated" => (
+            "fa-calculator",
+            "#3B82F6",
+            crate::i18n::tr("timeline-event-score", None),
+        ),
+        "Intervention" => (
+            "fa-hand-holding-medical",
+            "#8B5CF6",
+            crate::i18n::tr("timeline-event-intervention", None),
+        ),
+        "Medication" => (
+            "fa-pills",
+            "#14B8A6",
+            crate::i18n::tr("timeline-event-medication", None),
+        ),
+        "Procedure" => (
+            "fa-stethoscope",
+            "#0EA5E9",
+            crate::i18n::tr("timeline-event-procedure", None),
+        ),
+        "Note" => (
+            "fa-note-sticky",
+            "#64748B",
+            crate::i18n::tr("timeline-event-note", None),
+        ),
+        "Discharge" => (
+            "fa-door-open",
+            "#6B7280",
+            crate::i18n::tr("timeline-event-discharge", None),
+        ),
+        "Alert" => (
+            "fa-triangle-exclamation",
+            "#F59E0B",
+            crate::i18n::tr("timeline-event-alert", None),
+        ),
+        "CdsAction" => (
+            "fa-clipboard-list",
+            "#EC4899",
+            crate::i18n::tr("timeline-event-cds-action", None),
+        ),
+        _ => (
+            "fa-circle",
+            "#94A3B8",
+            crate::i18n::tr("timeline-event-other", None),
+        ),
     }
 }
 
-fn severity_meta(sev: &str) -> (&'static str, &'static str) {
+fn severity_meta(sev: &str) -> (&'static str, String) {
     match sev {
-        "critical" => ("#DC2626", "Crítica"),
-        "warning" => ("#F59E0B", "Advertencia"),
-        _ => ("#64748B", "Informativa"),
+        "critical" => ("#DC2626", crate::i18n::tr("timeline-sev-critical", None)),
+        "warning" => ("#F59E0B", crate::i18n::tr("status-warning", None)),
+        _ => ("#64748B", crate::i18n::tr("timeline-sev-info", None)),
     }
 }
 
@@ -134,13 +179,15 @@ pub fn PatientTimelinePage() -> impl IntoView {
                         class="inline-block mb-2 text-sm"
                         style="color:var(--uci-muted); text-decoration:none;"
                     >
-                        <i class="fa-solid fa-arrow-left mr-1"></i>"Volver al detalle"
+                        <i class="fa-solid fa-arrow-left mr-1"></i>
+                        {move || crate::i18n::tr("timeline-back", None)}
                     </a>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-clock-rotate-left mr-2"></i>"Timeline del paciente"
+                        <i class="fa-solid fa-clock-rotate-left mr-2"></i>
+                        {move || crate::i18n::tr("timeline-title", None)}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Historia clínica append-only con fingerprint SHA-256 por evento (SPEC-015)"
+                        {move || crate::i18n::tr("timeline-subtitle", None)}
                     </p>
                 </div>
                 <button
@@ -148,7 +195,7 @@ pub fn PatientTimelinePage() -> impl IntoView {
                     style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                     on:click=apply_filters
                 >
-                    <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                    <i class="fa-solid fa-rotate mr-2"></i>{move || crate::i18n::tr("action-refresh", None)}
                 </button>
             </div>
 
@@ -156,7 +203,7 @@ pub fn PatientTimelinePage() -> impl IntoView {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">
-                            "Tipo de evento"
+                            {move || crate::i18n::tr("timeline-filter-type", None)}
                         </label>
                         <select
                             class="form-select"
@@ -167,22 +214,42 @@ pub fn PatientTimelinePage() -> impl IntoView {
                                 reload.update(|n| *n += 1);
                             }
                         >
-                            <option value="">"Todos"</option>
-                            <option value="Admission">"Ingreso"</option>
-                            <option value="VitalSigns">"Signos vitales"</option>
-                            <option value="ScoreCalculated">"Score calculado"</option>
-                            <option value="Intervention">"Intervención"</option>
-                            <option value="Medication">"Medicamento"</option>
-                            <option value="Procedure">"Procedimiento"</option>
-                            <option value="Note">"Nota"</option>
-                            <option value="Discharge">"Egreso"</option>
-                            <option value="Alert">"Alerta"</option>
-                            <option value="CdsAction">"Acción CDS"</option>
+                            <option value="">{move || crate::i18n::tr("timeline-filter-all-types", None)}</option>
+                            <option value="Admission">
+                                {move || crate::i18n::tr("timeline-event-admission", None)}
+                            </option>
+                            <option value="VitalSigns">
+                                {move || crate::i18n::tr("timeline-event-vitals", None)}
+                            </option>
+                            <option value="ScoreCalculated">
+                                {move || crate::i18n::tr("timeline-event-score", None)}
+                            </option>
+                            <option value="Intervention">
+                                {move || crate::i18n::tr("timeline-event-intervention", None)}
+                            </option>
+                            <option value="Medication">
+                                {move || crate::i18n::tr("timeline-event-medication", None)}
+                            </option>
+                            <option value="Procedure">
+                                {move || crate::i18n::tr("timeline-event-procedure", None)}
+                            </option>
+                            <option value="Note">
+                                {move || crate::i18n::tr("timeline-event-note", None)}
+                            </option>
+                            <option value="Discharge">
+                                {move || crate::i18n::tr("timeline-event-discharge", None)}
+                            </option>
+                            <option value="Alert">
+                                {move || crate::i18n::tr("timeline-event-alert", None)}
+                            </option>
+                            <option value="CdsAction">
+                                {move || crate::i18n::tr("timeline-event-cds-action", None)}
+                            </option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">
-                            "Severidad"
+                            {move || crate::i18n::tr("timeline-filter-severity", None)}
                         </label>
                         <select
                             class="form-select"
@@ -193,23 +260,27 @@ pub fn PatientTimelinePage() -> impl IntoView {
                                 reload.update(|n| *n += 1);
                             }
                         >
-                            <option value="">"Todas"</option>
-                            <option value="info">"Informativa"</option>
-                            <option value="warning">"Advertencia"</option>
-                            <option value="critical">"Crítica"</option>
+                            <option value="">
+                                {move || crate::i18n::tr("timeline-filter-all-severities", None)}
+                            </option>
+                            <option value="info">{move || crate::i18n::tr("timeline-sev-info", None)}</option>
+                            <option value="warning">{move || crate::i18n::tr("status-warning", None)}</option>
+                            <option value="critical">
+                                {move || crate::i18n::tr("timeline-sev-critical", None)}
+                            </option>
                         </select>
                     </div>
                 </div>
             </div>
 
-            <Suspense fallback=move || view! { <LoadingState label="Cargando timeline..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("timeline-loading", None) /> }>
                 {move || match events.get() {
                     Some(Ok(resp)) => {
                         if resp.events.is_empty() {
                             view! {
                                 <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                                     <i class="fa-solid fa-inbox text-2xl mb-2" style="color:#94A3B8;"></i>
-                                    <p>"Sin eventos para los filtros seleccionados"</p>
+                                    <p>{move || crate::i18n::tr("timeline-empty", None)}</p>
                                 </div>
                             }.into_any()
                         } else {
@@ -218,13 +289,17 @@ pub fn PatientTimelinePage() -> impl IntoView {
                             }.into_any()
                         }
                     }
-                    Some(Err(e)) => view! {
+                    Some(Err(e)) => {
+                        let mut args = std::collections::HashMap::new();
+                        args.insert("error".to_string(), e.to_string());
+                        view! {
                         <ErrorState
-                            message=format!("No se pudo cargar el timeline: {}", e)
+                            message=crate::i18n::tr("timeline-load-error", Some(&args))
                             on_retry=Some(Callback::new(move |()| reload.update(|n| *n += 1)))
                         />
                     }
-                    .into_any(),
+                        .into_any()
+                    }
                     None => view! {}.into_any(),
                 }}
             </Suspense>
@@ -243,8 +318,10 @@ fn TimelineList(events: Vec<TimelineEvent>, has_more: bool) -> impl IntoView {
             ></div>
             <For each=move || list.get_value().clone() key=|e| e.fingerprint.clone() let:event>
                 {
-                    let (icon, color, label) = event_meta(&event.event_type);
-                    let (sev_color, sev_label) = severity_meta(&event.severity);
+                    let (icon, color, _) = event_meta(&event.event_type);
+                    let (sev_color, _) = severity_meta(&event.severity);
+                    let event_kind = StoredValue::new(event.event_type.clone());
+                    let event_sev = StoredValue::new(event.severity.clone());
                     let summary = payload_summary(&event.payload);
                     let has_summary = !summary.is_empty();
                     let summary = StoredValue::new(summary);
@@ -267,7 +344,7 @@ fn TimelineList(events: Vec<TimelineEvent>, has_more: bool) -> impl IntoView {
                                         )
                                     >
                                         <i class=format!("fa-solid {icon} text-[9px]")></i>
-                                        {label}
+                                        {move || event_meta(&event_kind.get_value()).2}
                                     </span>
                                     <span
                                         class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
@@ -275,7 +352,7 @@ fn TimelineList(events: Vec<TimelineEvent>, has_more: bool) -> impl IntoView {
                                             "background:color-mix(in srgb, {sev_color} 14%, transparent); color:{sev_color};"
                                         )
                                     >
-                                        {sev_label}
+                                        {move || severity_meta(&event_sev.get_value()).1}
                                     </span>
                                     <span class="text-xs ml-auto tabular-nums" style="color:var(--uci-muted);">
                                         {fmt_ts(event.occurred_at)}
@@ -285,7 +362,7 @@ fn TimelineList(events: Vec<TimelineEvent>, has_more: bool) -> impl IntoView {
                                     when=move || has_summary
                                     fallback=|| view! {
                                         <p class="text-xs" style="color:var(--uci-muted);">
-                                            "Sin payload"
+                                            {move || crate::i18n::tr("timeline-no-payload", None)}
                                         </p>
                                     }
                                 >
@@ -295,17 +372,28 @@ fn TimelineList(events: Vec<TimelineEvent>, has_more: bool) -> impl IntoView {
                                             key=|(k, _)| k.clone()
                                             let:kv
                                         >
-                                            <div class="flex gap-2 min-w-0">
-                                                <dt class="text-[11px] uppercase shrink-0" style="color:var(--uci-muted);">
-                                                    {kv.0.clone()}
-                                                </dt>
-                                                <dd
-                                                    class="text-[11px] font-semibold truncate"
-                                                    style="color:var(--uci-text);"
-                                                >
-                                                    {kv.1.clone()}
-                                                </dd>
-                                            </div>
+                                            {
+                                                let kv_label = kv.0.clone();
+                                                let kv_value = kv.1.clone();
+                                                let is_detail = kv_label == "detalle";
+                                                view! {
+                                                    <div class="flex gap-2 min-w-0">
+                                                        <dt class="text-[11px] uppercase shrink-0" style="color:var(--uci-muted);">
+                                                            {move || if is_detail {
+                                                                crate::i18n::tr("timeline-payload-detail", None)
+                                                            } else {
+                                                                kv_label.clone()
+                                                            }}
+                                                        </dt>
+                                                        <dd
+                                                            class="text-[11px] font-semibold truncate"
+                                                            style="color:var(--uci-text);"
+                                                        >
+                                                            {kv_value.clone()}
+                                                        </dd>
+                                                    </div>
+                                                }
+                                            }
                                         </For>
                                     </dl>
                                 </Show>
@@ -328,7 +416,7 @@ fn TimelineList(events: Vec<TimelineEvent>, has_more: bool) -> impl IntoView {
             <Show when=move || has_more>
                 <p class="text-xs pl-1" style="color:var(--uci-muted);">
                     <i class="fa-solid fa-circle-info mr-1"></i>
-                    "Hay más eventos. Ajusta los filtros o reduce el límite para acotar."
+                    {move || crate::i18n::tr("timeline-has-more", None)}
                 </p>
             </Show>
         </div>

@@ -3,6 +3,7 @@
 
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
+use std::sync::OnceLock;
 
 const THEME_KEY: &str = "dmart_theme";
 
@@ -56,9 +57,19 @@ fn system_is_dark() -> bool {
     false
 }
 
+/// Track last applied theme to prevent redundant DOM mutations
+static LAST_APPLIED_THEME: OnceLock<RwSignal<Option<Theme>>> = OnceLock::new();
+
 /// Aplica la clase `dark`/`light` en `<html>`: el mecanismo real que
 /// `input.css` (Tailwind) usa para cambiar todas las variables `--uci-*`.
 fn apply_dom_theme(t: &Theme) {
+    let last_signal = LAST_APPLIED_THEME.get_or_init(|| RwSignal::new(None));
+    
+    // Skip if theme hasn't changed
+    if last_signal.get() == Some(*t) {
+        return;
+    }
+    
     if let Some(window) = web_sys::window()
         && let Some(doc) = window.document()
         && let Some(html) = doc.document_element()
@@ -76,6 +87,8 @@ fn apply_dom_theme(t: &Theme) {
             let _ = class_list.remove_1("dark");
             let _ = class_list.add_1("light");
         }
+        // Track applied theme
+        last_signal.set(Some(*t));
     }
 }
 
@@ -93,9 +106,6 @@ pub fn use_theme() -> (ReadSignal<Theme>, WriteSignal<Theme>) {
         apply_dom_theme(&t);
         LocalStorage::set(THEME_KEY, t).ok();
     });
-
-    // Apply inmediato (el Effect corre tras la primera renderización).
-    apply_dom_theme(&stored);
 
     (theme, set_theme)
 }

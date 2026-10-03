@@ -1,0 +1,138 @@
+# Español (es) - Idioma por defecto
+# dMart UCI - Sistema de Gestión de UCI
+
+# Login
+login-username = "Usuario"
+login-password = "Contraseña"
+login-submit = "Iniciar sesión"
+login-forgot = "¿Olvidó contraseña?"
+login-version = "v2.0 — Rust + Leptos + WASM"
+login-invalid = "Credenciales inválidas"
+login-invalid-mfa = "Código MFA inválido"
+login-mfa-title = "Verificación MFA"
+login-mfa-hint = "Introduce el código de tu autenticador"
+login-mfa-backup-hint = "Introduce un código de respaldo"
+login-mfa-code = "Código MFA"
+login-mfa-backup-code = "Código de respaldo"
+login-mfa-verify = "Verificar"
+login-mfa-use-totp = "Usar TOTP"
+login-mfa-use-backup = "Usar código de respaldo"
+action-back = "Volver"
+
+# Navbar
+nav-dashboard = "Panel"
+nav-patients = "Pacientes"
+nav-patients-new = "Nuevo paciente"
+nav-record = "Historia clínica"
+nav-measure = "Nueva medición"
+nav-patient-active = "Paciente activo"
+nav-patients = "Pacientes"
+nav-devices = "Dispositivos"
+nav-quality = "Calidad"
+nav-support = "Soporte"
+nav-admin = "Administración"
+nav-profile = "Perfil"
+nav-logout = "Cerrar sesión"
+nav-section-main = "Principal"
+nav-section-actions = "Acciones"
+nav-patient-active = "Paciente activo"
+nav-record = "Historia"
+nav-measure = "Medir"
+nav-escalation = "Escalamiento"
+nav-support = "Soporte"
+nav-admin = "Admin"
+nav-profile = "Perfil"
+nav-logout = "Salir"
+nav-patients-new = "Nuevo"
+nav-patients = "Pacientes"
+nav-devices = "Dispositivos"
+nav-quality = "Calidad"
+nav-escalation = "Escalamiento"
+nav-support = "Soporte"
+nav-admin = "Admin"
+nav-profile = "Perfil"
+nav-logout = "Salir"
+
+# Sections
+nav-section-main = "Principal"
+nav-section-actions = "Acciones"
+nav-patient-active = "Paciente activo"
+
+# Theme
+settings-theme = "Tema"
+settings-theme-light = "Claro"
+settings-theme-dark = "Oscuro"
+settings-theme-system = "Sistema"
+aria-theme = "Seleccionar tema"
+
+# Language
+aria-language = "Seleccionar idioma"
+
+# General
+nav-dashboard = "Dashboard"
+nav-patients = "Pacientes"
+nav-patients-new = "Nuevo paciente"
+nav-record = "Historia"
+nav-measure = "Medir"
+nav-patient-active = "Paciente activo"
+nav-devices = "Dispositivos"
+nav-quality = "Calidad"
+nav-support = "Soporte"
+nav-admin = "Administración"
+nav-profile = "Perfil"
+nav-logout = "Cerrar sesión"
+nav-section-main = "Principal"
+nav-section-actions = "Acciones"
+nav-patient-active = "Paciente activo"
+
+# Login
+login-username = "Usuario"
+login-password = "Contraseña"
+login-submit = "Iniciar sesión"
+login-forgot = "¿Olvidó contraseña?"
+login-version = "v2.0 — Rust + Leptos + WASM"
+login-invalid = "Credenciales inválidas"
+login-invalid-mfa = "Código MFA inválido"
+login-mfa-title = "Verificación MFA"
+login-mfa-hint = "Introduce el código de tu autenticador"
+login-mfa-backup-hint = "Introduce un código de respaldo"
+login-mfa-code = "Código MFA"
+login-mfa-backup-code = "Código de respaldo"
+login-mfa-verify = "Verificar"
+login-mfa-use-totp = "Usar TOTP"
+login-mfa-use-backup = "Usar código de respaldo"
+action-back = "Volver"
+login-version = "v2.0 — Rust + Leptos + WASM"
+
+# Perfil
+login-submit = "Iniciar sesión"
+login-username = "Usuario"
+login-password = "Contraseña"
+login-forgot = "¿Olvidó contraseña?"
+login-version = "v2.0"
+login-invalid = "Credenciales inválidas"
+
+# Settings
+settings-theme = "Tema"
+settings-theme-light = "Claro"
+settings-theme-dark = "Oscuro"
+settings-theme-system = "Sistema"
+aria-theme = "Seleccionar tema"
+aria-language = "Seleccionar idioma"
+
+# Patient
+nav-record = "Historia"
+nav-measure = "Medir"
+nav-patient-active = "Paciente activo"
+
+# Settings
+settings-theme = "Tema"
+settings-theme-light = "Claro"
+settings-theme-dark = "Oscuro"
+settings-theme-system = "Sistema"
+aria-theme = "Seleccionar tema"
+aria-language = "Seleccionar idioma"
+
+# Footer
+nav-logout = "Cerrar sesión"
+login-version = "v2.0 — Rust + Leptos + WASM"

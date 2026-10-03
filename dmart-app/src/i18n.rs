@@ -84,7 +84,7 @@ pub fn get_current_lang() -> String {
 /// Igual que `get_current_lang()`, pero suscribe al cambio de idioma (reactivo):
 /// cualquier `move || tr(...)` re-renderiza al cambiar idioma.
 fn lang_tracked() -> String {
-    lang_signal().get()
+    lang_signal().get_untracked()
 }
 
 /// Set language preference in localStorage (reactivo: actualiza la UI al instante)
@@ -106,6 +106,28 @@ pub fn set_lang(lang: &str) {
     }
 }
 
+/// Sustituye los placeholders de un valor `.ftl` por los argumentos dados.
+///
+/// Los `.ftl` de dMart NO son Fluent: usan llaves **simples** (`{error}`), no
+/// dobles (`{{error}}`). El `format!` de abajo debe producir exactamente
+/// `{nombre}`; con llaves dobles la sustitución nunca ocurre y el placeholder
+/// se queda literal en pantalla.
+fn substitute(value: &str, args: &std::collections::HashMap<String, String>) -> String {
+    let mut result = value.to_string();
+    for (k, v) in args {
+        result = result.replace(&format!("{{{k}}}"), v);
+    }
+    result
+}
+
+/// Resuelve `value` contra `args`, sin placeholders pendientes.
+fn resolve(value: &String, args: Option<&std::collections::HashMap<String, String>>) -> String {
+    match args {
+        Some(a) => substitute(value, a),
+        None => value.clone(),
+    }
+}
+
 /// Translate a key with optional arguments
 /// Returns the translated string, or the key itself if not found
 pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -> String {
@@ -120,26 +142,14 @@ pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -
 
     for bundle in &bundles[lang_idx..] {
         if let Some(value) = bundle.get(key) {
-            let mut result = value.clone();
-            if let Some(args) = args {
-                for (k, v) in args {
-                    result = result.replace(&format!("{{{{{}}}}}", k), v);
-                }
-            }
-            return result;
+            return resolve(value, args);
         }
     }
 
     // Fallback to first bundle (usually Spanish)
     if let Some(bundle) = bundles.first() {
         if let Some(value) = bundle.get(key) {
-            let mut result = value.clone();
-            if let Some(args) = args {
-                for (k, v) in args {
-                    result = result.replace(&format!("{{{{{}}}}}", k), v);
-                }
-            }
-            return result;
+            return resolve(value, args);
         }
     }
 
@@ -166,4 +176,35 @@ pub fn arg(key: &str, value: &str) -> std::collections::HashMap<String, String> 
     let mut args = std::collections::HashMap::new();
     args.insert(key.to_string(), value.to_string());
     args
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn substitute_uses_single_brace_placeholders() {
+        let mut args = HashMap::new();
+        args.insert("error".to_string(), "boom".to_string());
+        args.insert("count".to_string(), "7".to_string());
+        assert_eq!(substitute("Error: {error}", &args), "Error: boom");
+        assert_eq!(substitute("{count} registros", &args), "7 registros");
+        assert_eq!(
+            substitute("{count} de {count} planes ({error})", &args),
+            "7 de 7 planes (boom)"
+        );
+        assert_eq!(substitute("sin placeholders", &args), "sin placeholders");
+    }
+
+    #[test]
+    fn substitute_keeps_unknown_placeholders_untouched() {
+        let args = HashMap::new();
+        assert_eq!(substitute("Error: {error}", &args), "Error: {error}");
+    }
+
+    #[test]
+    fn resolve_without_args_is_a_clone() {
+        let v = "Error: {error}".to_string();
+        assert_eq!(resolve(&v, None), "Error: {error}");
+    }
 }

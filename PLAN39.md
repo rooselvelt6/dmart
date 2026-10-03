@@ -33,6 +33,20 @@ peor que no tener pipeline*, porque da confianza falsa. Por eso verificación pe
 
 ---
 
+## ✅ Completado
+
+- [x] CI verde — 3 jobs rojos cerrados, pipeline con Candle 0.8, PEM propio y gates reales
+- [x] Cifrado PHI en reposo — en el camino de escritura
+- [x] RBAC por tenant
+- [x] MLLP fail-closed
+- [x] Frontend: secciones Timeline, CDS, Tenants y Auditoría
+- [x] Docker retirado del proyecto
+- [x] README reescrito contra el estado real
+- [x] Scripts k6 arreglados (crea results/, miden API real)
+- [x] Fix sesión con deep-link (no pedir contraseña de nuevo)
+
+---
+
 ## 🔴 P0 — Rompen la promesa del producto
 
 ### P0.1 El E2E nunca se ha ejecutado — el hueco navegador→API

@@ -1,68 +1,140 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, gotoAuthenticated } from './helpers';
 
-test.describe('Mediciones y Escalas', () => {
+test.describe.serial('Mediciones y Escalas', () => {
+  let patientId: string;
+
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.fill('input[type="email"]', 'admin@uci.local');
-    await page.fill('input[type="password"]', 'admin123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('**/pacientes');
+    await gotoAuthenticated(page, '/patients');
     
-    // Navigate to first patient
-    const firstRow = page.locator('tbody tr').first();
-    await firstRow.locator('button:has-text("Ver")').click();
-    await page.waitForURL(/\/pacientes\/\d+/);
+    await page.click('a.btn-primary:has-text("Nuevo Paciente")');
+    await page.waitForURL(/\/patients\/new/, { timeout: 10000 });
+    
+    const cedula = `V-${Date.now().toString().slice(-7)}`;
+    const hc = `HC-${Date.now().toString().slice(-5)}`;
+    const iso = new Date().toISOString().slice(0, 16);
+    
+    await page.fill('input[placeholder="Ej: Juan Alberto"]', 'Escala');
+    await page.fill('input[placeholder="Ej: Pérez García"]', 'Test');
+    await page.fill('input[placeholder="V-00000000"]', cedula);
+    await page.fill('input[placeholder="HC-00000"]', hc);
+    await page.selectOption('select', { label: 'Masculino' });
+    await page.fill('input[type="date"]', '1980-05-15');
+    const datetimeInputs = page.locator('input[type="datetime-local"]');
+    await datetimeInputs.nth(0).fill(iso);
+    await datetimeInputs.nth(1).fill(iso);
+    
+    await page.click('button[type="submit"]:has-text("Registrar Paciente")');
+    await page.waitForURL(/\/patients\/([^/]+)$/, { timeout: 15000 });
+    await expect(page.locator('.scale-chip:has-text("APACHE II")')).toBeVisible({ timeout: 20000 });
+    
+    patientId = page.url().match(/\/patients\/([^/]+)$/)?.[1] || '';
   });
 
-  test('should show patient scales', async ({ page }) => {
-    await expect(page.locator('text=APACHE II')).toBeVisible();
-    await expect(page.locator('text=SOFA')).toBeVisible();
-    await expect(page.locator('text=NEWS2')).toBeVisible();
-    await expect(page.locator('text=SAPS III')).toBeVisible();
-    await expect(page.locator('text=GCS')).toBeVisible();
+  test('muestra chips de escalas en el detalle del paciente', async ({ page }) => {
+    await expect(page.locator('.scale-chip:has-text("APACHE II")')).toBeVisible();
+    await expect(page.locator('.scale-chip:has-text("GCS")')).toBeVisible();
+    await expect(page.locator('.scale-chip:has-text("SOFA")')).toBeVisible();
+    await expect(page.locator('.scale-chip:has-text("SAPS III")')).toBeVisible();
+    await expect(page.locator('.scale-chip:has-text("NEWS2")')).toBeVisible();
   });
 
-  test('should calculate APACHE II', async ({ page }) => {
-    await page.click('button:has-text("APACHE II")');
-    await expect(page.locator('h2')).toContainText('APACHE II');
+  test('calcula APACHE II mediante sliders', async ({ page }) => {
+    await page.click('.scale-chip:has-text("APACHE II")');
+    await expect(page.locator('button:has-text("APACHE II"):not(:has-text("Registrar"))')).toHaveClass(/scale-105/);
     
-    // Fill required fields
-    await page.fill('input[name="temperatura"]', '38.5');
-    await page.fill('input[name="presion_arterial_media"]', '85');
-    await page.fill('input[name="frecuencia_cardiaca"]', '110');
-    await page.fill('input[name="frecuencia_respiratoria"]', '25');
-    await page.fill('input[name="fio2"]', '0.5');
-    await page.fill('input[name="pao2"]', '120');
-    await page.fill('input[name="ph_arterial"]', '7.35');
-    await page.fill('input[name="sodio_serico"]', '140');
-    await page.fill('input[name="potasio_serico"]', '4.0');
-    await page.fill('input[name="creatinina"]', '1.2');
-    await page.fill('input[name="hematocrito"]', '35');
-    await page.fill('input[name="leucocitos"]', '12');
-    await page.selectOption('select[name="gcs_ojos"]', '4');
-    await page.selectOption('select[name="gcs_verbal"]', '5');
-    await page.selectOption('select[name="gcs_motor"]', '6');
-    await page.selectOption('select[name="edad"]', '65');
+    const tempSlider = page.locator('input[type="range"][aria-label="Temp (°C)"]');
+    await expect(tempSlider).toBeVisible();
     
-    await page.click('button[type="submit"]:has-text("Calcular")');
-    await expect(page.locator('text=Score:')).toBeVisible();
+    await tempSlider.evaluate((el: HTMLInputElement) => {
+      el.value = '38.5';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    
+    await expect(page.locator('span:has-text("38.5")').first()).toBeVisible();
+    
+    const sliders = [
+      { label: 'PAM', value: '85' },
+      { label: 'FC', value: '110' },
+      { label: 'FR', value: '25' },
+      { label: 'FiO2', value: '0.5' },
+      { label: 'PaO2', value: '120' },
+      { label: 'pH', value: '7.35' },
+      { label: 'Sodio', value: '140' },
+      { label: 'Potasio', value: '4.0' },
+      { label: 'Creatinina', value: '1.2' },
+      { label: 'Hematocrito', value: '35' },
+      { label: 'Leucocitos', value: '12' },
+    ];
+    
+    for (const s of sliders) {
+      const slider = page.locator(`input[type="range"][aria-label="${s.label}"]`);
+      await slider.evaluate((el: HTMLInputElement, v: string) => {
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, s.value);
+    }
+    
+    const edadSlider = page.locator('input[type="range"][aria-label="Edad"]');
+    await edadSlider.evaluate((el: HTMLInputElement) => {
+      el.value = '65';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    
+    await page.locator('input[type="range"][aria-label="Ojos"]').evaluate((el: HTMLInputElement) => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.locator('input[type="range"][aria-label="Verbal"]').evaluate((el: HTMLInputElement) => { el.value = '5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.locator('input[type="range"][aria-label="Motor"]').evaluate((el: HTMLInputElement) => { el.value = '6'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    
+    await expect(page.locator('text=APACHE').first()).toBeVisible();
+    const apacheScore = page.locator('text=/^\\d+$/').first();
+    await expect(apacheScore).toBeVisible();
+    
+    await page.click('button:has-text("Registrar APACHE II")');
+    await page.waitForURL(/\/patients\/[^/]+$/, { timeout: 15000 });
+    await page.waitForTimeout(1000);
+    await expect(page.locator('h1')).toContainText('Escala Test');
   });
 
-  test('should calculate GCS', async ({ page }) => {
-    await page.click('button:has-text("GCS")');
-    await expect(page.locator('h2')).toContainText('Glasgow');
+  test('calcula GCS mediante sliders', async ({ page }) => {
+    await page.click('.scale-chip:has-text("GCS")');
+    await page.waitForURL(/\/measure\?escala=gcs/, { timeout: 10000 });
+    await page.waitForTimeout(1000);
     
-    await page.selectOption('select[name="gcs_ojos"]', '3');
-    await page.selectOption('select[name="gcs_verbal"]', '4');
-    await page.selectOption('select[name="gcs_motor"]', '5');
+    await expect(page.locator('button:has-text("GCS"):not(:has-text("Registrar"))')).toHaveClass(/scale-105/);
     
-    await page.click('button[type="submit"]:has-text("Calcular")');
-    await expect(page.locator('text=Total:')).toBeVisible();
+    await page.locator('input[type="range"][aria-label="Ojos (E)"]').evaluate((el: HTMLInputElement) => { el.value = '3'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.locator('input[type="range"][aria-label="Verbal (V)"]').evaluate((el: HTMLInputElement) => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await page.locator('input[type="range"][aria-label="Motor (M)"]').evaluate((el: HTMLInputElement) => { el.value = '5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    
+    await expect(page.locator('text=12').first()).toBeVisible();
+    await expect(page.locator('text=/15')).toBeVisible();
+    
+    await page.click('button:has-text("Registrar GCS")');
+    await page.waitForURL(/\/patients\/[^/]+$/, { timeout: 15000 });
   });
 
-  test('should show animated score bars', async ({ page }) => {
-    // Check that score bars have animation classes
-    const scoreBars = page.locator('.score-pulse-normal, .score-pulse-warning, .score-pulse-critical');
-    await expect(scoreBars.first()).toBeVisible();
+  test('cambia entre pestañas de escalas y ve sliders correspondientes', async ({ page }) => {
+    // Click en chip SOFA → el botón se activa (clase scale-105) y aparecen sus sliders
+    await page.click('.scale-chip:has-text("SOFA")');
+    await expect(page.locator('button:has-text("SOFA"):not(:has-text("Registrar"))')).toHaveClass(/scale-105/);
+    await expect(page.locator('input[type="range"][aria-label="Respiratorio (PaO2/FiO2)"]')).toBeVisible();
+    await expect(page.locator('input[type="range"][aria-label="Cardiovascular (PAM)"]')).toBeVisible();
+    
+    // Click en SAPS III
+    await page.click('button:has-text("SAPS III"):not(:has-text("Registrar"))');
+    await expect(page.locator('button:has-text("SAPS III"):not(:has-text("Registrar"))')).toHaveClass(/scale-105/);
+    await expect(page.locator('input[type="range"][aria-label="GCS"]')).toBeVisible();
+    
+    // Click en NEWS2
+    await page.click('button:has-text("NEWS2"):not(:has-text("Registrar"))');
+    await expect(page.locator('button:has-text("NEWS2"):not(:has-text("Registrar"))')).toHaveClass(/scale-105/);
+    await expect(page.locator('input[type="range"][aria-label="FR"]')).toBeVisible();
+    await expect(page.locator('button:has-text("Sí (+2)")')).toBeVisible();
+    await expect(page.locator('button:has-text("Aire Ambiente")')).toBeVisible();
+    
+    // Scores en tiempo real (sidebar/radar)
+    await expect(page.locator('text=Scores en Tiempo Real')).toBeVisible();
+    await expect(page.locator('text=APACHE').first()).toBeVisible();
+    await expect(page.locator('text=GCS').first()).toBeVisible();
+    await expect(page.locator('text=SOFA').first()).toBeVisible();
   });
 });

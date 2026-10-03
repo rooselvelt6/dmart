@@ -158,20 +158,27 @@ fn crypto_ctx(e: CryptoError) -> anyhow::Error {
     }
 }
 
-/// PHI de una medición: signos vitales y datos clínicos detallados.
+/// PHI de una medición: signos vitales, datos clínicos detallados y las notas
+/// libres del operador.
 ///
-/// Se cifra completo en el envelope `phi` de la tabla `measurements`.
+/// `notas` es texto clínico libre: puede contener nombre, diagnóstico o
+/// incidencias del paciente, así que va **dentro** del envelope (P0.2). Se
+/// marca `#[serde(default)]` para que los envelopes ya escritos sin `notas`
+/// sigan abriéndose: la re-sellar en la siguiente escritura los completa.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MeasurementPhi {
     pub apache_data: ApacheIIData,
     pub gcs_data: GcsData,
+    #[serde(default)]
+    pub notas: String,
 }
 
 /// Fila de `measurements` tal como se persiste tras la migración PHI.
 ///
-/// Los signos vitales y datos clínicos (`apache_data`, `gcs_data`) están en el
-/// envelope `phi`. Quedan en claro los campos necesarios para filtrar,
-/// paginar y agregar: ids, tenant, timestamps, scores calculados.
+/// Los signos vitales, los datos clínicos y las notas (`apache_data`,
+/// `gcs_data`, `notas`) están en el envelope `phi`. Quedan en claro los campos
+/// necesarios para filtrar, paginar y agregar: ids, tenant, timestamps, scores
+/// calculados y `fingerprint` (SPEC-029, que es un hash: no es PHI).
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MeasurementRow {
     // ── Columnas en claro: identidad técnica y filtros no identificables ────
@@ -207,8 +214,6 @@ pub struct MeasurementRow {
     pub algorithm_version: String,
     #[serde(rename = "fingerprint")]
     pub fingerprint: String,
-    #[serde(rename = "notas")]
-    pub notas: String,
 
     // ── PHI: envelope AES-256-GCM ───────────────────────────────────────────
     pub phi: String,
@@ -264,8 +269,8 @@ fn blind_legacy(field: &str, tenant_id: &str, value: &str) -> String {
     cipher().blind_index_legacy(tenant_id, field, value)
 }
 
-/// Prepara la fila persistible de una medición: sella la PHI (apache_data, gcs_data)
-/// en el envelope `phi`.
+/// Prepara la fila persistible de una medición: sella la PHI
+/// (apache_data, gcs_data, notas) en el envelope `phi`.
 ///
 /// El tenant se toma de la medición para que un cliente no pueda cifrar PHI
 /// de un tenant ajeno.
@@ -273,6 +278,7 @@ pub fn seal_measurement(m: &Measurement) -> Result<MeasurementRow> {
     let phi_payload = MeasurementPhi {
         apache_data: m.apache_data.clone(),
         gcs_data: m.gcs_data.clone(),
+        notas: m.notas.clone(),
     };
     let ctx = measurement_ctx(&m.tenant_id, &m.measurement_id);
     let phi = cipher()
@@ -297,15 +303,17 @@ pub fn seal_measurement(m: &Measurement) -> Result<MeasurementRow> {
         sofa_mortality: m.sofa_mortality,
         algorithm_version: m.algorithm_version.clone(),
         fingerprint: m.fingerprint.clone(),
-        notas: m.notas.clone(),
         phi,
     })
 }
 
 /// Abre una fila de `measurements` y devuelve la medición con PHI descifrado.
 ///
-/// Si la fila no tiene `phi` es una fila anterior a la migración: se asume que
-/// los datos clínicos ya están en claro en la fila (compatibilidad legacy).
+/// Si la fila no tiene `phi` es una fila anterior a la migración: la PHI sigue
+/// en las columnas en claro (`apache_data`, `gcs_data`, `notas`), y se leen de
+/// ahí. Si la fila tampoco trae esos campos se devuelve el default en vez de
+/// fallar: `Measurement` declara `#[serde(default)]` en todo y una fila
+/// genuinely corrupta debe verse como tal, no como una medición válida.
 pub fn open_measurement(value: Value) -> Result<Measurement> {
     let sealed_phi = value.get("phi").and_then(Value::as_str);
     let tenant_id = value
@@ -399,11 +407,23 @@ pub fn open_measurement(value: Value) -> Result<Measurement> {
                 .context("descifrando PHI de la medición")?;
             m.apache_data = phi_payload.apache_data;
             m.gcs_data = phi_payload.gcs_data;
+            m.notas = phi_payload.notas;
             Ok(m)
         }
         _ => {
-            // Fila legacy: apache_data y gcs_data ya vienen en claro (se deserializan
-            // desde las columnas que SurrealDB dejó en la fila original).
+            // Fila legacy: la PHI sigue en claro en la propia fila. Sin esto el
+            // backfill sellaría un `MeasurementPhi` con los defaults vacíos y
+            // destruiría los signos vitales de la fila.
+            if let Some(raw) = value.get("apache_data")
+                && let Ok(data) = serde_json::from_value::<ApacheIIData>(raw.clone())
+            {
+                m.apache_data = data;
+            }
+            if let Some(raw) = value.get("gcs_data")
+                && let Ok(data) = serde_json::from_value::<GcsData>(raw.clone())
+            {
+                m.gcs_data = data;
+            }
             Ok(m)
         }
     }
@@ -853,6 +873,16 @@ pub fn seal_push_sub(sub: &crate::push::PushSubscriptionRow, user_id: &str) -> R
     })
 }
 
+/// Abre una fila de `push_subscription`.
+///
+/// Si la fila no tiene `phi` es una fila anterior a la migración: `user_agent`
+/// sigue en la columna en claro y se lee de ahí. Sin esa rama, el backfill
+/// sellaría un envelope con `user_agent: None` y el dato se perdería para
+/// siempre.
+///
+/// El `endpoint` **no** se cifra: sin él en claro no hay entrega posible (es la
+/// URL a la que se hace el POST). Aun así viaja también dentro del envelope, que
+/// es lo que ata la fila a su AAD.
 pub fn open_push_sub(value: Value) -> Result<crate::push::PushSubscriptionRow> {
     let sealed_phi = value.get("phi").and_then(Value::as_str);
     let user_id = value
@@ -877,7 +907,10 @@ pub fn open_push_sub(value: Value) -> Result<crate::push::PushSubscriptionRow> {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
-        user_agent: None,
+        user_agent: value
+            .get("user_agent")
+            .and_then(Value::as_str)
+            .map(String::from),
         created_at: value
             .get("created_at")
             .and_then(Value::as_str)
@@ -1618,13 +1651,18 @@ mod db_tests {
     #[tokio::test]
     async fn update_reseals_phi() {
         let (db, _dir) = test_db().await;
-        let original = paciente("hosp-a", "MRN-OLD", "111", "Nombre Viejo");
+        let original = paciente(
+            "hosp-a",
+            "MRN-OLD",
+            "CEDULA-LEGACY-X9Q",
+            "NOMBRE-VIEJO-SENTINELA-Z7R",
+        );
         let saved = save_patient(&db, original).await.expect("save");
 
         let mut updated = saved.clone();
-        updated.cedula = "999".into();
+        updated.cedula = "CEDULA-NUEVA-A3K".into();
         updated.historia_clinica = "MRN-NEW".into();
-        updated.nombre = "Nombre Nuevo".into();
+        updated.nombre = "NOMBRE-NUEVO-B8Y".into();
         update_patient(&db, &saved.patient_id, updated)
             .await
             .expect("update");
@@ -1636,11 +1674,21 @@ mod db_tests {
             .take(0)
             .expect("t");
         assert_eq!(rows.len(), 1, "no debe duplicar la fila");
-        let crudo = serde_json::to_string(&rows[0]).expect("json");
-        assert!(!crudo.contains("Nombre Viejo"));
-        assert!(!crudo.contains("111"));
 
-        // El índice ciego del MRN antiguo ya no casa; el nuevo sí.
+        let row = &rows[0];
+        let crudo = serde_json::to_string(row).expect("json");
+
+        let legacy_keys = ["cedula", "historia_clinica", "nombre", "apellido"];
+        for k in legacy_keys {
+            assert!(
+                !row.get(k).is_some(),
+                "columna legacy '{k}' no debe existir en la fila sellada"
+            );
+        }
+
+        assert!(!crudo.contains("NOMBRE-VIEJO-SENTINELA-Z7R"));
+        assert!(!crudo.contains("CEDULA-LEGACY-X9Q"));
+
         assert!(
             find_patients_by_identifier(&db, "hosp-a", "MRN-OLD", 10)
                 .await
@@ -1651,7 +1699,7 @@ mod db_tests {
             .await
             .expect("find");
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].nombre, "Nombre Nuevo");
+        assert_eq!(found[0].nombre, "NOMBRE-NUEVO-B8Y");
     }
 
     /// Una fila legacy (sin `phi`) sigue encontrándose por sus columnas en
