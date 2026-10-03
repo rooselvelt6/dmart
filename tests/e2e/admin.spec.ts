@@ -16,7 +16,7 @@ test.describe.serial('Admin Dashboard', () => {
     // Las tarjetas KPI tienen estructura: icon + título + valor
     await expect(page.locator('text=Libres')).toBeVisible();
     await expect(page.locator('text=Ocupadas')).toBeVisible();
-    await expect(page.locator('text=Eq. Disponibles')).toBeVisible();
+    await expect(page.locator('text=Disponibles')).toBeVisible();
     await expect(page.locator('text=Medicos')).toBeVisible();
     await expect(page.locator('text=Enfermeros')).toBeVisible();
     

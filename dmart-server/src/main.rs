@@ -131,13 +131,13 @@ async fn main() -> anyhow::Result<()> {
     // Seed CIE-10 catalog if it does not survive yet (task F2-5)
     db::seed_diagnosticos(&database).await?;
 
-    // Seed initial beds (4 camas) if none exist
+    // Seed initial beds (20 camas for testing) if none exist
     let camas_existentes = db::list_camas(&database).await?;
     if camas_existentes.is_empty() {
-        db::init_camas(&database, 2, dmart_shared::models::TipoCama::General).await?;
-        db::init_camas(&database, 1, dmart_shared::models::TipoCama::Aislamiento).await?;
-        db::init_camas(&database, 1, dmart_shared::models::TipoCama::Pediatrica).await?;
-        tracing::info!("🛏️ Seeded 4 initial beds (2 General, 1 Aislamiento, 1 Pediátrica)");
+        db::init_camas(&database, 10, dmart_shared::models::TipoCama::General).await?;
+        db::init_camas(&database, 5, dmart_shared::models::TipoCama::Aislamiento).await?;
+        db::init_camas(&database, 5, dmart_shared::models::TipoCama::Pediatrica).await?;
+        tracing::info!("🛏️ Seeded 20 initial beds (10 General, 5 Aislamiento, 5 Pediátrica)");
     }
 
     // Cache (opcional — no bloquea si no está disponible)

@@ -96,11 +96,11 @@ pub async fn me() -> ApiResult<UserInfo> {
 
 /// Renueva el access token usando la cookie httpOnly del refresh token.
 pub async fn refresh_session() -> ApiResult<LoginResponse> {
-    let resp = Request::post(&format!("{}/auth/refresh", API_BASE))
+    let req = Request::post(&format!("{}/auth/refresh", API_BASE))
         .credentials(RequestCredentials::Include)
-        .send()
-        .await
+        .json(&serde_json::json!({}))
         .map_err(|e| e.to_string())?;
+    let resp = req.send().await.map_err(|e| e.to_string())?;
     let api_resp = check_auth_response::<LoginResponse>(resp, "refresh").await?;
     api_resp
         .data

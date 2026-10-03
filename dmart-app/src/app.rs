@@ -64,27 +64,38 @@ pub fn App() -> impl IntoView {
     provide_context(set_is_auth);
     let sidebar_open = RwSignal::new(false);
 
-    // Efecto de montaje: solo si ya hay token en memoria, arrancar refresh periódico
-    // y recuperar identidad si falta. NO intentar refresh automático sin token
-    // (evita ciclo: montaje → refresh → is_auth=true → redirect → remount → loop).
+    // Efecto de montaje: intentar reanudar sesión con refresh token si no hay access token en memoria.
+// Usa una flag para evitar loops de refresh infinitos.
+    let refresh_attempted = RwSignal::new(false);
     Effect::new(move |_| {
-        if has_token() {
-            start_session_refresh();
-            // Recuperar identidad si solo hay token en memoria
-            if current_user().is_none() {
-                spawn_local(async move {
-                    match crate::api::me().await {
-                        Ok(u) => save_user(&u),
-                        Err(_) => {
-                            clear_session();
-                            set_is_auth.set(false);
+        async move {
+            if has_token() {
+                start_session_refresh();
+                if current_user().is_none() {
+                    if let Ok(u) = crate::api::me().await {
+                        save_user(&u);
+                    } else {
+                        clear_session();
+                        set_is_auth.set(false);
+                    }
+                }
+            } else if !refresh_attempted.get() {
+                refresh_attempted.set(true);
+                match crate::api::refresh_session().await {
+                    Ok(resp) => {
+                        save_session(&resp);
+                        set_is_auth.set(true);
+                        if let Ok(u) = crate::api::me().await {
+                            save_user(&u);
                         }
                     }
-                });
+                    Err(_) => {
+                        clear_session();
+                        set_is_auth.set(false);
+                    }
+                }
             }
         }
-        // Si no hay token: NO intentar refresh automático.
-        // El usuario hará login manual y el backend setea la cookie httpOnly.
     });
 
     // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).
@@ -299,6 +310,7 @@ pub fn App() -> impl IntoView {
     }
 }
 
+/// Sidebar navigation component with glassmorphism effects
 #[component]
 fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
     let location = use_location();
@@ -314,10 +326,6 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
     };
 
     let is_active_exact = move |target: &str| path() == target;
-
-    let _is_active_query = move |target: &str, query_str: &str| {
-        path().starts_with(target) && location.search.get().contains(query_str)
-    };
 
     let active_patient_id = move || {
         let p = path();
