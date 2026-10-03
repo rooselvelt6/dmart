@@ -3,7 +3,7 @@
 
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, Mutex};
 
 const THEME_KEY: &str = "dmart_theme";
 
@@ -57,16 +57,16 @@ fn system_is_dark() -> bool {
     false
 }
 
-/// Track last applied theme to prevent redundant DOM mutations
-static LAST_APPLIED_THEME: OnceLock<RwSignal<Option<Theme>>> = OnceLock::new();
+/// Track last applied theme to prevent redundant DOM mutations (untracked)
+static LAST_APPLIED_THEME: OnceLock<Mutex<Option<Theme>>> = OnceLock::new();
 
 /// Aplica la clase `dark`/`light` en `<html>`: el mecanismo real que
 /// `input.css` (Tailwind) usa para cambiar todas las variables `--uci-*`.
 fn apply_dom_theme(t: &Theme) {
-    let last_signal = LAST_APPLIED_THEME.get_or_init(|| RwSignal::new(None));
+    let last_lock = LAST_APPLIED_THEME.get_or_init(|| Mutex::new(None));
     
-    // Skip if theme hasn't changed
-    if last_signal.get() == Some(*t) {
+    // Skip if theme hasn't changed (untracked - no reactive subscription)
+    if last_lock.lock().ok().and_then(|v| *v) == Some(*t) {
         return;
     }
     
@@ -88,7 +88,9 @@ fn apply_dom_theme(t: &Theme) {
             let _ = class_list.add_1("light");
         }
         // Track applied theme
-        last_signal.set(Some(*t));
+        if let Ok(mut guard) = last_lock.lock() {
+            *guard = Some(*t);
+        }
     }
 }
 
