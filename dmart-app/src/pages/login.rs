@@ -113,8 +113,9 @@ pub fn LoginPage() -> impl IntoView {
 
             <div class="glass-card w-full max-w-md p-10 relative z-10 page-enter">
                 <div class="text-center mb-10">
-                    <div class="w-20 h-20 bg-gradient-to-br from-[#e34a27] to-[#9b2a14] rounded-full mx-auto flex items-center justify-center shadow-lg shadow-[#e34a27]/40 mb-6 group transition-transform hover:scale-105 duration-300">
-                        <i class="fa-solid fa-mars text-4xl text-white group-hover:rotate-12 transition-transform"></i>
+                    <div class="w-20 h-20 mx-auto mb-6 group transition-transform hover:scale-105 duration-300 relative" aria-label="Marte">
+                        <div class="mars-planet"></div>
+                        <div class="mars-glow"></div>
                     </div>
                     <h1 class="text-5xl font-extrabold tracking-widest">
                         <span class="text-[#e34a27] drop-shadow-md">"D"</span>
