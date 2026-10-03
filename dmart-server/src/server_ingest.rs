@@ -246,6 +246,47 @@ where
     }
 }
 
+/// Tope de bytes pendientes que se drenan antes de cerrar tras descartar un
+/// frame, y gracia de espera por lectura durante ese drenado.
+///
+/// Si el servidor cierra con datos sin leer en el socket de recepción, el
+/// kernel responde con RST y el emisor pierde el ACK negativo que el servidor
+/// sí llegó a escribir. Drenar una cantidad **acotada** garantiza que el
+/// rechazo le llegue al emisor sin abrir la puerta al agotamiento de memoria
+/// que `max_frame_bytes` previene.
+const MAX_DRAIN_BYTES: usize = 64 * 1024;
+const DRAIN_GRACE: Duration = Duration::from_millis(250);
+
+/// Consume el resto del frame ya descartado hasta su terminador `\x1C\x0D`.
+///
+/// Terminar en el terminador natural del frame (y no agotar el presupuesto de
+/// tiempo) es lo que evita que el emisor se quede esperando un ACK que el
+/// servidor sí envió: si el drenado bloqueara hasta el `read_timeout`, el
+/// cliente cortaría antes de leerlo.
+async fn drain_pending<S>(stream: &mut S, budget: usize, grace: Duration)
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let mut remaining = budget;
+    let mut last: Option<u8> = None;
+    let mut buf = [0u8; 1024];
+    while remaining > 0 {
+        let want = remaining.min(buf.len());
+        match tokio::time::timeout(grace, stream.read(&mut buf[..want])).await {
+            Ok(Ok(0)) | Ok(Err(_)) | Err(_) => break,
+            Ok(Ok(n)) => {
+                remaining -= n;
+                for &b in &buf[..n] {
+                    if last == Some(END_BLOCK) && b == CARRIAGE_RETURN {
+                        return;
+                    }
+                    last = Some(b);
+                }
+            }
+        }
+    }
+}
+
 async fn write_ack<S>(stream: &mut S, ack: &[u8], write_timeout: Duration)
 where
     S: AsyncWrite + Unpin,
@@ -308,6 +349,9 @@ where
                 Err(e) => {
                     let code = ack_error_code(&e);
                     if e.to_string().contains("frame_too_large") {
+                        // Drenar antes del ACK: si no, el RST del cierre se
+                        // come el rechazo y el emisor no sabe por qué falló.
+                        drain_pending(&mut stream, MAX_DRAIN_BYTES, DRAIN_GRACE).await;
                         tracing::warn!(
                             "[mllp:{peer}] mensaje excede {max_frame_bytes} bytes; descartado"
                         );

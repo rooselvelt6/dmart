@@ -50,7 +50,7 @@ mod chrono_fallback {
         let secs = secs_of_day % 60;
 
         // Very rough date calculation (good enough for fallback)
-        let year = 1970 + (days / 365) as i64;
+        let year = 1970 + days / 365;
         let day_of_year = days % 365;
         let month = (day_of_year / 30) + 1;
         let day = (day_of_year % 30) + 1;
