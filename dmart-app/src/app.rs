@@ -6,11 +6,13 @@ use crate::pages::{
     patient_edit::PatientEditPage, patient_timeline::PatientTimelinePage, patients::PatientsPage,
     perfil::PerfilPage, register::RegisterPage, support::SupportConsole, tenants::TenantsPage,
 };
+use gloo_storage::{SessionStorage, Storage};
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_router::components::{A, Redirect, Route, Router, Routes};
 use leptos_router::hooks::*;
 use leptos_router::path;
+use std::sync::OnceLock;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
 
@@ -19,6 +21,33 @@ use crate::stores::{
     clear_session, current_user, fetch_patients_cached, has_token, is_admin, load_patients_cached,
     save_session, save_user, user_has,
 };
+
+/// Ruta a la que volver cuando la sesión se reanuda sola.
+///
+/// Un deep-link a una ruta protegida monta la app sin token en memoria, el
+/// router rebota a `/login`, y al reanudarse la sesión con la cookie lo
+/// razonable es devolver al usuario a donde quería ir, no al dashboard. Se
+/// guarda en `sessionStorage` porque el router es SPA y sobrevive a la
+/// navegación interna, pero un caso cae en el ciclo de carga inicial.
+fn pending_path() -> RwSignal<String> {
+    *PENDING_PATH.get_or_init(|| {
+        let saved = SessionStorage::get::<String>("dmart_pending_path")
+            .ok()
+            .filter(|p| !p.is_empty() && p != "/login");
+        RwSignal::new(saved.unwrap_or_else(|| "/".to_string()))
+    })
+}
+
+static PENDING_PATH: OnceLock<RwSignal<String>> = OnceLock::new();
+
+/// Recuerda la ruta solicitada antes de que el router redirija a `/login`.
+fn remember_path(path: &str) {
+    if path.is_empty() || path == "/login" {
+        return;
+    }
+    let _ = SessionStorage::set("dmart_pending_path", path);
+    pending_path().set(path.to_string());
+}
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -54,16 +83,23 @@ pub fn App() -> impl IntoView {
                     window().location().reload().unwrap_or_default();
                 }
             });
-        } else if current_user().is_some() {
+        } else {
             // El access token vive solo en memoria: tras una recarga ya no hay
-            // token. Si quedó identidad persistida, la sesión se reanuda con
-            // `/auth/refresh` (cookie httpOnly). Si falla, se borra la identidad
-            // local para que el gating por rol quede consistente.
+            // token. La sesión se reanuda con `/auth/refresh` (cookie httpOnly).
+            //
+            // Se intenta siempre, no solo cuando quedó una identidad en
+            // `localStorage`: si el usuario borró el almacenamiento local pero la
+            // cookie sigue viva, la sesión era recuperable y sin este intento la
+            // app lo expulsaba a `/login` teniendo una sesión válida. En un
+            // visitante sin cookie es una llamada fallida sin consecuencias.
             spawn_local(async move {
                 match crate::api::refresh_session().await {
                     Ok(resp) => {
                         save_session(&resp);
                         set_is_auth.set(true);
+                        // Devuelve al usuario a la ruta que pidió antes del rebote.
+                        let target = pending_path().get();
+                        use_navigate()(&target, Default::default());
                     }
                     Err(_) => clear_session(),
                 }
@@ -110,7 +146,19 @@ pub fn App() -> impl IntoView {
                         </button>
                     </Show>
                     <Routes fallback=|| view! { "Pagina no encontrada" }>
-                        <Route path=path!("/login") view=LoginPage />
+                        // Si ya hay sesión (reanudada por cookie en el efecto de
+                        // arranque, o token aún en memoria tras un soft-nav),
+                        // /login no debe atrapar al usuario: sin esto, un deep-link
+                        // a una ruta protegida rebotaba aquí y se quedaba, con la
+                        // sesión válida pero ante el formulario, obligando a
+                        // reintroducir la contraseña.
+                        <Route path=path!("/login") view=move || {
+                            if is_auth.get() {
+                                Either::Left(view! { <Redirect path=pending_path().get() /> })
+                            } else {
+                                Either::Right(view! { <LoginPage /> })
+                            }
+                        } />
 
                         <Route path=path!("/") view=move || {
                             if !is_auth.get() {

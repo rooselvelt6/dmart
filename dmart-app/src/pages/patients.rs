@@ -120,6 +120,7 @@ pub fn PatientsPage() -> impl IntoView {
                                     let delete_id = p.id.clone();
                                     view! {
                                         <div
+                                            data-testid="patient-row"
                                             style=move || format!("position:absolute; top:{}px; left:0; right:0; height:{}px; display:grid; grid-template-columns:minmax(180px,2fr) 130px 80px 48px 60px 96px auto; align-items:center; gap:8px; padding:0 16px; border-bottom:1px solid var(--uci-border);", top_px, ROW_HEIGHT)
                                         >
                                             <div class="flex items-center gap-2 md:gap-3 min-w-0">

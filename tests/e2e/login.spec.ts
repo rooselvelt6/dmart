@@ -1,31 +1,52 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers';
+import { ADMIN_USER, ADMIN_PASS } from './helpers';
 
 test.describe('Login', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/login');
   });
 
-  test('should show login page', async ({ page }) => {
-    await expect(page.locator('h1')).toContainText('dMart UCI');
-    await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
+  test('muestra el formulario de login real', async ({ page }) => {
+    // El DOM real: #login-username (type=text, no email) y #login-password.
+    await expect(page.locator('#login-username')).toBeVisible();
+    await expect(page.locator('#login-password')).toBeVisible();
+    // Hay dos botones submit (credenciales y MFA); el visible es el de credenciales.
+    await expect(page.locator('form:visible button[type="submit"]')).toBeVisible();
+    await expect(page.locator('#login-username')).toHaveAttribute('type', 'text');
   });
 
-  test('should login with valid credentials', async ({ page }) => {
-    await page.fill('input[type="email"]', 'admin@uci.local');
-    await page.fill('input[type="password"]', 'admin123');
+  test('acepta credenciales válidas y entra al dashboard', async ({ page }) => {
+    await page.fill('#login-username', ADMIN_USER);
+    await page.fill('#login-password', ADMIN_PASS);
     await page.click('button[type="submit"]');
-    
-    // Should redirect to dashboard/patients
-    await expect(page.locator('h1')).toContainText(/Pacientes|Dashboard/i);
+
+    // El login navega a "/" (DashboardPage), no a /patients: ver login.rs:59.
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15000 });
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page.locator('[role="alert"]')).toHaveCount(0);
   });
 
-  test('should show error with invalid credentials', async ({ page }) => {
-    await page.fill('input[type="email"]', 'wrong@uci.local');
-    await page.fill('input[type="password"]', 'wrong');
+  test('muestra error con credenciales inválidas', async ({ page }) => {
+    await page.fill('#login-username', ADMIN_USER);
+    await page.fill('#login-password', 'definitivamente-incorrecta');
     await page.click('button[type="submit"]');
-    
-    await expect(page.locator('.toast, .alert, [role="alert"]')).toBeVisible();
+
+    // El servidor devuelve 401 y la app pinta el alert con `login-invalid`.
+    await expect(page.locator('[role="alert"]')).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('requiere usuario: el submit no pasa el HTML si falta el campo', async ({ page }) => {
+    await page.fill('#login-password', ADMIN_PASS);
+    await page.click('button[type="submit"]');
+    // `required` en el input bloquea el submit nativo: seguimos en /login.
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.locator('#login-username')).toBeVisible();
+  });
+
+  test('una ruta protegida sin sesión redirige a /login', async ({ page }) => {
+    await page.goto('/patients');
+    await page.waitForURL(/\/login/, { timeout: 15000 });
+    await expect(page.locator('#login-username')).toBeVisible();
   });
 });
