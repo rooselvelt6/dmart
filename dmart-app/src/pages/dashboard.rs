@@ -455,7 +455,8 @@ fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView
                 <span class="text-[10px] md:text-xs uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
                 <i class=format!("fa-solid {} text-base md:text-lg", icon) style=format!("color:{};", color)></i>
             </div>
-            <div class="text-2xl md:text-3xl lg:text-4xl font-extrabold" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
+            <div class="text-safe text-2xl md:text-3xl lg:text-4xl font-extrabold min-w-0 overflow-hidden" 
+                 style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
         </div>
     }
 }
@@ -474,7 +475,7 @@ fn kpi_card(
                 <span class="text-[10px] md:text-xs uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
                 <i class=format!("fa-solid {} text-base md:text-lg", icon) style=format!("color:{};", color)></i>
             </div>
-            <div class="text-2xl md:text-3xl lg:text-4xl font-extrabold" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
+            <div class="text-safe text-2xl md:text-3xl lg:text-4xl font-extrabold min-w-0 overflow-hidden" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
             <div class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <i class="fa-solid fa-circle-info text-xs" style="color:var(--uci-muted);" title=tooltip></i>
             </div>
@@ -492,7 +493,7 @@ fn resource_card(title: &str, value: &str, color: &str, icon: &str) -> impl Into
                 <i class=format!("fa-solid {} text-sm", icon) style=format!("color:{};", color)></i>
                 <span class="text-[10px] uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
             </div>
-            <div class="text-xl md:text-2xl font-extrabold" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
+            <div class="text-safe text-xl md:text-2xl font-extrabold min-w-0 overflow-hidden" style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
         </div>
     }
 }

@@ -112,7 +112,7 @@ fn admin_stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl In
                 <i class=format!("fa-solid {} text-sm", icon) style=format!("color:{};", c)></i>
                 <span class="text-[10px] uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
             </div>
-            <div class="text-2xl font-extrabold" style=format!("color:{}; font-family:'JetBrains Mono',monospace;", c)>{value}</div>
+            <div class="text-safe text-2xl font-extrabold min-w-0 overflow-hidden" style=format!("color:{}; font-family:'JetBrains Mono',monospace;", c)>{value}</div>
         </div>
     }
 }

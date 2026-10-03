@@ -402,9 +402,9 @@ pub fn PatientDetailPage() -> impl IntoView {
 #[component]
 fn InfoRow(icon: &'static str, label: &'static str, value: String) -> impl IntoView {
     view! {
-        <div class="flex items-center justify-between">
-            <span class="text-xs text-uci-muted flex items-center gap-1"><i class={format!("fa-solid {}", icon)}></i>{label}</span>
-            <span class="text-sm text-uci-text font-medium text-right">{if value.is_empty() { "—".into() } else { value }}</span>
+        <div class="flex items-center justify-between min-w-0">
+            <span class="text-xs text-uci-muted flex items-center gap-1 shrink-0"><i class={format!("fa-solid {}", icon)}></i>{label}</span>
+            <span class="text-sm text-uci-text font-medium text-right text-safe truncate min-w-0">{if value.is_empty() { "—".into() } else { value }}</span>
         </div>
     }
 }
