@@ -1,13 +1,13 @@
 {
-  "name": "UCI — Sistema de Cuidados Intensivos",
-  "short_name": "UCI",
-  "description": "Gestión de pacientes, escalas de severidad (APACHE II, Glasgow, SOFA, NEWS2, SAPS III) y monitoreo en tiempo real de la UCI.",
+  "name": "dMart UCI — Sistema de Cuidados Intensivos",
+  "short_name": "dMart UCI",
+  "description": "Gestión de pacientes, escalas de severidad (APACHE II, Glasgow, SOFA, NEWS2, SAPS III) y monitoreo en tiempo real de la UCI. dMart: Marte + Health.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0B1220",
-  "theme_color": "#0B1220",
+  "theme_color": "#e34a27",
   "lang": "es",
   "categories": ["medical", "health"],
   "icons": [
@@ -16,6 +16,22 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nuevo Paciente",
+      "short_name": "Nuevo",
+      "description": "Registrar nuevo paciente en UCI",
+      "url": "/patients/new",
+      "icons": [{ "src": "icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Ver dashboard principal",
+      "url": "/",
+      "icons": [{ "src": "icon.svg", "sizes": "192x192" }]
     }
   ]
 }

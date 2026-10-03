@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN_USER, ADMIN_PASS } from './helpers';
 
-test('verify mars icon and password toggle', async ({ page }) => {
+test('verify mars planet and password toggle', async ({ page }) => {
   await page.goto('/login');
   await page.waitForLoadState('networkidle');
   
-  // Check Mars icon is present
-  const marsIcon = page.locator('i.fa-mars');
-  await expect(marsIcon).toBeVisible();
+  // Check Mars planet is present (custom CSS planet, not Font Awesome)
+  const marsPlanet = page.locator('.mars-planet');
+  await expect(marsPlanet).toBeVisible();
   
   // Check title has DMART with D in Mars color
   const title = page.locator('h1');

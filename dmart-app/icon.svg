@@ -1,8 +1,60 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0B1220"/>
-  <path d="M256 96 L416 192 V320 L256 416 L96 320 V192 Z" fill="#1E293B"/>
-  <path d="M160 256 L224 256 L256 208 L288 256 L352 256 L288 192 L256 112 L224 192 Z" fill="#3B82F6"/>
-  <rect x="150" y="288" width="212" height="18" rx="9" fill="#10B981"/>
-  <rect x="150" y="322" width="140" height="18" rx="9" fill="#64748B"/>
-  <rect x="150" y="356" width="90" height="18" rx="9" fill="#64748B"/>
+  <!-- Fondo circular oscuro -->
+  <circle cx="256" cy="256" r="240" fill="#0B1220"/>
+  
+  <!-- Anillo exterior sutil -->
+  <circle cx="256" cy="256" r="232" fill="none" stroke="#e34a27" stroke-width="4" opacity="0.3"/>
+  
+  <!-- Planeta Marte con gradiente realista -->
+  <circle cx="256" cy="256" r="160">
+    <animate attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="60s" repeatCount="indefinite"/>
+  </circle>
+  <defs>
+    <radialGradient id="mars-gradient" cx="35%" cy="35%" r="65%" fx="35%" fy="35%">
+      <stop offset="0%" stop-color="#ff5c2a"/>
+      <stop offset="35%" stop-color="#e34a27"/>
+      <stop offset="65%" stop-color="#c43a1c"/>
+      <stop offset="100%" stop-color="#8b1f0a"/>
+    </radialGradient>
+    <radialGradient id="mars-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff6b35" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#e34a27" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="256" cy="256" r="158" fill="url(#mars-gradient)"/>
+  
+  <!-- Detalles de superficie de Marte (manchas características) -->
+  <ellipse cx="310" cy="190" rx="32" ry="22" fill="#a0321a" opacity="0.6" transform="rotate(-15 310 190)"/>
+  <ellipse cx="200" cy="330" rx="28" ry="18" fill="#8b1f0a" opacity="0.5" transform="rotate(10 200 330)"/>
+  <ellipse cx="350" cy="340" rx="18" ry="14" fill="#9a3d22" opacity="0.4" transform="rotate(-20 350 340)"/>
+  <ellipse cx="180" cy="180" rx="16" ry="12" fill="#c43a1c" opacity="0.3" transform="rotate(5 180 180)"/>
+  
+  <!-- Brillo atmosférico sutil -->
+  <circle cx="256" cy="256" r="165" fill="none" stroke="url(#mars-glow)" stroke-width="3" opacity="0.6"/>
+  <defs>
+    <radialGradient id="mars-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff6b35" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#e34a27" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Cruz médica blanca centrada (símbolo universal de salud) -->
+  <g transform="translate(256, 256)">
+    <!-- Barra vertical -->
+    <rect x="-10" y="-70" width="20" height="140" rx="5" fill="white" opacity="0.95">
+      <animate attributeName="opacity" values="0.95;1;0.95" dur="3s" repeatCount="indefinite"/>
+    </rect>
+    <!-- Barra horizontal -->
+    <rect x="-60" y="-10" width="120" height="20" rx="5" fill="white" opacity="0.95">
+      <animate attributeName="opacity" values="0.95;1;0.95" dur="3s" repeatCount="indefinite"/>
+    </rect>
+    <!-- Centro reforzado -->
+    <rect x="-10" y="-10" width="20" height="20" rx="4" fill="white" opacity="1"/>
+  </g>
+  
+  <!-- Anillo interno con color Mars -->
+  <circle cx="256" cy="256" r="90" fill="none" stroke="#e34a27" stroke-width="2" opacity="0.5"/>
+  
+  <!-- Texto "DM" pequeño en la base -->
+  <text x="256" y="420" font-family="system-ui, sans-serif" font-size="28" font-weight="800" fill="#e34a27" text-anchor="middle" letter-spacing="2" opacity="0.7">DM</text>
 </svg>

@@ -1237,7 +1237,8 @@
   .nav-link, .scale-chip, .theme-switch, .lang-switch, .lang-switch-btn {
     transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
   }
-}
+
+/* Respeto preferencias de accesibilidad */
 
 /* Respeto preferencias de accesibilidad */
 @media (prefers-reduced-motion: reduce) {
