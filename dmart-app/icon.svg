@@ -1,60 +1,136 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Fondo circular oscuro -->
-  <circle cx="256" cy="256" r="240" fill="#0B1220"/>
+  <!-- Fondo circular con gradiente salud -->
+  <defs>
+    <radialGradient id="bg-gradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+    <radialGradient id="health-gradient" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#0d9488"/>
+      <stop offset="50%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </radialGradient>
+    <radialGradient id="pulse-gradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.4"/>
+      <stop offset="70%" stop-color="#06b6d4" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#0891b2" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Fondo circular -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg-gradient)"/>
   
-  <!-- Anillo exterior sutil -->
-  <circle cx="256" cy="256" r="232" fill="none" stroke="#e34a27" stroke-width="4" opacity="0.3"/>
-  
-  <!-- Planeta Marte con gradiente realista -->
-  <circle cx="256" cy="256" r="160">
-    <animate attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="60s" repeatCount="indefinite"/>
+  <!-- Anillo exterior pulsante -->
+  <circle cx="256" cy="256" r="240" fill="none" stroke="url(#pulse-gradient)" stroke-width="4" opacity="0.8" filter="url(#glow)">
+    <animate attributeName="stroke-width" values="2;4;2" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
   </circle>
-  <defs>
-    <radialGradient id="mars-gradient" cx="35%" cy="35%" r="65%" fx="35%" fy="35%">
-      <stop offset="0%" stop-color="#ff5c2a"/>
-      <stop offset="35%" stop-color="#e34a27"/>
-      <stop offset="65%" stop-color="#c43a1c"/>
-      <stop offset="100%" stop-color="#8b1f0a"/>
-    </radialGradient>
-    <radialGradient id="mars-glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ff6b35" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#e34a27" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <circle cx="256" cy="256" r="158" fill="url(#mars-gradient)"/>
   
-  <!-- Detalles de superficie de Marte (manchas características) -->
-  <ellipse cx="310" cy="190" rx="32" ry="22" fill="#a0321a" opacity="0.6" transform="rotate(-15 310 190)"/>
-  <ellipse cx="200" cy="330" rx="28" ry="18" fill="#8b1f0a" opacity="0.5" transform="rotate(10 200 330)"/>
-  <ellipse cx="350" cy="340" rx="18" ry="14" fill="#9a3d22" opacity="0.4" transform="rotate(-20 350 340)"/>
-  <ellipse cx="180" cy="180" rx="16" ry="12" fill="#c43a1c" opacity="0.3" transform="rotate(5 180 180)"/>
+  <!-- Anillo secundario rotativo -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.4" stroke-dasharray="10 20">
+    <animateTransform attributeName="transform" type="rotate" from="0 256 256" to="360 256 256" dur="30s" repeatCount="indefinite"/>
+  </circle>
   
-  <!-- Brillo atmosférico sutil -->
-  <circle cx="256" cy="256" r="165" fill="none" stroke="url(#mars-glow)" stroke-width="3" opacity="0.6"/>
-  <defs>
-    <radialGradient id="mars-glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ff6b35" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#e34a27" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  
-  <!-- Cruz médica blanca centrada (símbolo universal de salud) -->
-  <g transform="translate(256, 256)">
-    <!-- Barra vertical -->
-    <rect x="-10" y="-70" width="20" height="140" rx="5" fill="white" opacity="0.95">
-      <animate attributeName="opacity" values="0.95;1;0.95" dur="3s" repeatCount="indefinite"/>
-    </rect>
-    <!-- Barra horizontal -->
-    <rect x="-60" y="-10" width="120" height="20" rx="5" fill="white" opacity="0.95">
-      <animate attributeName="opacity" values="0.95;1;0.95" dur="3s" repeatCount="indefinite"/>
-    </rect>
-    <!-- Centro reforzado -->
-    <rect x="-10" y="-10" width="20" height="20" rx="4" fill="white" opacity="1"/>
+  <!-- Símbolo médico central: Cruz + Estetoscopio fusionados -->
+  <g transform="translate(256, 256)" filter="url(#glow)">
+    <!-- Base circular del símbolo médico -->
+    <circle r="72" fill="url(#health-gradient)" opacity="0.15"/>
+    <circle r="70" fill="none" stroke="#06b6d4" stroke-width="2" opacity="0.5"/>
+    
+    <!-- Estetoscopio formando una D estilizada -->
+    <g class="stethoscope">
+      <!-- Tubo principal -->
+      <path d="M-60,-40 Q-80,-20 -70,10 Q-50,40 -20,60 Q10,80 40,60" 
+            fill="none" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+        <animate attributeName="stroke-dashoffset" from="300" to="0" dur="2s" repeatCount="indefinite"/>
+      </path>
+      
+      <!-- Campana del estetoscopio -->
+      <circle cx="45" cy="65" r="14" fill="none" stroke="#22d3ee" stroke-width="3" opacity="0.8">
+        <animate attributeName="r" values="14;16;14" dur="1.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.8;1;0.8" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="45" cy="65" r="6" fill="#22d3ee" opacity="0.6"/>
+      
+      <!-- Tubo en Y -->
+      <path d="M-60,-40 L-70,-60 M-60,-40 L-70,-20" stroke="#22d3ee" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+      <circle cx="-70" cy="-60" r="4" fill="#22d3ee" opacity="0.8"/>
+      <circle cx="-70" cy="-20" r="4" fill="#22d3ee" opacity="0.8"/>
+      
+      <!-- Auriculares -->
+      <circle cx="-78" cy="-68" r="8" fill="none" stroke="#22d3ee" stroke-width="2.5" opacity="0.6"/>
+      <circle cx="-78" cy="-12" r="8" fill="none" stroke="#22d3ee" stroke-width="2.5" opacity="0.6"/>
+    </g>
+    
+    <!-- Cruz médica integrada en el pecho del estetoscopio -->
+    <g class="medical-cross">
+      <rect x="-8" y="-52" width="16" height="64" rx="4" fill="#22d3ee" opacity="0.9">
+        <animate attributeName="opacity" values="0.9;1;0.9" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="-32" y="-20" width="64" height="16" rx="4" fill="#22d3ee" opacity="0.9">
+        <animate attributeName="opacity" values="0.9;1;0.9" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="-8" y="-8" width="16" height="16" rx="3" fill="white" opacity="1"/>
+    </g>
+    
+    <!-- Pulso vital (línea EKG) -->
+    <path d="M-80,0 Q-60,-20 -40,0 Q-20,20 0,0 Q20,-20 40,0 Q60,20 80,0" 
+          fill="none" stroke="#f43f5e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" filter="url(#glow)">
+      <animate attributeName="stroke-dashoffset" from="400" to="0" dur="1.5s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- Punto de pulso -->
+    <circle cx="0" cy="0" r="4" fill="#f43f5e" opacity="1">
+      <animate attributeName="r" values="4;8;4" dur="1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="1;0.5;1" dur="1s" repeatCount="indefinite"/>
+    </circle>
   </g>
   
-  <!-- Anillo interno con color Mars -->
-  <circle cx="256" cy="256" r="90" fill="none" stroke="#e34a27" stroke-width="2" opacity="0.5"/>
+  <!-- Anillo de datos/vitales alrededor -->
+  <g class="vitals-ring">
+    <circle r="140" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.3" stroke-dasharray="8 12">
+      <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="40s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="145" fill="none" stroke="#22d3ee" stroke-width="0.5" opacity="0.15">
+      <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="-360 0 0" dur="25s" repeatCount="indefinite"/>
+    </circle>
+  </g>
   
-  <!-- Texto "DM" pequeño en la base -->
-  <text x="256" y="420" font-family="system-ui, sans-serif" font-size="28" font-weight="800" fill="#e34a27" text-anchor="middle" letter-spacing="2" opacity="0.7">DM</text>
+  <!-- Puntos de datos vitales (4 puntos cardinales) -->
+  <g class="vital-points">
+    <g transform="rotate(0)">
+      <circle cx="0" cy="-155" r="5" fill="#22d3ee" opacity="0.9">
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="1.2s" repeatCount="indefinite"/>
+      </circle>
+      <text x="0" y="-170" text-anchor="middle" font-size="10" font-weight="700" fill="#22d3ee" opacity="0.8">HR</text>
+    </g>
+    <g transform="rotate(90)">
+      <circle cx="0" cy="-155" r="5" fill="#f43f5e" opacity="0.9">
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="1s" repeatCount="indefinite"/>
+      </circle>
+      <text x="0" y="-170" text-anchor="middle" font-size="10" font-weight="700" fill="#f43f5e" opacity="0.8">BP</text>
+    </g>
+    <g transform="rotate(180)">
+      <circle cx="0" cy="-155" r="5" fill="#22d3ee" opacity="0.9">
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="1.1s" repeatCount="indefinite"/>
+      </circle>
+      <text x="0" y="-170" text-anchor="middle" font-size="10" font-weight="700" fill="#22d3ee" opacity="0.8">SpO₂</text>
+    </g>
+    <g transform="rotate(270)">
+      <circle cx="0" cy="-155" r="5" fill="#22d3ee" opacity="0.9">
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="1.3s" repeatCount="indefinite"/>
+      </circle>
+      <text x="0" y="-170" text-anchor="middle" font-size="10" font-weight="700" fill="#22d3ee" opacity="0.8">T°</text>
+    </g>
+  </g>
+  
+  <!-- Texto DM en la base -->
+  <text x="256" y="440" font-family="system-ui, sans-serif" font-size="24" font-weight="800" fill="#22d3ee" text-anchor="middle" letter-spacing="3" opacity="0.8">DM</text>
 </svg>
