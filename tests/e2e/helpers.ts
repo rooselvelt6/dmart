@@ -19,7 +19,7 @@ import { test, expect, Page } from '@playwright/test';
  */
 
 export const ADMIN_USER = process.env.ADMIN_USERNAME || 'admin';
-export const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'E2eTest!2026';
+export const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'WfBZSHynbV0jl5Hv';
 
 /** Login por el formulario real (`#login-username` type=text). */
 export async function loginViaForm(page: Page) {
