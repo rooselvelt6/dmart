@@ -160,43 +160,6 @@ pub fn init_theme() {
     let _ = use_theme(); // Initializes the effect
 }
 
-/// Global header visible on ALL pages (including login)
-/// Contains: logo, theme selector, language selector
-#[component]
-pub fn GlobalHeader() -> impl IntoView {
-    view! {
-        <header class="global-header" style="
-            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 8px 16px; gap: 16px;
-            background: var(--bg-card); border-bottom: 1px solid var(--border-primary);
-            backdrop-filter: blur(8px);
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-        ">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <a href="/" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit;">
-                    <div style="
-                        width: 36px; height: 36px; border-radius: 10px;
-                        background: linear-gradient(135deg, #0EA5E9 0%, #2563EB 50%, #6366F1 100%);
-                        display: flex; align-items: center; justify-content: center;
-                        box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
-                    ">
-                        <i class="fa-solid fa-heart-pulse" style="font-size: 18px; color: white;"></i>
-                    </div>
-                    <span style="font-weight: 700; font-size: 16px; color: var(--text-primary); letter-spacing: -0.3px;">
-                        <span style="color: #0EA5E9;">UCI</span> <span style="font-weight: 800;">DMART</span>
-                    </span>
-                </a>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <crate::theme::ThemeSelector />
-                <crate::theme::LangSelector />
-            </div>
-        </header>
-    }
-}
-
 /// Selector de idioma: flags + nombre de cada locale soportado.
 #[component]
 pub fn LangSelector() -> impl IntoView {

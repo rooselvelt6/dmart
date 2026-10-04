@@ -306,6 +306,15 @@ const SPANISH_WORDS: [&str; 35] = [
     "auditoria",
 ];
 
+/// Terminaciones operatoras del español, para los hardcodes que se escribieron
+/// **sin tilde**: `"Criticos"`, `"Estadisticas"`, `"Distribucion"`, `"Promedios"`.
+/// Sin esto el detector original perdía la mitad de la deuda real, que es
+/// exactamente la que sirve de línea base.
+const SPANISH_SUFFIXES: [&str; 18] = [
+    "cion", "ciones", "ico", "ica", "icos", "icas", "ivo", "iva", "ivos", "ivas", "dad", "ista",
+    "istas", "logia", "grafia", "metro", "sico", "sica",
+];
+
 fn looks_spanish(s: &str) -> bool {
     if SPANISH_CHARS.iter().any(|c| s.contains(*c)) {
         return true;
@@ -330,6 +339,216 @@ fn looks_spanish(s: &str) -> bool {
         .filter(|w| !w.is_empty())
         .collect();
     SPANISH_WORDS.iter().any(|needle| words.contains(needle))
+}
+
+/// [`looks_spanish`] + morfoxlogía por terminación. Más falsos positivos (falla
+/// hacia el lado de "esto parece español"), que es lo correcto para un ratchet:
+/// subir la línea base de más no rompe nada, subir la de menos sí.
+fn looks_spanish_wide(s: &str) -> bool {
+    if looks_spanish(s) {
+        return true;
+    }
+    let normalized: String = s
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'ä' => 'a',
+            'é' | 'è' => 'e',
+            'í' | 'ï' => 'i',
+            'ó' | 'ò' | 'ö' => 'o',
+            'ú' | 'ù' | 'ü' => 'u',
+            'ñ' => 'n',
+            'ç' => 'c',
+            _ => c,
+        })
+        .collect();
+    normalized
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() >= 5)
+        .any(|w| SPANISH_SUFFIXES.iter().any(|s| w.ends_with(s)))
+}
+
+// ---------------------------------------------------------------------------
+// Deuda de i18n del resto de la app (RATCHET)
+// ---------------------------------------------------------------------------
+//
+// Las 4 páginas de `TARGET_PAGES` están migradas y su test es una puerta dura.
+// Las otras 12 no lo están: 375 literales en español medidos el 3 de octubre
+// (el plan estimaba 2 h para 4 páginas; la deuda real es ~4× eso y son las
+// páginasviejas, no las nuevas).
+//
+// Migrarlas todas son varias sesiones de trabajo mecánico. Lo que NO puede pasar
+// es que la cifraCREZCA mientras tanto: por eso esto es un ratchet, no una
+// puerta. Cada página migrada baja su línea base en la misma commit.
+
+/// Nº máximo de literales en español por página. Medición del 3 de octubre.
+const I18N_DEBT_BASELINE: &[(&str, usize)] = &[
+    ("admin.rs", 70),
+    ("patient_edit.rs", 31),
+    ("patient_detail.rs", 30),
+    ("register.rs", 30),
+    ("dashboard.rs", 25),
+    ("perfil.rs", 24),
+    ("escalation.rs", 16),
+    ("devices.rs", 13),
+    ("support.rs", 11),
+    ("audit.rs", 0),
+    ("cds.rs", 0),
+    ("data_quality.rs", 0),
+    ("login.rs", 0),
+    ("measurement.rs", 0),
+    ("mod.rs", 0),
+    ("patient_timeline.rs", 0),
+    ("patients.rs", 0),
+    ("tenants.rs", 0),
+];
+
+/// Valores que se quedan en crudo a propósito: identificadores del contrato de
+/// datos, no texto de interfaz. Traducirlos rompería la API.
+const ALLOWED_RAW_BY_PAGE: &[(&str, &str, &str)] = &[
+    (
+        "cds.rs",
+        "cds-col-plan",
+        "clave de columna del contrato de datos",
+    ),
+    (
+        "tenants.rs",
+        "tenants-col-total",
+        "clave de columna del contrato de datos",
+    ),
+    (
+        "patients.rs",
+        "activos",
+        "valor del filtro de estado que viaja a la API",
+    ),
+    (
+        "patients.rs",
+        "todos",
+        "valor del filtro de estado que viaja a la API",
+    ),
+];
+
+/// Quita comentarios de línea y de bloque, respetando literales de cadena: los
+/// comentarios del código están en español y NO son texto de interfaz, así que
+/// contarlos como hardcode daría una línea base inútil.
+fn strip_comments(src: &str) -> String {
+    let b = src.as_bytes();
+    let mut out = String::with_capacity(src.len());
+    let (mut i, mut in_str, mut in_char, mut in_line_comment, mut in_block) =
+        (0, false, false, false, 0usize);
+    while i < b.len() {
+        let c = b[i];
+        let next = b.get(i + 1).copied();
+        if in_line_comment {
+            if c == b'\n' {
+                in_line_comment = false;
+                out.push('\n');
+            }
+        } else if in_block > 0 {
+            if c == b'*' && next == Some(b'/') {
+                in_block -= 1;
+                i += 1;
+            } else if c == b'/' && next == Some(b'*') {
+                in_block += 1;
+                i += 1;
+            } else if c == b'\n' {
+                out.push('\n');
+            }
+        } else if in_str {
+            out.push(c as char);
+            if c == b'\\' {
+                if let Some(n) = next {
+                    out.push(n as char);
+                }
+                i += 1;
+            } else if c == b'"' {
+                in_str = false;
+            }
+        } else if c == b'"' {
+            in_str = true;
+            out.push('"');
+        } else if c == b'\'' {
+            in_char = !in_char;
+            out.push('\'');
+        } else if c == b'/' && next == Some(b'/') {
+            in_line_comment = true;
+            i += 1;
+        } else if c == b'/' && next == Some(b'*') {
+            in_block = 1;
+            i += 1;
+        } else {
+            out.push(c as char);
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Texto que se pinta en pantalla y está en español, con su línea 1-indexada.
+///
+/// Cubre las dos formas que usa Leptos: literal de cadena (`label="Cargando..."`)
+/// y nodo de texto suelto (`>Cargando...<`), que NO es un literal y por eso se
+/// le escapaba a cualquier escaneo de strings.
+fn spanish_screen_text(
+    src: &str,
+    placeholders_conocidos: &BTreeSet<String>,
+) -> Vec<(usize, String)> {
+    let clean = strip_comments(src);
+    let mut out = Vec::new();
+
+    for (idx, line) in clean.lines().enumerate() {
+        let lineno = idx + 1;
+        let bytes = line.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'"' {
+                let start = i + 1;
+                let mut j = start;
+                while j < bytes.len() && bytes[j] != b'"' {
+                    j += if bytes[j] == b'\\' { 2 } else { 1 };
+                }
+                let lit = &line[start..j.min(line.len())];
+                // No es texto de pantalla: el primer argumento de `tr()`
+                // (`tr("dq-total", None)`) y los nombres de placeholder de los
+                // `.ftl` (`args.insert("error", ...)`).
+                let es_clave =
+                    line[..i].trim_end().ends_with("tr(") || placeholders_conocidos.contains(lit);
+                let visible = !es_clave
+                    && !lit.is_empty()
+                    && !lit.contains('{')
+                    && !lit.contains('=')
+                    && lit.len() > 2
+                    && looks_spanish_wide(lit);
+                if visible {
+                    out.push((lineno, lit.to_string()));
+                }
+                i = j + 1;
+            } else {
+                i += 1;
+            }
+        }
+
+        // Nodos de texto: `>texto<`. Se descartan los `x > y && y < z` del propio
+        // Rust filtrando los que llevan puntuación de código.
+        let mut k = 0;
+        while let Some(gt) = clean[k..].find('>') {
+            let s = k + gt + 1;
+            let Some(lt_rel) = clean[s..].find('<') else {
+                break;
+            };
+            let e = s + lt_rel;
+            k = e + 1;
+            let txt = clean[s..e].trim();
+            if txt.len() > 2
+                && !txt.contains(['{', '}', ';', '=', '(', ')', '&', '|', ':', '"', '\\'])
+                && !txt.contains("::")
+                && looks_spanish_wide(txt)
+            {
+                out.push((lineno, txt.to_string()));
+            }
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -524,5 +743,86 @@ fn target_pages_have_no_residual_spanish_hardcodes() {
     assert!(
         checked > 0,
         "i18n: el detector de hardcodeo no encontró ningún literal (escaneo roto)"
+    );
+}
+
+#[test]
+fn spanish_hardcode_debt_does_not_grow() {
+    let pages_dir = app_src_dir().join("pages");
+    let mut files = Vec::new();
+    rust_files(&pages_dir, &mut files);
+    files.sort();
+
+    // Nombres de placeholder de los `.ftl`: son claves de interpolación
+    // (`args.insert("error", ...)`), no texto que se pinte.
+    let mut phs: BTreeSet<String> = BTreeSet::new();
+    for entries in bundles().values() {
+        for (_, v) in entries {
+            phs.extend(placeholders(v));
+        }
+    }
+
+    let mut totales = 0usize;
+    let mut crecio = Vec::new();
+    let mut sin_linea_base = Vec::new();
+    let mut detalle = Vec::new();
+
+    for path in &files {
+        let page = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let src = fs::read_to_string(path).expect("leer página");
+        let permitidos: Vec<&str> = ALLOWED_RAW_BY_PAGE
+            .iter()
+            .filter(|(f, _, _)| *f == page)
+            .map(|(_, s, _)| *s)
+            .collect();
+
+        let offenders: Vec<(usize, String)> = spanish_screen_text(&src, &phs)
+            .into_iter()
+            .filter(|(_, txt)| !permitidos.contains(&txt.as_str()))
+            .collect();
+        let n = offenders.len();
+        totales += n;
+        detalle.push(format!("  {page:<22} {n:>3}"));
+
+        match I18N_DEBT_BASELINE.iter().find(|(f, _)| *f == page) {
+            Some((_, base)) => {
+                if n > *base {
+                    crecio.push(format!(
+                        "  {page}: {n} literales en español, la línea base es {base} \
+                         (+{}). Sácalos con i18n::tr() o, si son intencionales, \
+                         súbelos aquí con su razón.",
+                        n - base
+                    ));
+                }
+            }
+            // Página nueva: entra limpia o no entra.
+            None if n > 0 => sin_linea_base.push(format!(
+                "  {page}: {n} literales en español y no está en I18N_DEBT_BASELINE"
+            )),
+            None => {}
+        }
+    }
+
+    eprintln!(
+        "i18n: deuda medida por página\n{}\n  TOTAL {totales}",
+        detalle.join("\n")
+    );
+    assert!(
+        crecio.is_empty(),
+        "i18n: la deuda de hardcodes en español CRECIÓ:\n{}",
+        crecio.join("\n")
+    );
+    assert!(
+        sin_linea_base.is_empty(),
+        "i18n: páginas nuevas con hardcodeo sin línea base:\n{}",
+        sin_linea_base.join("\n")
+    );
+    assert!(
+        totales > 200,
+        "i18n: solo se detectan {totales} literales; el escaneo se ha quedado corto \
+         (la línea base real es ~375, no bajes el listón para que el test sea verde)"
     );
 }

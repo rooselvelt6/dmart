@@ -169,7 +169,7 @@ pub fn MeasurementPage() -> impl IntoView {
 
     view! {
         <div class="w-full min-h-screen" style="background:var(--uci-bg);">
-            <Suspense fallback=move || view! { <div class="flex items-center justify-center min-h-[60vh]"><crate::components::ui_kit::LoadingState label="Cargando..." /></div> }>
+            <Suspense fallback=move || view! { <div class="flex items-center justify-center min-h-[60vh]"><crate::components::ui_kit::LoadingState label=crate::i18n::tr("meas-loading-notes", None) /></div> }>
                 {move || patient_res.get().map(|res_wrapper| match res_wrapper {
                     Ok(ref p) => Either::Left(view! {
                         <div class="max-w-[1800px] mx-auto px-4 py-6">
@@ -181,7 +181,7 @@ pub fn MeasurementPage() -> impl IntoView {
                                    onmouseenter="this.style.color='var(--uci-accent)'"
                                    onmouseleave="this.style.color='var(--uci-muted)'">
                                     <i class="fa-solid fa-arrow-left"></i>
-                                    "Volver al Paciente"
+                                    {crate::i18n::tr("meas-back-to-patient", None)}
                                 </a>
                                 <h1 class="text-2xl md:text-3xl font-black" style="color:var(--uci-text);">
                                     {p.nombre_completo()}
@@ -189,7 +189,7 @@ pub fn MeasurementPage() -> impl IntoView {
                                 <div class="flex items-center gap-3 text-sm font-bold mt-1" style="color:var(--uci-muted);">
                                     <span class="px-3 py-0.5 rounded-full text-xs" style="background:rgba(59,130,246,0.1); color:var(--uci-accent);">{p.cedula.clone()}</span>
                                     <span>"•"</span>
-                                    <span>"Nueva Medición"</span>
+                                    <span>{crate::i18n::tr("meas-new-title", None)}</span>
                                 </div>
                             </div>
 
@@ -268,7 +268,7 @@ pub fn MeasurementPage() -> impl IntoView {
                                     // Mortalidad
                                     <div class="rounded-2xl p-4" style="background:linear-gradient(135deg, var(--uci-surface), var(--uci-card));">
                                         <div class="flex items-center justify-between mb-2">
-                                            <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--uci-muted);">"Riesgo Mortalidad"</span>
+                                            <span class="text-xs font-bold uppercase tracking-wider" style="color:var(--uci-muted);">{crate::i18n::tr("meas-mortality-risk", None)}</span>
                                             <i class="fa-solid fa-skull text-sm" style="color:var(--uci-muted);"></i>
                                         </div>
                                         <div class="text-4xl font-black text-center" style="color:var(--uci-critical);">
@@ -279,12 +279,12 @@ pub fn MeasurementPage() -> impl IntoView {
                                     // Observaciones y guardar
                                     <div class="rounded-2xl p-4 space-y-4 sticky bottom-4 z-10 xl:static" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                                         <div>
-                                            <label for="obs-notas" class="text-xs font-black uppercase tracking-[0.2em] mb-2 block" style="color:var(--uci-muted);">"Observaciones"</label>
+                                            <label for="obs-notas" class="text-xs font-black uppercase tracking-[0.2em] mb-2 block" style="color:var(--uci-muted);">{crate::i18n::tr("meas-observations", None)}</label>
                                             <textarea
                                                 id="obs-notas"
                                                 class="form-input text-sm resize-none"
                                                 rows="2"
-                                                placeholder="Notas clínicas..."
+                                                placeholder=crate::i18n::tr("meas-notes-placeholder", None)
                                                 prop:value=move || notas.get()
                                                 on:input=move |ev| notas.set(event_target_value(&ev))
                                             ></textarea>
@@ -319,7 +319,7 @@ pub fn MeasurementPage() -> impl IntoView {
                     _ => Either::Right(view! {
                         <div class="p-20 text-center">
                             <div class="text-4xl font-black mb-4" style="color:var(--uci-critical);">"Error"</div>
-                            <p style="color:var(--uci-muted);">"No se pudo cargar el expediente del paciente"</p>
+                            <p style="color:var(--uci-muted);">{crate::i18n::tr("meas-chart-error", None)}</p>
                         </div>
                     })
                 })}

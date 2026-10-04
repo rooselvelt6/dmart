@@ -87,9 +87,9 @@ pub fn PatientsPage() -> impl IntoView {
     let render_list = move || match patients_resource.get() {
         Some(Ok(list)) if list.is_empty() => {
             let msg = match estado_filter.get().as_str() {
-                "egresados" => "No hay pacientes egresados",
-                "todos" => "No se encontraron pacientes",
-                _ => "No hay pacientes activos en UCI",
+                "egresados" => crate::i18n::tr("pat-empty-discharged", None),
+                "todos" => crate::i18n::tr("pat-empty-all", None),
+                _ => crate::i18n::tr("pat-empty-active", None),
             };
             view! {
                 <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">{msg}</div>
@@ -100,7 +100,7 @@ pub fn PatientsPage() -> impl IntoView {
             let list: Vec<_> = list;
             if list.is_empty() {
                 view! {
-                    <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">"No se encontraron pacientes"</div>
+                    <div class="glass-card p-10 text-center" style="color:var(--uci-muted);">{crate::i18n::tr("pat-empty-all", None)}</div>
                 }.into_any()
             } else {
                 view! {
@@ -148,19 +148,19 @@ pub fn PatientsPage() -> impl IntoView {
                                             </div>
                                             <div class="text-center"><SeverityBadge level=p.estado_gravedad.clone() /></div>
                                             <div class="flex flex-wrap justify-end gap-1 sm:gap-2">
-                                                <a href=format!("/patients/{}", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(59,130,246,0.1); color:var(--uci-accent);">"Ver"</a>
-                                                <a href=format!("/patients/{}/edit", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(16,185,129,0.1); color:var(--uci-low);">"Editar"</a>
+                                                <a href=format!("/patients/{}", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(59,130,246,0.1); color:var(--uci-accent);">{crate::i18n::tr("pat-action-view", None)}</a>
+                                                <a href=format!("/patients/{}/edit", pid) class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline" style="background:rgba(16,185,129,0.1); color:var(--uci-low);">{crate::i18n::tr("pat-action-edit", None)}</a>
                                                 <button
                                                     on:click=move |_| {
                                                         if let Some(w) = web_sys::window()
-                                                            && let Ok(true) = w.confirm_with_message("¿Está seguro de eliminar este paciente? Esta acción no se puede deshacer.")
+                                                            && let Ok(true) = w.confirm_with_message(&crate::i18n::tr("pat-confirm-delete", None))
                                                         {
                                                             delete_patient(delete_id.clone());
                                                         }
                                                     }
                                                     class="py-1 px-2 md:py-2 md:px-3 rounded text-xs font-semibold no-underline"
                                                     style="background:rgba(239,68,68,0.1); color:#EF4444;"
-                                                >"Eliminar"</button>
+                                                >{crate::i18n::tr("pat-action-delete", None)}</button>
                                             </div>
                                         </div>
                                     }
@@ -189,18 +189,22 @@ pub fn PatientsPage() -> impl IntoView {
             <div class="page-enter">
                 <div class="flex flex-col md:flex-row justify-between items-start gap-4 mb-5 md:mb-6">
                     <div>
-                        <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Registro de Pacientes"</h1>
-                        <p style="color:var(--uci-muted); font-size:13px; md:text-14px; margin:0;">"Busque, revise y gestione los pacientes de la UCI"</p>
+                        <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">{crate::i18n::tr("pat-title", None)}</h1>
+                        <p style="color:var(--uci-muted); font-size:13px; md:text-14px; margin:0;">{crate::i18n::tr("pat-subtitle", None)}</p>
                     </div>
-                    <a href="/patients/new" class="btn-primary text-center no-underline whitespace-nowrap">"+ Nuevo Paciente"</a>
+                    <a href="/patients/new" class="btn-primary text-center no-underline whitespace-nowrap">{crate::i18n::tr("pat-new-patient", None)}</a>
                 </div>
 
                 <div class="mb-4 md:mb-5">
-                    <input type="text" class="form-input w-full" placeholder="Buscar por nombre, cedula o historia clinica..." on:input=on_search />
+                    <input type="text" class="form-input w-full" placeholder=crate::i18n::tr("pat-search-placeholder", None) on:input=on_search />
                 </div>
 
                 <div class="flex flex-wrap gap-2 mb-4 md:mb-5">
-                    {[("activos", "Activos"), ("egresados", "Egresados"), ("todos", "Todos")]
+                    {[
+                    ("activos", crate::i18n::tr("pat-filter-active", None)),
+                    ("egresados", crate::i18n::tr("pat-filter-discharged", None)),
+                    ("todos", crate::i18n::tr("pat-filter-all", None)),
+                ]
                         .into_iter()
                         .map(|(val, label)| {
                             let is_active = move || estado_filter.get() == val;
@@ -219,7 +223,7 @@ pub fn PatientsPage() -> impl IntoView {
                         .collect_view()}
                 </div>
 
-    <Suspense fallback=move || view! { <LoadingState label="Cargando pacientes..." /> }>
+    <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("pat-loading", None) /> }>
                     {move || render_list()}
                 </Suspense>
             </div>

@@ -4,12 +4,19 @@ use crate::api;
 use crate::api::{QualityIssue, QualitySummary};
 use crate::components::ui_kit::{ErrorState, LoadingState};
 
-fn severity_meta(sev: &str) -> (&'static str, &'static str) {
+/// Args de interpolación para los mensajes de error de la API.
+fn error_args(error: &str) -> std::collections::HashMap<String, String> {
+    let mut args = std::collections::HashMap::new();
+    args.insert("error".to_string(), error.to_string());
+    args
+}
+
+fn severity_meta(sev: &str) -> (&'static str, String) {
     match sev {
-        "high" => ("#EF4444", "Alta"),
-        "medium" => ("#F59E0B", "Media"),
-        "low" => ("#3B82F6", "Baja"),
-        _ => ("#6B7280", "Desconocida"),
+        "high" => ("#EF4444", crate::i18n::tr("dq-sev-high", None)),
+        "medium" => ("#F59E0B", crate::i18n::tr("dq-sev-medium", None)),
+        "low" => ("#3B82F6", crate::i18n::tr("dq-sev-low", None)),
+        _ => ("#6B7280", crate::i18n::tr("dq-sev-unknown", None)),
     }
 }
 
@@ -31,10 +38,10 @@ pub fn DataQualityPage() -> impl IntoView {
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-shield-heart mr-2"></i>"Calidad de Datos"
+                        <i class="fa-solid fa-shield-heart mr-2"></i>{crate::i18n::tr("dq-title", None)}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Issues de ingest HL7/MLLP: valores fuera de rango, timestamps y secuencia"
+                        {crate::i18n::tr("dq-subtitle", None)}
                     </p>
                 </div>
                 <button
@@ -42,16 +49,16 @@ pub fn DataQualityPage() -> impl IntoView {
                     style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                     on:click=move |_| refresh.update(|n| *n += 1)
                 >
-                    <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                    <i class="fa-solid fa-rotate mr-2"></i>{crate::i18n::tr("dq-refresh", None)}
                 </button>
             </div>
 
-            <Suspense fallback=move || view! { <LoadingState label="Calculando resumen de calidad..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("dq-loading-summary", None) /> }>
                 {move || match summary.get() {
                     Some(Ok(s)) => view! { <Summary summary=s /> }.into_any(),
                     Some(Err(e)) => view! {
                         <ErrorState
-                            message=format!("No se pudo cargar el resumen: {}", e)
+                            message=crate::i18n::tr("dq-summary-error", Some(&error_args(&e.to_string())))
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
@@ -60,14 +67,14 @@ pub fn DataQualityPage() -> impl IntoView {
             </Suspense>
 
             <h2 class="text-sm font-bold uppercase mt-6 mb-3" style="color:var(--uci-text);">
-                <i class="fa-solid fa-list-check mr-2"></i>"Últimos issues"
+                <i class="fa-solid fa-list-check mr-2"></i>{crate::i18n::tr("dq-latest-issues", None)}
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Cargando issues..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label=crate::i18n::tr("dq-loading-issues", None) /> }>
                 {move || match report.get() {
                     Some(Ok(issues)) => view! { <IssuesTable issues=issues /> }.into_any(),
                     Some(Err(e)) => view! {
                         <ErrorState
-                            message=format!("No se pudo cargar el reporte: {}", e)
+                            message=crate::i18n::tr("dq-report-error", Some(&error_args(&e.to_string())))
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
@@ -110,13 +117,13 @@ fn Summary(summary: QualitySummary) -> impl IntoView {
     view! {
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="glass-card p-4">
-                <div class="text-xs uppercase font-semibold" style="color:var(--uci-muted);">"Total"</div>
+                <div class="text-xs uppercase font-semibold" style="color:var(--uci-muted);">{crate::i18n::tr("dq-total", None)}</div>
                 <div class="text-2xl font-bold mt-1" style="color:var(--uci-text);">{summary.total}</div>
             </div>
             {sevs}
         </div>
         <div class="glass-card p-5 mt-4">
-            <h3 class="text-xs font-bold uppercase mb-2" style="color:var(--uci-text);">"Por código"</h3>
+            <h3 class="text-xs font-bold uppercase mb-2" style="color:var(--uci-text);">{crate::i18n::tr("dq-by-code", None)}</h3>
             <div class="space-y-1">{codes}</div>
         </div>
     }
@@ -128,7 +135,7 @@ fn IssuesTable(issues: Vec<QualityIssue>) -> impl IntoView {
         return view! {
             <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                 <i class="fa-solid fa-circle-check text-2xl mb-2" style="color:#10B981;"></i>
-                <p>"Sin issues de calidad registrados"</p>
+                <p>{crate::i18n::tr("dq-no-issues", None)}</p>
             </div>
         }.into_any();
     }
@@ -159,12 +166,12 @@ fn IssuesTable(issues: Vec<QualityIssue>) -> impl IntoView {
             <table class="w-full">
                 <thead style="background:var(--uci-bg);">
                     <tr>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Fecha"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Severidad"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Código"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Paciente"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Detalle"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Mensaje"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{crate::i18n::tr("dq-col-date", None)}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{crate::i18n::tr("dq-col-severity", None)}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{crate::i18n::tr("dq-col-code", None)}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{crate::i18n::tr("dq-col-patient", None)}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{crate::i18n::tr("dq-col-detail", None)}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{crate::i18n::tr("dq-col-message", None)}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y" style="border-color:var(--uci-border);">
