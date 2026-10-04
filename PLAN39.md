@@ -2,10 +2,15 @@
 
 > **Estado de partida**: 7 commits el 2 de octubre (`225899b`..`9cd0254`), 83 archivos,
 > +6435/−1760. El CI volvió a estar verde después de arreglarlo (ver más abajo).
-> **Evaluación honesta hoy: 6,5/10.** Este documento es el camino a 10.
+> **Evaluación honesta hoy: 7,5/10** (era 6,5). Este documento es el camino a 10.
 >
 > Regla de este plan: cada punto dice **qué está roto hoy**, **por qué importa** y
 > **cómo se comprueba que está hecho**. Nada de "mejoras varias".
+>
+> **3 de octubre**: cerrados P0.1 (E2E real, 20/20) y P0.2 (backfill de PHI en las
+> 4 tablas que sí se cifran en escritura). Lo que sube la nota es verificación
+> 8→9 y seguridad 8→9. El frontend sigue en 5: P0.3 (i18n del contenido) no está
+> tocado, y es lo único que separa al próximo salto.
 
 ---
 
@@ -13,18 +18,23 @@
 
 No es percepción. Es siete dimensiones con evidencia observable:
 
-| Dimensión | Hoy | Peso | Por qué |
-|---|---|---|---|
-| Seguridad | 8 | ×2 | Maneja PHI de pacientes reales |
-| Verificación (tests+CI) | 8 | ×2 | Sin esto, todo lo demás es fe |
-| Backend/API | 8 | x1.5 | El dominio clínico está bien modelado |
-| Operabilidad | 5 | ×1.5 | ¿Se puede saber si está roto? |
-| Frontend | 5 | ×1 | Lo que ve el médico |
-| Documentación | 6 | ×0.5 | |
-| Supply chain | 6 | ×0.5 | |
+| Dimensión | Antes | Hoy | Peso | Por qué |
+|---|---|---|---|---|
+| Seguridad | 8 | **9** | ×2 | Maneja PHI de pacientes reales. Baja pendiente: la PHI de `audit_logs` sigue en claro (y no se puede cifrar sin romper el hash WORM) |
+| Verificación (tests+CI) | 8 | **9** | ×2 | El E2E se ejecuta de verdad y el gate que lo vigila estaba arreglado (contaba 0 tests) |
+| Backend/API | 8 | 8 | x1.5 | El dominio clínico está bien modelado |
+| Operabilidad | 5 | 5 | ×1.5 | ¿Se puede saber si está roto? Sin alerting (P1.2) |
+| Frontend | 5 | 5 | ×1 | Lo que ve el médico. Pendiente P0.3 (i18n) + P2.3 (lints) |
+| Documentación | 6 | **7** | ×0.5 | `docs/compliance/PHI_BACKFILL.md` con el procedimiento y sus límites |
+| Supply chain | 6 | 6 | ×0.5 | Pendiente P2.4 (gitleaks, permissions, PAT) |
 
-**Falta para 10:** cerrar el hueco navegador→API (E2E), idempotencia de PHI,
-rate limit distribuido, observabilidad real, e i18n del contenido.
+**Falta para 10:** i18n del contenido (P0.3), alerting real (P1.2), rate limit
+distribuido (P1.1), rotación de claves (P1.3) y despliegue nativo (P2.6).
+
+**Lo que NO se puntúa como subido de nivel:** la PHI de `audit_logs` sigue en
+claro. No es un forgot: `details` entra en el `content_hash` de la cadena WORM, así
+que cifrarla sin redesignar el hash rompe el control legal. Está medido y
+documentado, no cerrado.
 
 **Principio que порядo las cosas:** *un pipeline verde sobre código sin probar es
 peor que no tener pipeline*, porque da confianza falsa. Por eso verificación pesa
@@ -44,59 +54,96 @@ peor que no tener pipeline*, porque da confianza falsa. Por eso verificación pe
 - [x] README reescrito contra el estado real
 - [x] Scripts k6 arreglados (crea results/, miden API real)
 - [x] Fix sesión con deep-link (no pedir contraseña de nuevo)
+- [x] **P0.1 E2E real** — 20/20 verde en local y el gate de CI arreglado (ver abajo)
+- [x] **P0.2 backfill** — 4 tablas con test de integración (`camas` incluida); `audit_logs` y `care_plan` salen fuera con evidencia, no por olvido
 
 ---
 
 ## 🔴 P0 — Rompen la promesa del producto
 
-### P0.1 El E2E nunca se ha ejecutado — el hueco navegador→API
+### ✅ P0.1 El E2E nunca se ha ejecutado — cerrado el 3 de octubre
 
-**Qué está roto.** Los 4 specs Playwright (`login`, `patients`, `measurements`,
-`admin`) llevan días en `skipped`. No hay un solo registro de que la UI funcione
-contra el backend. Todo lo que verifiqué hoy fue por HTTP directo (curl, k6): el
-camino real que usa el médico —navegador → WASM → API— no está probado ni una vez.
+**Lo que había.** 4 specs en `skipped`, cero ejecuciones reales del camino
+navegador → WASM → API.
 
-**Por qué importa.** Es exactamente el hueco de mi evaluación: backend
-validado, frontend nunca ejecutado. Si el WASM no monta una ruta, si un `t!()` falta,
-si el token no viaja bien, **el E2E es lo único que lo detecta** y ahora no lo
-detecta nadie.
+**Causas reales que encontró la primera ejecución (no eran "selectores
+desfases"):**
 
-**Cómo se hace.**
-1. Levantar el stack completo en local: `trunk serve` + server con `DMART_DIST_PATH`.
-2. Correr `npx playwright test` y triage de cada fallo.
-3. Que el job del CI **no pueda volver a saltarse**: si el spec no corre, el job
-   falla. Un `skipped` silencioso es peor que un rojo.
+1. **El gate de CI nunca funcionó.** `verify-run.mjs` leía `suite.specs`, pero
+   el reporter JSON cuelga los specs de `suite.suites` (los `describe`):
+   contaba **0 tests** en todos los ficheros. Además `--output=playwright-results.json`
+   de Playwright crea un **directorio** con ese nombre, y el gate lo leía como
+   fichero (`EISDIR`). El job no podía pasar verde por la puerta que debía
+   vigilar. Arreglado: recorrido en profundidad + `PLAYWRIGHT_JSON_OUTPUT_NAME`.
+2. **Los specs no eran repetibles.** `register.rs` bloquea el alta si no hay
+   camas libres, y la suite nunca egresa a los pacientes que crea: la segunda
+   ejecución local se quedaba sin camas. Añadido `tests/e2e/global-setup.ts`
+   que garantiza 12 camas libres antes de correr nada.
+3. **Un fallo estaba enmascarado.** `waitForURL(/\/patients\/[^/]+$/)` también
+   casa con `/patients/new`, así que el test "crea un paciente" pasaba la
+   navegación sin haber creado nada y reventaba luego en una aserción
+   secundaria. Ahora es un predicado sobre `pathname` con UUID.
+4. **Un `test.skip()` condicional** en "navega al detalle desde la fila": en CI
+   (BD limpia) saltaba en silencio — justo lo que P0.1 prohíbe. El test se
+   ejecuta después del alta, que el listado ordena por `created_at DESC`.
+5. specs de andamiaje (`debug-*.spec.ts`, `mars-test.spec.ts`) versionados: Playwright
+   los ejecutaba en CI. Borrados.
 
-**Comprobación.** El job termina `success` con ≥1 spec ejecutado por archivo, y su
-log lista los tests por nombre.
+**Comprobación ejecutada.**
 
-**Esfuerzo.** 1–2 h. **Ganancia de nivel.** Es el salto de 6,5 a 7 más barato que
-existe: no escribes código, dejas de tener un agujero.
+```bash
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test --reporter=list
+# → 20 passed (53s)
+PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/pw.json npx playwright test --reporter=json,list
+node tests/e2e/verify-run.mjs /tmp/pw.json
+# → GATE OK: 20 tests, 0 skipped, 0 failed
+```
 
-### P0.2 Cifrado PHI sin idempotencia (backfill incompleto)
+El gate se comprobó en negativo también: con un test `skipped` inyectado y con
+un `.spec.ts` vacío, sale por `exit 1`.
 
-**Qué está roto.** `backfill_phi_patients` existe y es idempotente para `patients`,
-pero el resto de tablas con PHI (`care_plan`, `audit`, `push`, `device_registry`,
-`reports`, `measurements`) se cifró **en el camino de escritura**. Filas legacy ya
-en disco siguen en claro.
+### P0.2 Cifrado PHI sin idempotencia — cerrado el 3 de octubre (parcial y con un hallazgo)
 
-**Por qué importa.** El control de PHI se anunció como completo, y en una base con
-histórico real no lo está. Un escaneo de PHI en claro devuelve datos de pacientes.
-Es el mayor riesgo de cumplimiento que queda abierto.
+**Regla que se aplicó al ampliar el backfill:** *sólo se sella en el backfill lo que
+ya está sellado en el camino de escritura.* Si el servidor escribe la fila en claro,
+sellarla después deja datos que nadie sabe descifrar, y en auditoría rompe el
+control legal.
 
-**Cómo se hace.**
-1. Extender el binario de backfill a cada tabla (mismo patrón `dry-run` + métricas).
-2. Ejecutar en dry-run y **revisar el reporte** antes de aplicar: cuántas filas, qué
-   timestamps.
-3. Verificación post-backfill: escaneo que falle si encuentra PHI en claro.
-4. Documentar el procedimiento de upgrade en `docs/`.
+**Lo que se añadió:** `camas` (`paciente_nombre` sí está sellado en el alta y en el
+egreso, así que su histórico legacy también se puede sellar).
 
-**Comprobación.** Un test de integración que siembre una fila legacy en claro, corra
-el backfill y verifique que (a) queda cifrada, (b) el segundo run es no-op, (c) los
-índices ciegos siguen funcionando para búsqueda exacta.
+**Bug que encontró el test de la cama:** `phi_store::open_cama` no tenía la rama de
+fila legacy que sí tienen `open_measurement`/`open_push_sub`. El backfill sellaba un
+`CamaPhi { paciente_nombre: None }` y **destruía el nombre del paciente** de la fila.
+Arreglado; el test `camas_legacy_row_is_sealed_and_still_readable` es el que lo
+detecta (falló con `left: None, right: Some("María Fernández")` antes del fix).
 
-**Esfuerzo.** 3–4 h. **Ganancia.** Seguridad 8→9. Esto es lo que separa "dice que
-cifra" de "cifra".
+**Lo que queda fuera, y por qué (medido, no supuesto):**
+
+- **`audit_logs`:** `AuditService::log` escribe `AuditLog` tal cual —
+  `seal_audit_log` no se llama en ningún sitio, así que `details` sigue **en claro**.
+  Y `details` forma parte de `canonical_log_payload`, o sea del `content_hash` de la
+  cadena WORM. Probado: tras una pasada, `verify_integrity()` deja de responder
+  (`unknown variant CREATE`). El "backfill de auditoría" no cifraba, **deshabilitaba
+  el control legal**. Requiere su propio ítem: sellar en escritura + descifrar en las
+  6 lecturas, o sacar `details` del payload canónico y versionar la cadena.
+- **`care_plan`:** `seal_care_plan`/`open_care_plan` tampoco se usan; una fila legacy
+  da `errores=1` y `open_care_plan` devuelve `activity` vacía. Antes hay que cerrar el
+  contrato de la fila (`id` vs `care_plan_id`).
+- **`reports`**, **`device_registry`:** sin envelope y sin decidir qué es PHI.
+
+Detalle y procedimiento en `docs/compliance/PHI_BACKFILL.md`.
+
+**Comprobación ejecutada:**
+
+```bash
+cargo test -p dmart-server --test phi_backfill   # 12 passed (4 tablas, antes 3)
+cargo clippy -p dmart-server --all-targets -- -D warnings   # verde
+cargo fmt --all -- --check
+```
+
+Pendiente de este ítem: el escaneo post-backfill que falle si encuentra PHI en claro
+sobre una base real (hoy el gate es el test de integración, no un escaneo de producción).
 
 ### P0.3 i18n: el contenido de las páginas nuevas está en español
 
@@ -289,8 +336,7 @@ release hace falta:
 ## Orden de ejecución
 
 ```
-MAÑANA (4 h) → 7,5
-  P0.1  E2E real ................... 1,5 h   el hueco navegador→API
+MAÑANA (4 h) → 7,5  ✅ P0.1 y P0.2 hechos el 3 de octubre
   P0.3  i18n del contenido ......... 2,0 h   4 páginas × 4 locales
   P2.1  GlobalHeader ............... 0,5 h
   P2.2  borrar locales/ ............ 0,1 h
@@ -303,9 +349,9 @@ ESTA SEMANA (1 día) → 8,5
         → supply chain 6→8, integridad clínica
 
 SIGUIENTE (2 días) → 9,5
-  P0.2  backfill PHI completo ....... 3-4 h   el riesgo legal #1
   P1.2  alerting + runbooks .......... 1 día
   P1.1  rate limit distribuido ...... 4-6 h
+  P0.3  i18n del contenido (sube de bloque) ... 2 h
 
 CIERRE (3 días) → 10
   P1.3  rotación de claves sin downtime
@@ -313,6 +359,8 @@ CIERRE (3 días) → 10
   informe final actualizado
 
 POST-10 — fuera del alcance de este plan, sin fecha
+  PHI en audit_logs (rompe el hash WORM) ...... 1-2 días
+  PHI en care_plan (contrato de fila) ......... 0,5-1 día
   P2.5  F2.5 sin panic!/unwrap en handlers ..... 2-3 días
   P2.5  F2.4 TLS saliente + anti-SSRF ........ 1-2 días
   P2.5  F5.x  índices, cache, pooling ....... 2 días
