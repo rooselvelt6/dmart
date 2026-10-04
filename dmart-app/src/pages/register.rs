@@ -14,6 +14,7 @@ pub fn RegisterPage() -> impl IntoView {
     let navigate = use_navigate();
     let cama_disponible = RwSignal::new(None::<(String, u8, String)>);
     let sin_camas = RwSignal::new(false);
+    let camas_listas = RwSignal::new(false);
     let equipos_disponibles = RwSignal::new(Vec::<Equipo>::new());
     let equipos_seleccionados = RwSignal::new(Vec::<String>::new());
 
@@ -38,6 +39,12 @@ pub fn RegisterPage() -> impl IntoView {
         if let Ok(equipos) = api::get_equipos_disponibles().await {
             equipos_disponibles.set(equipos);
         }
+        // A partir de aquí ya se sabe si hay cama o no: el submit se habilita.
+        // Sin esto, un usuario (o un test) que rellene el formulario rápido
+        // puede pulsar "Registrar" antes de que responda `check-camas`, y el
+        // handler aborta con "Debe esperar a que una cama esté disponible"
+        // aunque sí haya camas.
+        camas_listas.set(true);
     });
 
     let edad_calculada = Memo::new(move |_| {
@@ -491,7 +498,7 @@ pub fn RegisterPage() -> impl IntoView {
                         <i class="fa-solid fa-xmark group-hover:rotate-90 transition-transform"></i>
                         "Cancelar"
                     </a>
-                    <button type="submit" class="btn-primary flex items-center justify-center gap-2 px-8 md:px-10 lg:px-12 h-11 md:h-12 lg:h-14 text-base md:text-lg" disabled=move || saving.get()>
+                    <button type="submit" class="btn-primary flex items-center justify-center gap-2 px-8 md:px-10 lg:px-12 h-11 md:h-12 lg:h-14 text-base md:text-lg" disabled=move || saving.get() || !camas_listas.get()>
                         {move || {
                             if saving.get() {
                                 Either::Left(view! {

@@ -45,15 +45,6 @@ pub fn init_pending_path_signal() {
     let _ = pending_path();
 }
 
-/// Recuerda la ruta solicitada antes de que el router redirija a `/login`.
-fn remember_path(path: &str) {
-    if path.is_empty() || path == "/login" {
-        return;
-    }
-    let _ = SessionStorage::set("dmart_pending_path", path);
-    pending_path().set(path.to_string());
-}
-
 #[component]
 pub fn App() -> impl IntoView {
     console_error_panic_hook::set_once();
