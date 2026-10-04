@@ -199,6 +199,14 @@ fn toasts() -> RwSignal<Vec<Toast>> {
     *TOASTS.get_or_init(|| RwSignal::new(Vec::new()))
 }
 
+/// Crea la señal de toasts fuera de todo owner reactivo. Ver
+/// `i18n::init_lang_signal`: una señal global cacheada en un `static` pero
+/// creada dentro de un componente queda destruida en cuanto ese componente se
+/// desmonta, y el `spawn_local` del `TimeoutFuture` (6 s después) hace panic.
+pub fn init_toasts_signal() {
+    let _ = toasts();
+}
+
 /// Muestra una notificación (toast) en la esquina inferior derecha.
 pub fn show_toast(me: &MeasurementEvent) {
     let critical = me.is_critical();

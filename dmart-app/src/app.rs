@@ -18,8 +18,7 @@ use web_sys::console;
 
 use crate::stores::start_session_refresh;
 use crate::stores::{
-    clear_session, current_user, fetch_patients_cached, has_token, is_admin, load_patients_cached,
-    save_session, save_user, user_has,
+    clear_session, current_user, has_token, is_admin, save_session, save_user, user_has,
 };
 
 /// Ruta a la que volver cuando la sesión se reanuda sola.
@@ -39,6 +38,12 @@ fn pending_path() -> RwSignal<String> {
 }
 
 static PENDING_PATH: OnceLock<RwSignal<String>> = OnceLock::new();
+
+/// Crea la señal de ruta pendiente fuera de todo owner reactivo (ver
+/// `i18n::init_lang_signal`): si nace dentro de `App`, desaparece con él.
+pub fn init_pending_path_signal() {
+    let _ = pending_path();
+}
 
 /// Recuerda la ruta solicitada antes de que el router redirija a `/login`.
 fn remember_path(path: &str) {
@@ -98,17 +103,6 @@ pub fn App() -> impl IntoView {
 
     // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).
     let _realtime = crate::stores::use_realtime();
-
-    let preloaded = RwSignal::new(Vec::new());
-    // Solo obtener pacientes cuando estemos autenticados
-    Effect::new(move |_| {
-        if is_auth.get() {
-            spawn_local(async move {
-                let fresh = fetch_patients_cached().await;
-                preloaded.set(fresh);
-            });
-        }
-    });
 
     view! {
         <Router>

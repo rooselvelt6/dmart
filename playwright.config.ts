@@ -12,6 +12,11 @@ export default defineConfig({
   globalSetup: './tests/e2e/global-setup.ts',
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8081/dist',
+    // La app deduce el idioma de `navigator.language` cuando no hay
+    // `dmart_lang` en localStorage. Sin fijar el locale, los specs (que
+    // asertan texto en español) dependen del navegador de quien los ejecuta:
+    // en local salía inglés y en CI español, con el mismo código.
+    locale: 'es-ES',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

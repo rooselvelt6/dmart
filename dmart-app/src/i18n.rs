@@ -22,6 +22,22 @@ pub fn lang_signal() -> RwSignal<String> {
     })
 }
 
+/// Crea la señal de idioma **fuera de cualquier owner reactivo**.
+///
+/// Es obligatorio que sea desde `main()` y no perezosamente desde el primer
+/// componente que la use: una `RwSignal` creada dentro de un owner pertenece a
+/// ese owner, así que al desmontarlo Leptos la destruye. Como la señal vive en
+/// un `static`, el `OnceLock` la cachea ya destruida y el siguiente `tr()`
+/// —que se llama desde manejadores de eventos y `spawn_local`, fuera del árbol
+/// reactivo— hace panic y tumba el router entero:
+/// `you tried to access a reactive value ... but it has already been disposed`.
+///
+/// Síntoma que producía: login → dashboard OK, y al pulsar cualquier enlace del
+/// sidebar la URL se quedaba sin cambiar y la app moría. Dos E2E en rojo.
+pub fn init_lang_signal() {
+    let _ = lang_signal();
+}
+
 /// Detecta el idioma desde localStorage o el navegador (syna).
 fn detect_lang() -> String {
     use gloo_storage::{LocalStorage, Storage};
