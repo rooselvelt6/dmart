@@ -55,7 +55,7 @@ struct Args {
         long,
         value_enum,
         default_value = "all",
-        help = "Tabla a procesar: patients | measurements | push_subscription | all"
+        help = "Tabla a procesar: patients | measurements | push_subscription | camas | all"
     )]
     table: SelectionArg,
 
@@ -67,7 +67,7 @@ struct Args {
     max_errors: u64,
 }
 
-/// `--table patients|measurements|push_subscription|all`.
+/// `--table patients|measurements|push_subscription|camas|all`.
 ///
 /// El enum vive en la lib (para que los tests puedan usar la misma definición),
 /// así que aquí se reexporta el valor por defecto y se mapea el caso `all` a
@@ -77,6 +77,7 @@ enum SelectionArg {
     Patients,
     Measurements,
     PushSubscription,
+    Camas,
     All,
 }
 
@@ -86,6 +87,7 @@ impl From<SelectionArg> for Option<Target> {
             SelectionArg::Patients => Some(Target::Patients),
             SelectionArg::Measurements => Some(Target::Measurements),
             SelectionArg::PushSubscription => Some(Target::PushSubscription),
+            SelectionArg::Camas => Some(Target::Camas),
             SelectionArg::All => None,
         }
     }

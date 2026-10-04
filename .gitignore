@@ -34,6 +34,10 @@ dmart.service
 node_modules/
 playwright-report/
 test-results/
+# Salida del reporter JSON de Playwright (fichero, no directorio)
+playwright-results.json
+# Resultados de k6
+/results/
 
 # cargo-deny advisory DB (descargado, no es fuente)
 /advisory-db

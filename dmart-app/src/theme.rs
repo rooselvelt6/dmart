@@ -3,7 +3,7 @@
 
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
-use std::sync::{OnceLock, Mutex};
+use std::sync::{Mutex, OnceLock};
 
 const THEME_KEY: &str = "dmart_theme";
 
@@ -64,12 +64,12 @@ static LAST_APPLIED_THEME: OnceLock<Mutex<Option<Theme>>> = OnceLock::new();
 /// `input.css` (Tailwind) usa para cambiar todas las variables `--uci-*`.
 fn apply_dom_theme(t: &Theme) {
     let last_lock = LAST_APPLIED_THEME.get_or_init(|| Mutex::new(None));
-    
+
     // Skip if theme hasn't changed (untracked - no reactive subscription)
     if last_lock.lock().ok().and_then(|v| *v) == Some(*t) {
         return;
     }
-    
+
     if let Some(window) = web_sys::window()
         && let Some(doc) = window.document()
         && let Some(html) = doc.document_element()

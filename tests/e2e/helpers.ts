@@ -16,10 +16,28 @@ import { test, expect, Page } from '@playwright/test';
  * funciona bien porque el router verifica `is_auth` antes de que la sesión
  * se restaure vía `/auth/refresh`. La navegación debe ser client-side
  * (click en enlaces del sidebar) DESPUÉS del login inicial.
+ *
+ * IMPORTANTE 2: hay que correr la suite contra el backend
+ * (`PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000`), que además sirve `dist/`. La
+ * cookie de refresco es `SameSite=Strict; Path=/api/auth`: si la app se sirve
+ * desde otro origen (p. ej. el `python3 -m http.server` de :8081), el navegador
+ * no la envía y la sesión no se restaura. Debilitar la cookie a `Lax` para que
+ * funcione en ese montaje sería rebajar la seguridad para acomodar un problema
+ * de configuración, no de código.
  */
 
 export const ADMIN_USER = process.env.ADMIN_USERNAME || 'admin';
 export const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'WfBZSHynbV0jl5Hv';
+
+/**
+ * Predicado de URL del detalle de un paciente. El id es un UUID, así que el
+ * patrón NO puede ser `\/patients\/[^/]+$`: ese también casa con
+ * `/patients/new` y el test pasaba el `waitForURL` sin haber creado nada
+ * (fallo enmascarado). Se compara contra `pathname` porque Playwright evalúa
+ * el predicado con la URL completa.
+ */
+export const PATIENT_DETAIL_URL = (url: URL) =>
+  /^\/patients\/[0-9a-fA-F-]{36}$/.test(url.pathname);
 
 /** Login por el formulario real (`#login-username` type=text). */
 export async function loginViaForm(page: Page) {

@@ -455,7 +455,7 @@ fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView
                 <span class="text-[10px] md:text-xs uppercase font-bold" style="color:var(--uci-muted);">{title}</span>
                 <i class=format!("fa-solid {} text-base md:text-lg", icon) style=format!("color:{};", color)></i>
             </div>
-            <div class="text-safe text-2xl md:text-3xl lg:text-4xl font-extrabold min-w-0 overflow-hidden" 
+            <div class="text-safe text-2xl md:text-3xl lg:text-4xl font-extrabold min-w-0 overflow-hidden"
                  style=format!("color:{}; font-family:'JetBrains Mono',monospace; line-height:1;", color)>{value}</div>
         </div>
     }

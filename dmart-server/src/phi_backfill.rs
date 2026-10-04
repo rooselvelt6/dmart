@@ -20,9 +20,12 @@
 //! - **Métricas y exit code.** Devuelve un [`BackfillReport`] por tabla; el
 //!   binario traduce eso a exit code != 0 si hubo errores.
 //!
-//! Sólo se cubren `patients`, `measurements` y `push_subscription`. Las demás
-//! tablas con envelope (`camas`, `care_plan`, `audit_logs`, `device_registry`,
-//! `reports`) quedan fuera a propósito: ver
+//! Se cubren `patients`, `measurements`, `push_subscription` y `camas`: las
+//! únicas tablas cuya PHI está **sellada en el camino de escritura** y, por
+//! tanto, las únicas que se pueden sellar también en las filas legacy sin dejar
+//! datos ilegibles. `care_plan` y `audit_logs` quedan fuera a propósito (su
+//! `details` forma parte del hash de la cadena WORM, y sellarlo aquí rompe la
+//! verificación); `device_registry` y `reports` no tienen envelope. Ver
 //! `docs/compliance/PHI_BACKFILL.md`.
 
 use std::collections::BTreeSet;
@@ -45,14 +48,20 @@ pub enum Target {
     Measurements,
     /// Endpoint y user agent de la suscripción Web Push.
     PushSubscription,
+    /// Nombre del paciente en la cama.
+    Camas,
+    // `care_plan` y `audit_logs` quedan FUERA a propósito: sus columnas PHI no
+    // están selladas en el camino de escritura y sellarlas aquí las deja
+    // ilegibles (o rompe la cadena WORM). Ver `docs/compliance/PHI_BACKFILL.md`.
 }
 
 impl Target {
     /// Todas las tablas cubiertas, en el orden en que se procesan.
-    pub const ALL: [Target; 3] = [
+    pub const ALL: [Target; 4] = [
         Target::Patients,
         Target::Measurements,
         Target::PushSubscription,
+        Target::Camas,
     ];
 
     pub fn name(self) -> &'static str {
@@ -60,6 +69,7 @@ impl Target {
             Target::Patients => "patients",
             Target::Measurements => "measurements",
             Target::PushSubscription => "push_subscription",
+            Target::Camas => "camas",
         }
     }
 
@@ -74,6 +84,7 @@ impl Target {
             Target::Patients => "patient_id",
             Target::Measurements => "measurement_id",
             Target::PushSubscription => "endpoint",
+            Target::Camas => "cama_id",
         }
     }
 
@@ -452,6 +463,24 @@ async fn seal_row(db: &Surreal<Db>, target: Target, row: Value) -> Result<()> {
                 .await
                 .with_context(|| format!("actualizando suscripción push {}", sub.user_id))?;
             check_statement_errors(&mut res, "UPSERT push_subscription")?;
+        }
+        Target::Camas => {
+            let tenant_id = row
+                .get("tenant_id")
+                .and_then(Value::as_str)
+                .unwrap_or("default")
+                .to_string();
+            let cama = phi_store::open_cama(row)?;
+            let sealed = phi_store::seal_cama(&cama, &tenant_id)?;
+            let id = sealed.cama_id.clone();
+            let updated: Option<phi_store::CamaRow> = db
+                .update(("camas", id.clone()))
+                .content(sealed)
+                .await
+                .with_context(|| format!("actualizando cama {id} cifrada"))?;
+            if updated.is_none() {
+                bail!("no existe el registro camas:{id} (cama_id descuadrado del id)");
+            }
         }
     }
     Ok(())

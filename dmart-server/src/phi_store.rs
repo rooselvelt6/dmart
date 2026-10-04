@@ -543,7 +543,16 @@ pub fn open_cama(value: Value) -> Result<dmart_shared::models::Cama> {
             cama.paciente_nombre = phi_payload.paciente_nombre;
             Ok(cama)
         }
-        _ => Ok(cama),
+        _ => {
+            // Fila legacy: el nombre sigue en claro en la propia fila. Sin esta
+            // rama el backfill sellaría un `CamaPhi` con `None` y **destruiría**
+            // el nombre del paciente de la cama.
+            cama.paciente_nombre = value
+                .get("paciente_nombre")
+                .and_then(Value::as_str)
+                .map(String::from);
+            Ok(cama)
+        }
     }
 }
 

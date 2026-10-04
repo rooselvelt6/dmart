@@ -18,6 +18,20 @@ if (!fs.existsSync(reportPath)) {
 
 const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
 
+/**
+ * El reporte JSON anida los specs según el `describe`: el suite de nivel
+ * fichero tiene `specs: []` y los specs reales cuelgan de `suites[]`
+ * (los `describe`). Recorremos en profundidad, si no el gate cuenta 0 tests
+ * y daba por bueno un suite entero sin ejecutar (o lo marcaba fallido siempre).
+ */
+function collectSpecs(suite) {
+  const specs = [...(suite.specs || [])];
+  for (const child of suite.suites || []) {
+    specs.push(...collectSpecs(child));
+  }
+  return specs;
+}
+
 const suites = report.suites || [];
 let totalTests = 0;
 let totalPassed = 0;
@@ -30,7 +44,7 @@ console.log('─── Resumen Playwright ───\n');
 
 for (const suite of suites) {
   const file = path.relative(process.cwd(), suite.file);
-  const tests = suite.specs || [];
+  const tests = collectSpecs(suite);
   let specPassed = 0;
   let specFailed = 0;
   let specSkipped = 0;

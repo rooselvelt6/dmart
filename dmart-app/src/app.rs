@@ -65,34 +65,32 @@ pub fn App() -> impl IntoView {
     let sidebar_open = RwSignal::new(false);
 
     // Efecto de montaje: intentar reanudar sesión con refresh token si no hay access token en memoria.
-// Usa una flag para evitar loops de refresh infinitos.
+    // Usa una flag para evitar loops de refresh infinitos.
     let refresh_attempted = RwSignal::new(false);
-    Effect::new(move |_| {
-        async move {
-            if has_token() {
-                start_session_refresh();
-                if current_user().is_none() {
+    Effect::new(move |_| async move {
+        if has_token() {
+            start_session_refresh();
+            if current_user().is_none() {
+                if let Ok(u) = crate::api::me().await {
+                    save_user(&u);
+                } else {
+                    clear_session();
+                    set_is_auth.set(false);
+                }
+            }
+        } else if !refresh_attempted.get() {
+            refresh_attempted.set(true);
+            match crate::api::refresh_session().await {
+                Ok(resp) => {
+                    save_session(&resp);
+                    set_is_auth.set(true);
                     if let Ok(u) = crate::api::me().await {
                         save_user(&u);
-                    } else {
-                        clear_session();
-                        set_is_auth.set(false);
                     }
                 }
-            } else if !refresh_attempted.get() {
-                refresh_attempted.set(true);
-                match crate::api::refresh_session().await {
-                    Ok(resp) => {
-                        save_session(&resp);
-                        set_is_auth.set(true);
-                        if let Ok(u) = crate::api::me().await {
-                            save_user(&u);
-                        }
-                    }
-                    Err(_) => {
-                        clear_session();
-                        set_is_auth.set(false);
-                    }
+                Err(_) => {
+                    clear_session();
+                    set_is_auth.set(false);
                 }
             }
         }
@@ -101,12 +99,15 @@ pub fn App() -> impl IntoView {
     // Suscripción en tiempo real a eventos del servidor (nuevas mediciones).
     let _realtime = crate::stores::use_realtime();
 
-    let preloaded = RwSignal::new(load_patients_cached().unwrap_or_default());
+    let preloaded = RwSignal::new(Vec::new());
+    // Solo obtener pacientes cuando estemos autenticados
     Effect::new(move |_| {
-        spawn_local(async move {
-            let fresh = fetch_patients_cached().await;
-            preloaded.set(fresh);
-        });
+        if is_auth.get() {
+            spawn_local(async move {
+                let fresh = fetch_patients_cached().await;
+                preloaded.set(fresh);
+            });
+        }
     });
 
     view! {

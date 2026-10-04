@@ -7,6 +7,9 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
+  // Garantiza camas libres antes de la suite: sin ellas `register.rs` bloquea
+  // el alta de pacientes y los specs de pacientes/mediciones fallan.
+  globalSetup: './tests/e2e/global-setup.ts',
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8081/dist',
     trace: 'on-first-retry',

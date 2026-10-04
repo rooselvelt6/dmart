@@ -392,9 +392,13 @@ jobs:
           DMART_ADMIN_PASSWORD: testadmin123
           DMART_DIST_PATH: dist
       - name: Run Playwright tests (list + json)
-        run: npx playwright test --reporter=list --reporter=json --output=playwright-results.json
+        run: npx playwright test --reporter=list,line --reporter=json
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          # El reporter JSON escribe a stdout salvo que se le diga el destino;
+          # con `--output=` Playwright creaba un DIRECTORIO con ese nombre y el
+          # gate de abajo moría con EISDIR sin llegar a contar los tests.
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
           ADMIN_USERNAME: admin
           ADMIN_PASSWORD: testadmin123
       - name: Verify no skipped specs

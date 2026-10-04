@@ -359,7 +359,7 @@ fn ScoresTable(entries: Vec<ScoreAuditEntry>) -> impl IntoView {
     let has_rows = !entries.is_empty();
     let entries = StoredValue::new(entries);
 
-view! {
+    view! {
         <div class="glass-card p-5">
             <div class="flex flex-wrap items-center gap-3 mb-4">
                 <Show

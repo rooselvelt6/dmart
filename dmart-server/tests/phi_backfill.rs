@@ -420,6 +420,124 @@ async fn push_subscription_legacy_row_is_sealed_and_still_deliverable() {
     assert_eq!(raw_rows(&db, "push_subscription").await.len(), 1);
 }
 
+// ─── camas ───────────────────────────────────────────────────────────────────
+
+/// Cama legacy con `paciente_nombre` en claro y `cama_id` == id del record.
+fn legacy_cama(cama_id: &str, tenant: &str, paciente_id: &str, nombre: &str) -> Value {
+    serde_json::json!({
+        "cama_id": cama_id,
+        "tenant_id": tenant,
+        "numero": 7,
+        "tipo": "General",
+        "estado": "Ocupada",
+        "paciente_id": paciente_id,
+        "paciente_nombre": nombre,
+        "created_at": "2026-01-01T00:00:00+00:00",
+    })
+}
+
+/// (a) el nombre del paciente sale del claro, (b) 2ª ejecución no-op,
+/// (c) la cama sigue siendo legible con el AAD `(tenant_id, cama_id)`.
+#[tokio::test]
+async fn camas_legacy_row_is_sealed_and_still_readable() {
+    init_master_key();
+    let (db, _dir) = test_db().await;
+    let nombre = "María Fernández";
+
+    seed_clear(
+        &db,
+        "camas",
+        "C-1",
+        legacy_cama("C-1", "hosp-a", "P-1", nombre),
+    )
+    .await;
+
+    let antes = raw_rows(&db, "camas").await;
+    assert_eq!(antes.len(), 1);
+    assert!(
+        serde_json::to_string(&antes[0])
+            .expect("json")
+            .contains(nombre),
+        "la cama debe sembrarse en claro"
+    );
+
+    let report = phi_backfill::run(&db, &cfg(vec![Target::Camas]))
+        .await
+        .expect("run");
+    assert_eq!(report.sealed(), 1, "{}", report.summary());
+    assert_eq!(report.errors(), 0, "{}", report.summary());
+
+    // (a) `phi` poblada, nombre fuera del claro, y el resto de la fila intacto.
+    let despues = raw_rows(&db, "camas").await;
+    assert_eq!(despues.len(), 1, "no debe duplicar camas");
+    let crudo = serde_json::to_string(&despues[0]).expect("json");
+    assert!(phi_poblado(&despues[0]), "columna phi poblada");
+    assert!(!crudo.contains(nombre), "nombre del paciente en claro");
+    assert_eq!(
+        despues[0]["paciente_id"], "P-1",
+        "paciente_id sigue en claro"
+    );
+    assert_eq!(despues[0]["numero"], 7);
+    assert_eq!(despues[0]["estado"], "Ocupada");
+
+    // (c) La cama se reabre con el AAD correcto y devuelve el nombre.
+    let cama = phi_store::open_cama(despues[0].clone()).expect("open");
+    assert_eq!(cama.paciente_nombre.as_deref(), Some(nombre));
+    assert_eq!(cama.cama_id, "C-1");
+    assert_eq!(cama.paciente_id.as_deref(), Some("P-1"));
+
+    // El envelope está atado a su fila: con otro tenant no abre.
+    let mut otro = despues[0].clone();
+    if let Some(obj) = otro.as_object_mut() {
+        obj.insert("tenant_id".into(), Value::String("hosp-b".into()));
+    }
+    assert!(
+        phi_store::open_cama(otro).is_err(),
+        "el AAD debe impedir abrir la cama desde otro tenant"
+    );
+
+    // (b) El segundo run es un no-op.
+    let segunda = phi_backfill::run(&db, &cfg(vec![Target::Camas]))
+        .await
+        .expect("second run");
+    assert_eq!(segunda.pending(), 0, "{}", segunda.summary());
+    assert_eq!(segunda.sealed(), 0);
+    assert!(segunda.is_clean());
+    assert_eq!(raw_rows(&db, "camas").await.len(), 1);
+}
+
+/// El camino de escritura normal tampoco deja `paciente_nombre` en claro: el
+/// alta de un paciente con cama asignada sella ambas filas en una transacción.
+#[tokio::test]
+async fn new_camas_are_written_with_patient_name_encrypted() {
+    init_master_key();
+    let (db, _dir) = test_db().await;
+    db::init_camas(&db, 1, dmart_shared::models::TipoCama::General)
+        .await
+        .expect("init_camas");
+
+    let cama_id = db::get_cama_libre(&db)
+        .await
+        .expect("get_cama_libre")
+        .expect("cama libre")
+        .cama_id;
+
+    let mut paciente = legacy_patient("P-NUEVO", "hosp-a", "HC-999", "María");
+    paciente.apellido = "Fernández".into();
+    paciente.cama_id = Some(cama_id);
+    paciente.cama_numero = Some(1);
+    db::create_patient_with_assignments(&db, paciente, &[])
+        .await
+        .expect("alta con cama");
+
+    let crudo = serde_json::to_string(&raw_rows(&db, "camas").await[0]).expect("json");
+    assert!(
+        !crudo.contains("María"),
+        "el alta no debe dejar el nombre del paciente en claro"
+    );
+    assert!(crudo.contains("\"phi\""), "debe escribir el envelope");
+}
+
 // ─── B1: avance garantizado ──────────────────────────────────────────────────
 
 /// Una fila legacy ilegible no puede dejar el backfill girando: se cuenta como

@@ -1,4 +1,4 @@
-import { test, expect, gotoAuthenticated } from './helpers';
+import { test, expect, gotoAuthenticated, PATIENT_DETAIL_URL } from './helpers';
 
 test.describe.serial('Pacientes', () => {
   test.beforeEach(async ({ page }) => {
@@ -26,26 +26,6 @@ test.describe.serial('Pacientes', () => {
     // El virtual scrolling renderiza filas con data-testid
     const rows = page.locator('[data-testid="patient-row"]');
     await expect(rows).toHaveCount(0);
-  });
-
-  test('navega al detalle de paciente desde la fila', async ({ page }) => {
-    // Esperar a que cargue al menos una fila (puede estar vacío en BD limpia)
-    const firstRow = page.locator('[data-testid="patient-row"]').first();
-    const count = await firstRow.count();
-    
-    if (count === 0) {
-      test.skip(true, 'No hay pacientes en la BD para probar navegación');
-    }
-    
-    // El enlace "Ver" es un <a> con clase btn-like, no un button
-    const verLink = firstRow.locator('a:has-text("Ver")');
-    await expect(verLink).toBeVisible();
-    await verLink.click();
-    
-    // La ruta real es /patients/:id
-    await page.waitForURL(/\/patients\/[^/]+$/, { timeout: 15000 });
-    // En el detalle el título es el nombre del paciente
-    await expect(page.locator('h1')).toBeVisible();
   });
 
   test('crea un nuevo paciente vía formulario real', async ({ page }) => {
@@ -82,7 +62,25 @@ test.describe.serial('Pacientes', () => {
     await page.click('button[type="submit"]:has-text("Registrar Paciente")');
     
     // Debe navegar al detalle del paciente creado
-    await page.waitForURL(/\/patients\/[^/]+$/, { timeout: 15000 });
+    await page.waitForURL(PATIENT_DETAIL_URL, { timeout: 15000 });
+    await expect(page.locator('h1')).toContainText('Test Paciente');
+  });
+
+  // Va DESPUÉS del alta a propósito: el listado se ordena por `created_at DESC`,
+  // así que el paciente recién creado es la primera fila. Antes esto era un
+  // `test.skip()` condicional que en CI (BD limpia) saltaba en silencio.
+  test('navega al detalle de paciente desde la fila', async ({ page }) => {
+    const row = page.locator('[data-testid="patient-row"]', { hasText: 'Test Paciente' }).first();
+    await expect(row).toBeVisible({ timeout: 15000 });
+
+    // El enlace "Ver" es un <a> con clase btn-like, no un button
+    const verLink = row.locator('a:has-text("Ver")');
+    await expect(verLink).toBeVisible();
+    await verLink.click();
+
+    // La ruta real es /patients/:id (id = UUID)
+    await page.waitForURL(PATIENT_DETAIL_URL, { timeout: 15000 });
+    // En el detalle el título es el nombre del paciente
     await expect(page.locator('h1')).toContainText('Test Paciente');
   });
 

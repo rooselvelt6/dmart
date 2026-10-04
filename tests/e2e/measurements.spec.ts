@@ -1,4 +1,4 @@
-import { test, expect, gotoAuthenticated } from './helpers';
+import { test, expect, gotoAuthenticated, PATIENT_DETAIL_URL } from './helpers';
 
 test.describe.serial('Mediciones y Escalas', () => {
   let patientId: string;
@@ -24,10 +24,10 @@ test.describe.serial('Mediciones y Escalas', () => {
     await datetimeInputs.nth(1).fill(iso);
     
     await page.click('button[type="submit"]:has-text("Registrar Paciente")');
-    await page.waitForURL(/\/patients\/([^/]+)$/, { timeout: 15000 });
+    await page.waitForURL(PATIENT_DETAIL_URL, { timeout: 15000 });
     await expect(page.locator('.scale-chip:has-text("APACHE II")')).toBeVisible({ timeout: 20000 });
     
-    patientId = page.url().match(/\/patients\/([^/]+)$/)?.[1] || '';
+    patientId = page.url().split('/').pop() || '';
   });
 
   test('muestra chips de escalas en el detalle del paciente', async ({ page }) => {
@@ -89,7 +89,7 @@ test.describe.serial('Mediciones y Escalas', () => {
     await expect(apacheScore).toBeVisible();
     
     await page.click('button:has-text("Registrar APACHE II")');
-    await page.waitForURL(/\/patients\/[^/]+$/, { timeout: 15000 });
+    await page.waitForURL(PATIENT_DETAIL_URL, { timeout: 15000 });
     await page.waitForTimeout(1000);
     await expect(page.locator('h1')).toContainText('Escala Test');
   });
@@ -109,7 +109,7 @@ test.describe.serial('Mediciones y Escalas', () => {
     await expect(page.locator('text=/15')).toBeVisible();
     
     await page.click('button:has-text("Registrar GCS")');
-    await page.waitForURL(/\/patients\/[^/]+$/, { timeout: 15000 });
+    await page.waitForURL(PATIENT_DETAIL_URL, { timeout: 15000 });
   });
 
   test('cambia entre pestañas de escalas y ve sliders correspondientes', async ({ page }) => {

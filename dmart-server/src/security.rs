@@ -559,13 +559,18 @@ mod tests {
     #[test]
     fn test_mfa_throttle_is_stricter_than_login() {
         // Test with default values
-        std::env::set_var("DMART_DISABLE_LOGIN_THROTTLE", "false");
-        std::env::set_var("DMART_LOGIN_THROTTLE_MAX_ATTEMPTS", "5");
-        std::env::set_var("DMART_LOGIN_THROTTLE_LOCKOUT_SECS", "300");
-        std::env::set_var("DMART_DISABLE_MFA_THROTTLE", "false");
-        std::env::set_var("DMART_MFA_THROTTLE_MAX_ATTEMPTS", "3");
-        std::env::set_var("DMART_MFA_THROTTLE_LOCKOUT_SECS", "300");
-        
+        // SAFETY: el binario de test es el único que fija estas variables de
+        // entorno, siempre al mismo valor, así que no hay carrera observable
+        // con los tests paralelos que leen la configuración.
+        unsafe {
+            std::env::set_var("DMART_DISABLE_LOGIN_THROTTLE", "false");
+            std::env::set_var("DMART_LOGIN_THROTTLE_MAX_ATTEMPTS", "5");
+            std::env::set_var("DMART_LOGIN_THROTTLE_LOCKOUT_SECS", "300");
+            std::env::set_var("DMART_DISABLE_MFA_THROTTLE", "false");
+            std::env::set_var("DMART_MFA_THROTTLE_MAX_ATTEMPTS", "3");
+            std::env::set_var("DMART_MFA_THROTTLE_LOCKOUT_SECS", "300");
+        }
+
         let state = create_security_state();
         // 3 failed attempts allowed for the MFA challenge flow
         assert_eq!(state.mfa_throttle.max_attempts, 3);
