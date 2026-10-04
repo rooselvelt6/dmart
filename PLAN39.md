@@ -8,9 +8,12 @@
 > **cómo se comprueba que está hecho**. Nada de "mejoras varias".
 >
 > **3 de octubre**: cerrados P0.1 (E2E real, 20/20) y P0.2 (backfill de PHI en las
-> 4 tablas que sí se cifran en escritura). Lo que sube la nota es verificación
-> 8→9 y seguridad 8→9. El frontend sigue en 5: P0.3 (i18n del contenido) no está
-> tocado, y es lo único que separa al próximo salto.
+> 4 tablas que sí se cifran en escritura), y P0.3 **a medias**: las 4 páginas
+> nuevas ya estaban traducidas (160 llamadas a `tr()` y su gate), pero las 12
+> viejas tenían 283 literales en español. La estimación de "2 h mecánicas" era 4×
+> más pequeña que la realidad, y el job E2E del push salió **rojo** (2 de 20) con
+> un bug de navegación que el `dist/` local obsoleto ocultaba: verde local con el
+> WASM viejo no es verde.
 
 ---
 
@@ -56,6 +59,8 @@ peor que no tener pipeline*, porque da confianza falsa. Por eso verificación pe
 - [x] Fix sesión con deep-link (no pedir contraseña de nuevo)
 - [x] **P0.1 E2E real** — 20/20 verde en local y el gate de CI arreglado (ver abajo)
 - [x] **P0.2 backfill** — 4 tablas con test de integración (`camas` incluida); `audit_logs` y `care_plan` salen fuera con evidencia, no por olvido
+- [x] **P0.3 i18n, parte 1** — ratchet de deuda + 3 de 12 páginas migradas; las 4 nuevas ya estaban y el plan no lo sabía
+- [x] **Bug de navegación por señal global** — mataba el router al cambiar de ruta; verde local con `dist/` viejo, rojo en CI
 
 ---
 
@@ -145,24 +150,83 @@ cargo fmt --all -- --check
 Pendiente de este ítem: el escaneo post-backfill que falle si encuentra PHI en claro
 sobre una base real (hoy el gate es el test de integración, no un escaneo de producción).
 
-### P0.3 i18n: el contenido de las páginas nuevas está en español
+### 🟡 P0.3 i18n del contenido — las 4 páginas nuevas ya estaban; las 12 viejas no
 
-**Qué está roto.** La navegación se traduce (ES/EN/PT/FR completos), pero el
-**contenido** de las 4 páginas nuevas está hardcodeado en español: 15–38 `t!()`
-faltantes por archivo. El `locale` del usuario cambia el menú y no el contenido.
+**Lo que decía este ítem.** "15–38 `t!()` faltantes por archivo" en las 4 páginas
+nuevas, 2 h, mecánico. **Lo que había**: las 4 páginas nuevas (`tenants`, `cds`,
+`audit`, `patient_timeline`) llevan 160 llamadas a `tr()` y un gate que lo
+verifica (`i18n_keys.rs`, job `I18n Keys Gate`). El ítem ya estaba hecho y el plan
+no lo sabía.
 
-**Por qué importa.** Es visible al minuto de usar la app y rompe la promesa de las
-4 linguas. Un hospital no italiano recibe la interfaz en italiano con todo el cuerpo
-clínico en español.
+**Lo que nadie había medido: el resto de la app.** 12 páginas — las que un médico
+usa todos los días: `dashboard`, `patients`, `patient_detail`, `measurement`,
+`register`, `admin`, `perfil` — con **283 literales en español**. Y el detector
+del gate no veía ni la mitad: `"Criticos"`, `"Estadisticas"`, `"Distribucion"` no
+llevan tilde, y los nodos de texto sueltos de Leptos (`>Cargando...<`) no son
+literales, así que ningún escaneo de strings los encontraba.
 
-**Cómo se hace.** Un `t!()` por string visible, con claves en
-`dmart-app/locales/{es,en,pt,fr}.ftl`. Los términos clínicos (APACHE, SOFA, NEWS2,
-SAPS III) **no se traducen**: son nombres de escala clínica registrada.
+**Esfuerzo real: 6–8 h**, no 2. Y las páginas no son las nuevas: son las viejas.
 
-**Comprobación.** Un test que itere los 4 locales y falle si ninguna clave falta en
-ninguno. Sin ese test, el siguiente hardcodeo reintroduce el bug.
+**Lo hecho en esta tanda:**
 
-**Esfuerzo.** 2 h (mecánico). **Ganancia.** Frontend 5→7.
+1. **Ratchet, no promesa** (`spanish_hardcode_debt_does_not_grow`). La deuda no se
+   cierra en una sesión, pero tampoco puede crecer: el test mide los literales por
+   página y falla si alguna sube de su línea base. Una página nueva entra limpia o
+   no entra. Comprobado en negativo (metiendo un hardcode: falla con archivo y
+   línea).
+2. **3 páginas migradas** a los 4 idiomas: `data_quality`, `measurement`,
+   `patients`. Bajan la deuda de 283 a **250**.
+3. **Detector arreglado**: morfología por terminación (`-ción`, `-ico`, `-ivo`…),
+   nodos de texto además de literales, y exclusiones justificadas
+   (`ALLOWED_RAW_BY_PAGE`: claves de columna del contrato de datos, valores de
+   filtro que viajan a la API).
+4. **Dos trozos de código muerto**: `uci_stats.rs` (141 líneas) no estaba en
+   `pages/mod.rs` → no se compilaba; y `GlobalHeader` (36 líneas en `theme.rs`)
+   duplicaba lo que ya hace el sidebar.
+
+**Lo que queda**: 250 literales en 8 páginas, cada una se migra en la misma commit
+que baja su línea base. `admin.rs` (70) y `register.rs` (30) son las dos grandes.
+
+```bash
+cargo test -p dmart-server --test i18n_keys   # 5 passed (uno nuevo)
+```
+
+---
+
+### 🔴 Bug de navegación por señal global (lo encontró el CI, no las pruebas)
+
+**Síntoma.** Login → dashboard OK. Al pulsar cualquier enlace del sidebar, la URL
+no cambia y la app muere; todo test que navega a otra ruta falla.
+
+**Causa.** `CURRENT_LANG` (y `TOASTS`, y `PENDING_PATH`) son `RwSignal` cacheadas
+en un `static OnceLock` que se crean **perezosamente dentro de un componente**. En
+Leptos una señal pertenece al owner que la crea: al desmontarlo, Leptos la
+destruye, pero el `OnceLock` la cachea ya muerta. El siguiente `tr()` —que se
+llama desde manejadores de eventos y `spawn_local`, fuera del árbol reactivo— hace
+`get_untracked()` sobre una señal destruida → panic → router muerto:
+
+```text
+At dmart-app/src/i18n.rs:87:19, you tried to access a reactive value
+which was defined at dmart-app/src/i18n.rs:21:9, but it has already been disposed.
+```
+
+**Arreglo.** Las tres señales se crean en `main()`, fuera de todo owner reactivo:
+`i18n::init_lang_signal()`, `app::init_pending_path_signal()`,
+`stores::init_toasts_signal()`.
+
+**Por qué estaba oculto.** El `dist/` local era viejo: el bug entró con el cambio
+de refresh de sesión del commit anterior, que nunca se había compilado. Los 20/20
+locales venían de un bundle pre-bug. El CI, que compila de verdad, dio **2 failed
+/ 14 passed**. Regla nueva: **el E2E local se corre contra un `dist/` recién
+compilado**; si no, miente.
+
+**Y un fallo de entorno**: los specs asertan texto en español y la app deduce el
+idioma de `navigator.language`. En local salía inglés (fallaba) y en CI español
+(pasaba), con el mismo código. `playwright.config.ts` fija `locale: 'es-ES'`: la
+aserción es sobre la app, no sobre el navegador de quien la ejecuta.
+
+**Comprobación.** `playwright` + `verify-run.mjs`: 20/20, 0 skipped, gate verde,
+con `dist/` recién compilado en release.
 
 ---
 
@@ -256,22 +320,17 @@ monitorización, no es cosmético.
 
 ## 🟢 P2 — Deuda visible y supply chain
 
-### P2.1 Montar `GlobalHeader` o borrarlo
+### ✅ P2.1 `GlobalHeader` era código muerto — borrado (3 oct)
 
-**Qué está roto.** Existe en `dmart-app/src/theme.rs` y **no está montado**. Código
-muerto en producción, con el layout compensado por `md:ml-[280px]` en el `main`.
+**Decisión.** No montarlo: el sidebar ya lleva logo, `ThemeSelector` y
+`LangSelector`, y un header fijo (`z-index:1000`) sobre un sidebar fijo
+(`z-index:50`) se solaparían en móvil. Borradas 36 líneas de `theme.rs`.
 
-**Cómo se hace.** Montarlo y quitar el padding compensatorio, o borrarlo. Decidir en
-5 minutos y ejecutar.
+### ✅ P2.2 `dmart-app/src/locales/` borrado (3 oct)
 
-**Esfuerzo.** 30 min. **Ganancia.** Limpieza; el sidebar deja de estar emparchado.
-
-### P2.2 Borrar `dmart-app/src/locales/`
-
-**Qué está roto.** Duplicado obsoleto no versionado. Los locales válidos están en
-`dmart-app/locales/`.
-
-**Esfuerzo.** 1 min. **Ganancia.** Que nadie edite el fichero equivocado.
+**Comprobado antes de borrar:** `i18n.rs` embebe `dmart-app/locales/*.ftl` con
+`include_str!`; el duplicado no lo leía nadie y estaba desactualizado
+(98/138/63/63 líneas frente a 458).
 
 ### P2.3 Los 55 lints de Clippy del frontend
 
@@ -336,11 +395,10 @@ release hace falta:
 ## Orden de ejecución
 
 ```
-MAÑANA (4 h) → 7,5  ✅ P0.1 y P0.2 hechos el 3 de octubre
-  P0.3  i18n del contenido ......... 2,0 h   4 páginas × 4 locales
-  P2.1  GlobalHeader ............... 0,5 h
-  P2.2  borrar locales/ ............ 0,1 h
-        → frontend 5→7, verificación 8→9
+MAÑANA  ✅ P0.1, P0.2, P0.3 (parte 1) y P2.1/P2.2 hechos el 3 de octubre
+  P1.2  alerting + runbooks ........ 1 día   Operabilidad 5→8, la más barata
+  P0.3b resto de i18n ............. 6-8 h   250 literales en 8 páginas
+  P1.1  rate limit distribuido ..... 4-6 h
 
 ESTA SEMANA (1 día) → 8,5
   P2.3  55 lints (con la red del E2E)
@@ -348,13 +406,11 @@ ESTA SEMANA (1 día) → 8,5
   P2.4  PAT + gitleaks + permissions
         → supply chain 6→8, integridad clínica
 
-SIGUIENTE (2 días) → 9,5
-  P1.2  alerting + runbooks .......... 1 día
-  P1.1  rate limit distribuido ...... 4-6 h
-  P0.3  i18n del contenido (sube de bloque) ... 2 h
+SIGUIENTE (3 días) → 9,5
+  P0.3b resto de i18n ............... 6-8 h   cada página baja su ratchet
+  P1.3  rotación de claves .......... 1 día   Seguridad 9→10
 
-CIERRE (3 días) → 10
-  P1.3  rotación de claves sin downtime
+CIERRE → 10
   P2.6  despliegue nativo (systemd, reverse proxy, upgrade/rollback)
   informe final actualizado
 
