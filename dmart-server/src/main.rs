@@ -170,7 +170,7 @@ async fn main() -> anyhow::Result<()> {
     let auth_config = AuthMiddlewareConfig::new(auth_service);
 
     // Create security state (rate limiter + login throttle)
-    let security_state = create_security_state();
+    let security_state = create_security_state().await;
 
     // ── CORS ────────────────────────────────────────────────────────
     // Orígenes permitidos vía `DMART_CORS_ORIGIN` (CSV). Si la variable está

@@ -12,12 +12,11 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use crate::rate_limit_store::{create_rate_limit_store, RateLimitStore};
+use base64::Engine;
 use dmart_shared::models::ApiResponse;
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
 
 /// Combined security state for middleware
 #[derive(Clone)]
@@ -27,91 +26,76 @@ pub struct SecurityState {
     /// Dedicated throttle for the MFA challenge flow (`/auth/mfa/verify`).
     /// Stricter than the generic login throttle to prevent TOTP brute-force.
     pub mfa_throttle: Arc<LoginThrottle>,
+    /// Distributed rate limit store (Valkey/Redis or in-memory for tests)
+    pub rate_limit_store: Arc<dyn RateLimitStore>,
 }
 
-/// Rate Limiter using in-memory sliding window (backup for Valkey)
+/// Rate Limiter using distributed store (Valkey/Redis or in-memory)
 pub struct RateLimiter {
-    requests: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
+    store: Arc<dyn RateLimitStore>,
     max_requests: u32,
     window_secs: u64,
 }
 
 impl RateLimiter {
     pub fn new(max_requests: u32, window_secs: u64) -> Self {
+        // Legacy constructor for backward compatibility (in-memory only)
+        Self::with_store(Arc::new(crate::rate_limit_store::InMemoryFailingStore::new()), max_requests, window_secs)
+    }
+
+    pub fn with_store(store: Arc<dyn RateLimitStore>, max_requests: u32, window_secs: u64) -> Self {
         RateLimiter {
-            requests: Arc::new(RwLock::new(HashMap::new())),
+            store,
             max_requests,
             window_secs,
         }
     }
 
     pub async fn check(&self, key: &str) -> bool {
-        let now = Instant::now();
-        let window = Duration::from_secs(self.window_secs);
-        let mut requests = self.requests.write().await;
-
-        requests.retain(|_, times| times.iter().any(|t| now.duration_since(*t) < window));
-
-        let entry = requests.entry(key.to_string()).or_insert_with(Vec::new);
-
-        entry.retain(|t| now.duration_since(*t) < window);
-
-        if entry.len() >= self.max_requests as usize {
-            return false;
+        match self.store.increment(key, self.window_secs).await {
+            Ok((count, _)) => count <= self.max_requests,
+            Err(_) => false, // Fail closed
         }
-
-        entry.push(now);
-        true
     }
 }
 
-/// Login throttle tracker (brute force protection)
-type AttemptMap = HashMap<String, (u32, Option<Instant>)>;
-
+/// Login throttle tracker (brute force protection) using distributed store
 pub struct LoginThrottle {
-    attempts: Arc<RwLock<AttemptMap>>,
+    store: Arc<dyn RateLimitStore>,
     max_attempts: u32,
     lockout_secs: u64,
 }
 
 impl LoginThrottle {
     pub fn new(max_attempts: u32, lockout_secs: u64) -> Self {
+        Self::with_store(Arc::new(crate::rate_limit_store::InMemoryFailingStore::new()), max_attempts, lockout_secs)
+    }
+
+    pub fn with_store(store: Arc<dyn RateLimitStore>, max_attempts: u32, lockout_secs: u64) -> Self {
         LoginThrottle {
-            attempts: Arc::new(RwLock::new(HashMap::new())),
+            store,
             max_attempts,
             lockout_secs,
         }
     }
 
     pub async fn record_failure(&self, key: &str) -> bool {
-        let mut attempts = self.attempts.write().await;
-        let count = attempts
-            .entry(key.to_string())
-            .or_insert_with(|| (0u32, None));
-        count.0 += 1;
-
-        if count.0 >= self.max_attempts {
-            count.1 = Some(Instant::now());
-            return true;
+        match self.store.increment(key, self.lockout_secs).await {
+            Ok((count, _)) => count >= self.max_attempts,
+            Err(_) => false,
         }
-        false
     }
 
     #[allow(dead_code)]
     pub async fn record_success(&self, key: &str) {
-        let mut attempts = self.attempts.write().await;
-        attempts.remove(key);
+        let _ = self.store.reset(key).await;
     }
 
     pub async fn is_locked(&self, key: &str) -> Option<u64> {
-        let attempts = self.attempts.read().await;
-        if let Some((_, Some(locked_at))) = attempts.get(key) {
-            let elapsed = locked_at.elapsed().as_secs();
-            if elapsed < self.lockout_secs {
-                return Some(self.lockout_secs - elapsed);
-            }
+        match self.store.get(key).await {
+            Ok(Some((count, ttl_remaining))) if count >= self.max_attempts => Some(ttl_remaining),
+            _ => None,
         }
-        None
     }
 }
 
@@ -185,17 +169,40 @@ pub async fn rate_limit_middleware(
 ) -> Response {
     let key = get_client_key(&req);
 
-    if state.rate_limiter.check(&key).await {
+    // Get current count from store to return proper headers
+    let (allowed, limit, remaining, reset) = match state.rate_limit_store.increment(&key, state.rate_limiter.window_secs).await {
+        Ok((count, ttl_remaining)) => {
+            let allowed = count <= state.rate_limiter.max_requests;
+            let remaining = state.rate_limiter.max_requests.saturating_sub(count);
+            (allowed, state.rate_limiter.max_requests, remaining, ttl_remaining)
+        }
+        Err(_) => (false, state.rate_limiter.max_requests, 0, 60), // Fail closed
+    };
+
+    if allowed {
         let mut res = next.run(req).await;
         res.headers_mut().insert(
+            header::HeaderName::from_static("x-ratelimit-limit"),
+            HeaderValue::from_str(&limit.to_string()).unwrap(),
+        );
+        res.headers_mut().insert(
             header::HeaderName::from_static("x-ratelimit-remaining"),
-            HeaderValue::from_static("1"),
+            HeaderValue::from_str(&remaining.to_string()).unwrap(),
+        );
+        res.headers_mut().insert(
+            header::HeaderName::from_static("x-ratelimit-reset"),
+            HeaderValue::from_str(&reset.to_string()).unwrap(),
         );
         res
     } else {
         (
             StatusCode::TOO_MANY_REQUESTS,
-            [(header::RETRY_AFTER, "60")],
+            [
+                (header::RETRY_AFTER, HeaderValue::from_static("60")),
+                (header::HeaderName::from_static("x-ratelimit-limit"), HeaderValue::from_str(&limit.to_string()).unwrap()),
+                (header::HeaderName::from_static("x-ratelimit-remaining"), HeaderValue::from_static("0")),
+                (header::HeaderName::from_static("x-ratelimit-reset"), HeaderValue::from_str(&reset.to_string()).unwrap()),
+            ],
             "Rate limit exceeded. Try again later.",
         )
             .into_response()
@@ -263,7 +270,13 @@ fn client_ip(req: &Request) -> Option<String> {
 }
 
 fn get_client_key(req: &Request) -> String {
-    client_ip(req).unwrap_or_else(|| "unknown".to_string())
+    let ip = client_ip(req).unwrap_or_else(|| "unknown".to_string());
+    // Si hay un tenant en el token, usarlo para aislar la cuota por tenant
+    if let Some(tenant) = bearer_tenant(req) {
+        format!("{}|{}", tenant, ip)
+    } else {
+        ip
+    }
 }
 
 /// Decodifica el `sub` (user_id) de un token Bearer sin tocar la BD, para
@@ -278,6 +291,29 @@ fn bearer_sub(req: &Request) -> Option<String> {
     ) {
         Ok(data) => Some(data.claims.sub),
         Err(_) => None,
+    }
+}
+
+/// Extrae el `tenant_id` del token Bearer (claim `tenant_id`).
+/// No verifica la firma: solo extrae el claim para rate limiting.
+fn bearer_tenant(req: &Request) -> Option<String> {
+    let header = req.headers().get("authorization")?.to_str().ok()?;
+    let token = crate::auth::extract_token_from_header(header)?;
+    // Decode without verification for rate limit key extraction
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let payload = parts[1];
+    // Add padding if needed
+    let payload = payload.to_string() + &"=".repeat((4 - payload.len() % 4) % 4);
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
+    let tid = claims.get("tenant_id")?.as_str()?;
+    if tid == "default" || tid.is_empty() {
+        None
+    } else {
+        Some(tid.to_string())
     }
 }
 
@@ -425,7 +461,10 @@ pub fn sanitize_internal_error(detail: &dyn std::fmt::Display) -> String {
 }
 
 /// Create global security state
-pub fn create_security_state() -> SecurityState {
+pub async fn create_security_state() -> SecurityState {
+    // Crear store distribuido (Valkey/Redis o en memoria)
+    let rate_limit_store = create_rate_limit_store().await;
+
     // Requests por ventana para endpoints generales. El valor por defecto es
     // conservador (100 rpm) y solo se sube explícitamente: el job de load test
     // necesita declarar el sobre que mide, y con el límite de producción
@@ -445,9 +484,9 @@ pub fn create_security_state() -> SecurityState {
         .and_then(|v| v.parse::<bool>().ok())
         .unwrap_or(false);
     let rate_limiter = if disable_rate_limit {
-        Arc::new(RateLimiter::new(u32::MAX, 1))
+        Arc::new(RateLimiter::with_store(rate_limit_store.clone(), u32::MAX, 1))
     } else {
-        Arc::new(RateLimiter::new(max_requests, window_secs))
+        Arc::new(RateLimiter::with_store(rate_limit_store.clone(), max_requests, window_secs))
     };
 
     // Login throttle configuration
@@ -468,9 +507,9 @@ pub fn create_security_state() -> SecurityState {
         .unwrap_or(300);
 
     let login_throttle = if disable_login_throttle || login_max_attempts == 0 {
-        Arc::new(LoginThrottle::new(u32::MAX, 1))
+        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), u32::MAX, 1))
     } else {
-        Arc::new(LoginThrottle::new(login_max_attempts, login_lockout_secs))
+        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), login_max_attempts, login_lockout_secs))
     };
 
     // MFA throttle configuration
@@ -491,15 +530,16 @@ pub fn create_security_state() -> SecurityState {
         .unwrap_or(300);
 
     let mfa_throttle = if disable_mfa_throttle || mfa_max_attempts == 0 {
-        Arc::new(LoginThrottle::new(u32::MAX, 1))
+        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), u32::MAX, 1))
     } else {
-        Arc::new(LoginThrottle::new(mfa_max_attempts, mfa_lockout_secs))
+        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), mfa_max_attempts, mfa_lockout_secs))
     };
 
     SecurityState {
         rate_limiter,
         login_throttle,
         mfa_throttle,
+        rate_limit_store,
     }
 }
 
@@ -525,7 +565,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter() {
-        let limiter = RateLimiter::new(3, 60);
+        let store = Arc::new(crate::rate_limit_store::InMemoryFailingStore::new());
+        let limiter = RateLimiter::with_store(store, 3, 60);
 
         // First 3 should pass
         assert!(limiter.check("test_ip").await);
@@ -541,7 +582,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_throttle() {
-        let throttle = LoginThrottle::new(3, 60);
+        let store = Arc::new(crate::rate_limit_store::InMemoryFailingStore::new());
+        let throttle = LoginThrottle::with_store(store, 3, 60);
 
         // Record 2 failures
         assert!(!throttle.record_failure("user1").await);
@@ -556,8 +598,8 @@ mod tests {
         assert!(throttle.is_locked("user1").await.is_none());
     }
 
-    #[test]
-    fn test_mfa_throttle_is_stricter_than_login() {
+    #[tokio::test]
+    async fn test_mfa_throttle_is_stricter_than_login() {
         // Test with default values
         // SAFETY: el binario de test es el único que fija estas variables de
         // entorno, siempre al mismo valor, así que no hay carrera observable
@@ -571,7 +613,7 @@ mod tests {
             std::env::set_var("DMART_MFA_THROTTLE_LOCKOUT_SECS", "300");
         }
 
-        let state = create_security_state();
+        let state = create_security_state().await;
         // 3 failed attempts allowed for the MFA challenge flow
         assert_eq!(state.mfa_throttle.max_attempts, 3);
         // while the generic login throttle allows 5

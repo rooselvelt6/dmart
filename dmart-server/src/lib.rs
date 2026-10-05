@@ -46,6 +46,7 @@ pub mod phi_backfill;
 pub mod phi_store;
 #[allow(dead_code)] // SPEC-052: Web Push VAPID (tarea 3.9)
 pub mod push;
+pub mod rate_limit_store;
 pub mod rbac;
 pub mod realtime;
 #[allow(dead_code)] // SPEC-030: Retención/downsampling (job + API; ejercitado por test retention)

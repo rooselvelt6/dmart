@@ -740,6 +740,19 @@ pub async fn get_last_measurement(
     Ok(result)
 }
 
+pub async fn get_measurement(
+    db: &Surreal<Db>,
+    measurement_id: &str,
+) -> Result<Option<Measurement>> {
+    let rows: Vec<Value> = db
+        .query("SELECT * OMIT id FROM measurements WHERE measurement_id = $mid LIMIT 1")
+        .bind(("mid", measurement_id.to_string()))
+        .await?
+        .take(0)?;
+    let measurements = phi_store::open_measurements(rows)?;
+    Ok(measurements.into_iter().next())
+}
+
 // ─── Camas ───────────────────────────────────────────────────────────
 
 pub async fn init_camas(db: &Surreal<Db>, cantidad: u8, tipo: TipoCama) -> Result<Vec<Cama>> {

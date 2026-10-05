@@ -1079,7 +1079,7 @@ fn AuditPanel() -> impl IntoView {
                             {admin_stat_card("LOS", &format!("{:.1}d", stats.ejecutivo.los_dias_promedio), "#3B82F6", "fa-clock")}
                         </div>
                     }.into_any(),
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 })}
             </Suspense>
 

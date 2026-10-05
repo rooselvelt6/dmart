@@ -7,17 +7,12 @@ use std::sync::{Mutex, OnceLock};
 
 const THEME_KEY: &str = "dmart_theme";
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub enum Theme {
+    #[default]
     System = 0,
     Light = 1,
     Dark = 2,
-}
-
-impl Default for Theme {
-    fn default() -> Self {
-        Theme::System
-    }
 }
 
 impl Theme {

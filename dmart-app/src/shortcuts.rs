@@ -232,7 +232,7 @@ fn show_shortcuts_help() {
     // Close on overlay click
     let overlay = div.clone();
     let close_handler = move |_: web_sys::Event| {
-        let _ = overlay.remove();
+        overlay.remove();
     };
     let closure = Closure::wrap(Box::new(close_handler) as Box<dyn FnMut(web_sys::Event)>);
     div.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())

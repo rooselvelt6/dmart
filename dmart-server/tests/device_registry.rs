@@ -314,7 +314,7 @@ async fn build_app(db: &db::Database) -> axum::Router {
     let raw: &Surreal<Db> = db;
     let auth_service = dmart_server::auth::AuthService::new(raw.clone());
     let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
-    let security_state = dmart_server::security::create_security_state();
+    let security_state = dmart_server::security::create_security_state().await;
     dmart_server::api::build_api_router(db.clone(), auth_config, security_state).layer(
         axum::extract::connect_info::MockConnectInfo("127.0.0.1:0".parse::<SocketAddr>().unwrap()),
     )

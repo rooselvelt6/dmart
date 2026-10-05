@@ -158,7 +158,7 @@ pub fn DevicesPage() -> impl IntoView {
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
 
@@ -228,7 +228,7 @@ pub fn DevicesPage() -> impl IntoView {
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
         </div>

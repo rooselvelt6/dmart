@@ -212,7 +212,7 @@ pub fn TenantsPage() -> impl IntoView {
                     }
                         .into_any()
                     }
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
 
@@ -236,7 +236,7 @@ pub fn TenantsPage() -> impl IntoView {
                         </div>
                     }
                     .into_any(),
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
         </div>

@@ -23,6 +23,9 @@ jobs:
   spec-lint:
     name: Spec Lint (SDD Gate)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -69,6 +72,8 @@ jobs:
   rust-fmt:
     name: Format Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -80,6 +85,8 @@ jobs:
   rust-clippy:
     name: Clippy (-D warnings)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -106,6 +113,8 @@ jobs:
   rust-test-lib:
     name: Library Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -118,6 +127,8 @@ jobs:
   rust-test-integration:
     name: Integration Tests (API)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -130,6 +141,8 @@ jobs:
   phi-backfill-test:
     name: PHI Backfill Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -143,6 +156,8 @@ jobs:
   i18n-keys-test:
     name: I18n Keys Gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -156,6 +171,8 @@ jobs:
   hl7-integration-test:
     name: HL7 + MLLP Integration Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -172,6 +189,8 @@ jobs:
   prop-test:
     name: Property Tests (proptest)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -188,6 +207,8 @@ jobs:
   fuzz-test:
     name: Fuzzing (cargo-fuzz)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -214,6 +235,9 @@ jobs:
   load-test:
     name: Load Test (k6)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 15
     if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'load-test')
     steps:
@@ -289,6 +313,9 @@ jobs:
   wasm-build:
     name: WASM Build (trunk + wasm-opt)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -343,6 +370,9 @@ jobs:
   e2e-test:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     timeout-minutes: 30
     needs: [wasm-build, rust-test-integration, phi-backfill-test, i18n-keys-test, hl7-integration-test]
     steps:
@@ -424,6 +454,8 @@ jobs:
   coverage:
     name: Coverage Gate (llvm-cov)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -465,6 +497,8 @@ jobs:
   cargo-deny:
     name: Dependency Policy (cargo-deny)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -483,6 +517,8 @@ jobs:
   security-audit:
     name: Security Audit (cargo audit + dependabot)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -511,6 +547,9 @@ jobs:
   release-build:
     name: Release Build (all targets)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     needs: [rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, coverage, wasm-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -537,12 +576,66 @@ jobs:
           retention-days: 30
 
   # ──────────────────────────────────────────────────────────────
+  # COSIGN SIGNING — Supply chain security (P2.4)
+  # ──────────────────────────────────────────────────────────────
+  cosign-sign:
+    name: Cosign Sign Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for keyless signing
+    needs: [release-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download release binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: dmart-release-binaries
+          path: artifacts
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign artifacts with cosign (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          for f in artifacts/*; do
+            cosign sign-blob --yes --bundle "$f.bundle" "$f"
+          done
+      - name: Upload signatures
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmart-release-signatures
+          path: artifacts/*.bundle
+          retention-days: 90
+
+  # ──────────────────────────────────────────────────────────────
+  # GITLEAKS — Secret scanning
+  # ──────────────────────────────────────────────────────────────
+  gitleaks-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────
   # NOTIFY
   # ──────────────────────────────────────────────────────────────
   notify:
     name: Notify Result
     runs-on: ubuntu-latest
-    needs: [spec-lint, rust-fmt, rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, fuzz-test, load-test, coverage, cargo-deny, security-audit, wasm-build, e2e-test, release-build]
+    permissions:
+      contents: read
+    needs: [spec-lint, rust-fmt, rust-clippy, rust-test-lib, rust-test-integration, hl7-integration-test, prop-test, fuzz-test, load-test, coverage, cargo-deny, security-audit, gitleaks-scan, wasm-build, e2e-test, release-build, cosign-sign]
     if: always()
     steps:
       - name: Summary

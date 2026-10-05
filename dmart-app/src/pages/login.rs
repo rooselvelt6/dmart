@@ -31,11 +31,7 @@ pub fn LoginPage() -> impl IntoView {
     let login_mfa_title = crate::i18n::tr("login-mfa-title", None);
     let login_mfa_backup_hint = crate::i18n::tr("login-mfa-backup-hint", None);
     let login_mfa_hint = crate::i18n::tr("login-mfa-hint", None);
-    let login_mfa_backup_code = crate::i18n::tr("login-mfa-backup-code", None);
-    let login_mfa_code = crate::i18n::tr("login-mfa-code", None);
     let login_mfa_verify = crate::i18n::tr("login-mfa-verify", None);
-    let login_mfa_use_totp = crate::i18n::tr("login-mfa-use-totp", None);
-    let login_mfa_use_backup = crate::i18n::tr("login-mfa-use-backup", None);
     let action_back = crate::i18n::tr("action-back", None);
     let login_version = crate::i18n::tr("login-version", None);
 

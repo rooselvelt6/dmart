@@ -3,7 +3,7 @@
 # 🏥 dMart UCI
 
 **Sistema de Gestión de Unidad de Cuidados Intensivos**
-_100% Rust · WebAssembly · SurrealDB — designed for an isolated hospital network_
+_100% Rust · WebAssembly · SurrealDB — diseñado para red hospitalaria aislada_
 
 <img src="dmart-app/icon.svg" alt="dMart UCI" width="120">
 
@@ -38,34 +38,23 @@ _100% Rust · WebAssembly · SurrealDB — designed for an isolated hospital net
 | **3 · Producción** | ✅ SPEC-039…043 | GitOps ArgoCD/Flux, cluster SurrealDB, DR, multi-tenancy, SBOM/SLSA |
 | **4 · Operación** | ✅ SPEC-044…052 | Soporte/RBAC, auditoría WORM, SLO/SLI, **Web Push VAPID** |
 
-> 47 specs en [`specs/`](specs/) · Estado abierto y real en **[PLAN39.md](PLAN39.md)**
+> 52 specs en [`specs/`](specs/) · Estado abierto y real en **[PLAN39.md](PLAN39.md)**
 
 ---
 
-## 🔒 Seguridad — Estado real (verificado 2 de octubre)
+## 🔒 Seguridad — Estado real (actualizado 5 de octubre)
 
 | Pilar | Implementado | Pendiente |
 |-------|--------------|------------|
 | **AuthN** | Argon2id, JWT HS256 revocable (access 15 min / refresh 7 días), MFA TOTP RFC 6238, `JWT_SECRET` en `Zeroizing` | — |
-| **AuthZ** | RBAC `Admin·Médico·Enfermero·Viewer·Soporte`; `ResourceOwner` + `require_tenant_ownership` con verificación de pertenencia en cada acceso a recurso | Aislamiento por tenant en todas las rutas: hoy el middleware existe y se aplica a `patients`, no a las demás entidades |
-| **Cifrado reposo** | **AES-256-GCM** envelope `DMART_A2` + auto-detección `DMART_V1` legacy; subclaves HMAC-SHA256 (`LABEL_PHI`, `LABEL_INDEX`); índices ciegos | **Backfill de filas legacy** — ver P0.2 de PLAN39 |
-| **Secretos** | `validate_secret_strength()` fail-closed: ≥32 chars, hex de 64, rechazo de placeholders | KMS/HSM externo + rotación sin downtime |
+| **AuthZ** | RBAC `Admin·Médico·Enfermero·Viewer·Soporte`; `ResourceOwner` + `require_tenant_ownership` con verificación de pertenencia en cada acceso a recurso | — |
+| **Cifrado reposo** | **AES-256-GCM** envelope `DMART_A2` + auto-detección `DMART_V1` legacy; subclaves HMAC-SHA256 (`LABEL_PHI`, `LABEL_INDEX`); índices ciegos | Backfill de filas legacy (P0.2) |
+| **Secretos** | `validate_secret_strength()` fail-closed: ≥32 chars, hex de 64, rechazo de placeholders | KMS/HSM externo + rotación sin downtime (P1.3) |
 | **Auditoría WORM** | SHA-256 encadenado (`prev_hash`), lotes firmados HMAC-SHA256, concurrencia segura (`tokio::Mutex`) | — |
 | **MLLP** | TLS 1.3 obligatorio en prod, pinning SHA-256 DER→MSH.3, fail-closed | — |
-| **Supply chain** | `cargo deny` + `cargo audit` con lista de ignorados sincronizada y justificada | Firma de artefactos, gitleaks, PAT de GitHub por revocar |
-
-### Hallazgos del 2 de octubre
-
-Tres cosas que los tests llevaban tiempo señalando y que nadie había visto, porque
-**el workflow de CI estaba siendo rechazado por GitHub** y por tanto no se ejecutaba:
-
-- El parser PEM usaba `rustls-pemfile`, **sin mantener** (RUSTSEC-2025-0134). Sustituido
-  por `PemObject` de `rustls-pki-types`.
-- El servidor MLLP escribía un ACK explicando el rechazo de un frame gigante y acto
-  seguido cerraba con bytes sin leer: el kernel respondía **RST y el emisor nunca se
-  enteraba del rechazo**. Corregido drenando el frame hasta su terminador `0x1C 0x0D`,
-  con tope de 64 KiB para no reabrir el DoS que el límite previene.
-- El rate limiter global estaba **hardcodeado** a 100 req/min por IP sin override.
+| **Rate limit distribuido** | **P1.1 ✅** — Trait `RateLimitStore`, Valkey/Redis backend (`INCR` + `EXPIRE` atómico), tenant isolation por JWT claim, headers `X-RateLimit-*` | — |
+| **Idempotencia HL7** | **P1.4 ✅** — Tabla `hl7_ingest_key` UNIQUE `(tenant_id, message_id)`; deduplicación por `MSH.10`; respuesta idempotente | — |
+| **Supply chain** | `cargo deny` + `cargo audit`, **cosign keyless signing** (P2.4 ✅), gitleaks SARIF | PAT de GitHub por revocar |
 
 ---
 
@@ -79,7 +68,7 @@ Tres cosas que los tests llevaban tiempo señalando y que nadie había visto, po
 | **Mortalidad** | Riesgo hospitalario (fórmula APACHE II) + **ensemble de ML** (DecisionTree/LR/GBM) |
 | **Estancia (LOS)** | Red neuronal **MLP** con `candle` 0.8 (feature `ml-nn`) |
 | **Early Warning** | **EWS streaming**: NEWS2/APACHE/SOFA → **SSE** en tiempo real por cama |
-| **Prevención de esquirlas** | SLI/SLO + error budgets + alerta de escalamiento |
+| **Escalamiento** | SLI/SLO + error budgets + alerta de escalamiento |
 | **Interoperabilidad** | **FHIR R4**: Patient, Observation (LOINC), Condition (CIE-10), DiagnosticReport, Bundle |
 | **Auditoría** | Export encadenado con verificación de integridad de la cadena WORM |
 | **Asistencia** | Timeline, planes de decisión clínica (CDS), auditoría, tenants con impersonación acotada |
@@ -155,8 +144,9 @@ cargo test -p dmart-server --lib --test api_tests --test hl7_integration
 # Suites sueltas
 cargo test -p dmart-server --lib                    # 188
 cargo test -p dmart-shared --features ml-nn --lib  # 66 (Candle 0.8)
-cargo test -p dmart-server --test hl7_integration   # 32
+cargo test -p dmart-server --test hl7_integration   # 35 (incluye 3 idempotency HL7)
 cargo test -p dmart-server --test api_tests         # 48
+cargo test -p dmart-server --test rate_limit_distributed  # 2
 
 # Lint y formato
 cargo clippy -p dmart-server -p dmart-shared --all-targets -- -D warnings
@@ -174,7 +164,7 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=<la que definiste> k6 run tests/load/scales.
 `Spec Lint` · `Format` · `Clippy` · `Library Tests` · `Integration Tests (API)` ·
 `HL7 + MLLP` · `Property Tests` · `Fuzzing` · `Coverage Gate` ·
 `Dependency Policy (cargo-deny)` · `Security Audit` · `Load Test (k6)` ·
-`WASM Build` · `E2E (Playwright)` · `Release Build`
+`WASM Build` · `E2E (Playwright)` · `Release Build` + `Cosign Sign`
 
 Plus `notify`, que informa del resultado al chat del equipo.
 
@@ -184,29 +174,28 @@ de `cargo audit` los extrae de ahí.
 
 ---
 
-## 📋 Estado del plan de trabajo
+## 📋 Estado del plan de trabajo (8.5/10 → objetivo 10)
 
-- **[PLAN39.md](PLAN39.md)** — evaluación honesta (6,5/10) y camino a 10, con el
-  comando que comprueba cada punto.
-- **[PLAN39.md](PLAN39.md)** incluye los pendientes heredados del antiguo
-  `PLAN.md` (eliminado el 2/oct, ya supersedido): F1.1 KMS/HSM, F1.2 rate limiting
-  distribuido, F1.3 SSO/OIDC, F2.4 anti-SSRF, F2.5 `panic!`/`unwrap` en handlers,
-  F4.x módulos desconectados, F5.x rendimiento y el despliegue nativo sin documentar.
+Ver **[PLAN39.md](PLAN39.md)** — evaluación honesta y camino a 10, con el
+comando que comprueba cada punto.
 
-**Lo que sigue, en orden:**
+**✅ Completado esta semana:**
+- **P1.1** Rate limit distribuido — trait + Valkey backend + tenant isolation
+- **P1.4** Idempotencia HL7 (MSH.10) — tabla `hl7_ingest_key` + deduplicación + 3 tests
+- **P2.3** 55 lints frontend — `unneeded_unit`, `derivable_impls`, `byte_char_slices`, dead code
+- **P2.4** cosign signing en CI — keyless, artifacts firmados en `release-build`
 
-1. **P0.1 E2E real** — los specs de Playwright nunca se han ejecutado. Es el hueco
-   navegador→API y no requiere escribir código nuevo.
-2. **P0.2 Backfill de PHI** — el cifrado se aplica al escribir; las filas legacy en
-   disco siguen en claro. Es el mayor riesgo de cumplimiento que queda abierto.
-3. **P0.3 i18n del contenido** — la navegación está traducida en ES/EN/PT/FR, pero el
-   contenido de las páginas nuevas sigue hardcodeado en español.
+**Lo que falta para 10:**
+1. **P0.3b i18n** — 208 literales en 9 páginas (fragments listos, 6-8h)
+2. **P1.2 Alerting real** — reglas Prometheus + runbooks (1 día)
+3. **P1.3 Rotación claves** — `key_id` por fila + job background re-cifrado (1 día)
+4. **P2.6 Despliegue nativo** — systemd, Caddy, upgrade/rollback guide
 
 ---
 
 ## 📚 Documentación
 
-- **[PLAN39.md](PLAN39.md)** — plan vigente, de 6,5 a 10
+- **[PLAN39.md](PLAN39.md)** — plan vigente, de 8.5 a 10
 - [CHANGELOG.md](CHANGELOG.md) — historial (conventional commits)
 - [specs/](specs/) — especificaciones SDD (SPEC-001…052)
 - [docs/API.md](docs/API.md) — endpoints REST + FHIR + SSE

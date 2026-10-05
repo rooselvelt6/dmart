@@ -197,7 +197,7 @@ pub fn AuditPage() -> impl IntoView {
                     }
                         .into_any()
                     }
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
 
@@ -219,7 +219,7 @@ pub fn AuditPage() -> impl IntoView {
                     }
                         .into_any()
                     }
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
 

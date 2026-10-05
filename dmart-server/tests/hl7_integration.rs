@@ -972,3 +972,170 @@ mod hl7_concurrent_handling {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+mod hl7_idempotency {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_hl7_idempotency_same_msh10_returns_same_measurement() {
+        let dir = std::env::temp_dir().join(format!("dmart-hl7-idempotent-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let db = dmart_server::db::connect(&dir.join("test.surreal").to_string_lossy())
+            .await
+            .expect("db connect");
+
+        // Create patient
+        let mut patient = Patient::new();
+        patient.nombre = "Idempotent".into();
+        patient.apellido = "Test".into();
+        patient.historia_clinica = "999999".into();
+        let created = db_ops::create_patient(&db, patient).await.expect("create");
+
+        // HL7 message with fixed MSH.10
+        let hl7 = "MSH|^~\\&|BeneVision|ICU01|DMART|UCI|20240821141031||ORU^R01|IDEMPOTENT001|P|2.5\r\
+            PID|||999999^^^ICU01MR||IDEMPOTENT^TEST||19600415|M\r\
+            OBR|1|||||||20240821141030\r\
+            OBX|1|NM|8867-4^Heart rate^LN||88|bpm";
+
+        let msg = parse_oru_message(hl7).expect("parse");
+        assert_eq!(msg.message_id, "IDEMPOTENT001");
+
+        // First ingestion
+        let m1 = ingest_vitals(&db, &msg).await.expect("first ingest");
+
+        // Second ingestion with same MSH.10 (simulating retry)
+        let m2 = ingest_vitals(&db, &msg).await.expect("second ingest (retry)");
+
+        // Should return the SAME measurement_id (idempotent)
+        assert_eq!(m1.measurement_id, m2.measurement_id, "retry must return same measurement");
+        assert_eq!(m1.patient_id, created.patient_id);
+
+        // Verify only ONE measurement was created for this patient
+        let measurements = db_ops::get_measurements_for_patient(&db, &created.patient_id)
+            .await
+            .expect("measurements");
+        assert_eq!(measurements.len(), 1, "idempotency: only one measurement should exist");
+
+        // Verify hl7_ingest_key table has the record
+        let keys: Vec<serde_json::Value> = db
+            .query("SELECT tenant_id, message_id, measurement_id, sender, source, created_at FROM hl7_ingest_key WHERE message_id = $msh10")
+            .bind(("msh10", "IDEMPOTENT001"))
+            .await
+            .expect("query keys")
+            .take(0)
+            .expect("take");
+        assert_eq!(keys.len(), 1, "hl7_ingest_key should have one record");
+        assert_eq!(keys[0].get("message_id").and_then(|v| v.as_str()), Some("IDEMPOTENT001"));
+        assert_eq!(keys[0].get("measurement_id").and_then(|v| v.as_str()), Some(m1.measurement_id.as_str()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_hl7_idempotency_different_msh10_creates_new_measurement() {
+        let dir = std::env::temp_dir().join(format!("dmart-hl7-idempotent-diff-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let db = dmart_server::db::connect(&dir.join("test.surreal").to_string_lossy())
+            .await
+            .expect("db connect");
+
+        let mut patient = Patient::new();
+        patient.nombre = "Diff".into();
+        patient.apellido = "MSH10".into();
+        patient.historia_clinica = "888888".into();
+        let created = db_ops::create_patient(&db, patient).await.expect("create");
+
+        // First message
+        let hl7_1 = "MSH|^~\\&|BeneVision|ICU01|DMART|UCI|20240821141031||ORU^R01|MSG001|P|2.5\r\
+            PID|||888888^^^ICU01MR||DIFF^TEST||19600415|M\r\
+            OBR|1|||||||20240821141030\r\
+            OBX|1|NM|8867-4^Heart rate^LN||80|bpm";
+
+        let msg1 = parse_oru_message(hl7_1).expect("parse 1");
+        let m1 = ingest_vitals(&db, &msg1).await.expect("ingest 1");
+
+        // Second message with DIFFERENT MSH.10
+        let hl7_2 = "MSH|^~\\&|BeneVision|ICU01|DMART|UCI|20240821141032||ORU^R01|MSG002|P|2.5\r\
+            PID|||888888^^^ICU01MR||DIFF^TEST||19600415|M\r\
+            OBR|1|||||||20240821141031\r\
+            OBX|1|NM|8867-4^Heart rate^LN||85|bpm";
+
+        let msg2 = parse_oru_message(hl7_2).expect("parse 2");
+        let m2 = ingest_vitals(&db, &msg2).await.expect("ingest 2");
+
+        // Different MSH.10 should create a NEW measurement
+        assert_ne!(m1.measurement_id, m2.measurement_id, "different MSH.10 creates new measurement");
+        assert_eq!(m1.patient_id, m2.patient_id);
+
+        let measurements = db_ops::get_measurements_for_patient(&db, &created.patient_id)
+            .await
+            .expect("measurements");
+        assert_eq!(measurements.len(), 2, "two different messages = two measurements");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_hl7_idempotency_tenant_isolation() {
+        let dir = std::env::temp_dir().join(format!("dmart-hl7-idempotent-tenant-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let db = dmart_server::db::connect(&dir.join("test.surreal").to_string_lossy())
+            .await
+            .expect("db connect");
+
+        // Patient in tenant A
+        let mut patient_a = Patient::new();
+        patient_a.nombre = "TenantA".into();
+        patient_a.apellido = "Test".into();
+        patient_a.historia_clinica = "111111".into();
+        patient_a.tenant_id = "tenant_a".into();
+        let created_a = db_ops::create_patient(&db, patient_a).await.expect("create A");
+
+        // Patient in tenant B
+        let mut patient_b = Patient::new();
+        patient_b.nombre = "TenantB".into();
+        patient_b.apellido = "Test".into();
+        patient_b.historia_clinica = "222222".into();
+        patient_b.tenant_id = "tenant_b".into();
+        let created_b = db_ops::create_patient(&db, patient_b).await.expect("create B");
+
+        // Same MSH.10 in both tenants should create separate measurements
+        let hl7_a = "MSH|^~\\&|BeneVision|ICU01|DMART|UCI|20240821141031||ORU^R01|SAME001|P|2.5\r\
+            PID|||111111^^^ICU01MR||TENANT^A||19600415|M\r\
+            OBR|1|||||||20240821141030\r\
+            OBX|1|NM|8867-4^Heart rate^LN||80|bpm";
+
+        let hl7_b = "MSH|^~\\&|BeneVision|ICU01|DMART|UCI|20240821141031||ORU^R01|SAME001|P|2.5\r\
+            PID|||222222^^^ICU01MR||TENANT^B||19600415|M\r\
+            OBR|1|||||||20240821141030\r\
+            OBX|1|NM|8867-4^Heart rate^LN||85|bpm";
+
+        let msg_a = parse_oru_message(hl7_a).expect("parse A");
+        let msg_b = parse_oru_message(hl7_b).expect("parse B");
+
+        let m_a = ingest_vitals(&db, &msg_a).await.expect("ingest A");
+        let m_b = ingest_vitals(&db, &msg_b).await.expect("ingest B");
+
+        // Different tenants = different measurements even with same MSH.10
+        assert_ne!(m_a.measurement_id, m_b.measurement_id, "tenant isolation: same MSH.10 different tenants = different measurements");
+        assert_eq!(m_a.tenant_id, "tenant_a");
+        assert_eq!(m_b.tenant_id, "tenant_b");
+
+        let keys: Vec<serde_json::Value> = db
+            .query("SELECT tenant_id, message_id, measurement_id, sender, source, created_at FROM hl7_ingest_key WHERE message_id = $msh10")
+            .bind(("msh10", "SAME001"))
+            .await
+            .expect("query keys")
+            .take(0)
+            .expect("take");
+        assert_eq!(keys.len(), 2, "hl7_ingest_key should have two records (one per tenant)");
+        let tenants: Vec<_> = keys.iter().map(|k| k.get("tenant_id").and_then(|v| v.as_str()).unwrap()).collect();
+        assert!(tenants.contains(&"tenant_a"));
+        assert!(tenants.contains(&"tenant_b"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

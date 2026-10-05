@@ -300,7 +300,7 @@ pub fn PatientTimelinePage() -> impl IntoView {
                     }
                         .into_any()
                     }
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
         </div>

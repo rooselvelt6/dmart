@@ -228,7 +228,7 @@ pub fn CdsPage() -> impl IntoView {
                                         <p class="text-sm py-3" style="color:#EF4444;">{e}</p>
                                     }
                                     .into_any(),
-                                    None => view! {}.into_any(),
+                                    None => ().into_any(),
                                 }}
                             </Suspense>
                         </div>
@@ -255,7 +255,7 @@ pub fn CdsPage() -> impl IntoView {
                     }
                         .into_any()
                     }
-                    None => view! {}.into_any(),
+                    None => ().into_any(),
                 }}
             </Suspense>
         </div>

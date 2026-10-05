@@ -160,11 +160,11 @@ pub fn ToastContainer() -> impl IntoView {
                         <div class=format!("toast {}", kind_class) role="alert" aria-live="assertive">
                             <i class=format!("fa-solid {} toast-icon", icon) aria-hidden="true"></i>
                             <span class="toast-message">{toast.message}</span>
-                            {if !toast.persistent {
-                                view! { <button class="toast-close" on:click=move |_| remove_toast(id) aria-label="Cerrar"><i class="fa-solid fa-times"></i></button> }.into_any()
-                            } else {
-                                view! { }.into_any()
-                            }}
+{if !toast.persistent {
+                                 view! { <button class="toast-close" on:click=move |_| remove_toast(id) aria-label="Cerrar"><i class="fa-solid fa-times"></i></button> }.into_any()
+                             } else {
+                                 ().into_any()
+                             }}
                         </div>
                     }
                 }

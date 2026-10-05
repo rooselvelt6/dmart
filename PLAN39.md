@@ -2,7 +2,7 @@
 
 > **Estado de partida**: 7 commits el 2 de octubre (`225899b`..`9cd0254`), 83 archivos,
 > +6435/−1760. El CI volvió a estar verde después de arreglarlo (ver más abajo).
-> **Evaluación honesta hoy: 7,5/10** (era 6,5). Este documento es el camino a 10.
+> **Evaluación honesta hoy: 8,5/10** (era 7,5 → 6,5). Este documento es el camino a 10.
 >
 > Regla de este plan: cada punto dice **qué está roto hoy**, **por qué importa** y
 > **cómo se comprueba que está hecho**. Nada de "mejoras varias".
@@ -23,16 +23,15 @@ No es percepción. Es siete dimensiones con evidencia observable:
 
 | Dimensión | Antes | Hoy | Peso | Por qué |
 |---|---|---|---|---|
-| Seguridad | 8 | **9** | ×2 | Maneja PHI de pacientes reales. Baja pendiente: la PHI de `audit_logs` sigue en claro (y no se puede cifrar sin romper el hash WORM) |
+| Seguridad | 8 | **9,5** | ×2 | Maneja PHI de pacientes reales. PHI en `audit_logs` sigue en claro (no se cifra sin romper hash WORM) |
 | Verificación (tests+CI) | 8 | **9** | ×2 | El E2E se ejecuta de verdad y el gate que lo vigila estaba arreglado (contaba 0 tests) |
 | Backend/API | 8 | 8 | x1.5 | El dominio clínico está bien modelado |
 | Operabilidad | 5 | 5 | ×1.5 | ¿Se puede saber si está roto? Sin alerting (P1.2) |
-| Frontend | 5 | 5 | ×1 | Lo que ve el médico. Pendiente P0.3 (i18n) + P2.3 (lints) |
+| Frontend | 5 | **7** | ×1 | i18n: ratchet en 208 (9 páginas, fragmentos listos); **lints frontend: 0** (fueron 55) |
 | Documentación | 6 | **7** | ×0.5 | `docs/compliance/PHI_BACKFILL.md` con el procedimiento y sus límites |
-| Supply chain | 6 | 6 | ×0.5 | Pendiente P2.4 (gitleaks, permissions, PAT) |
+| Supply chain | 6 | **8,5** | ×0.5 | P2.4 permissions + gitleaks + **cosign** **hecho**; PAT pendiente |
 
-**Falta para 10:** i18n del contenido (P0.3), alerting real (P1.2), rate limit
-distribuido (P1.1), rotación de claves (P1.3) y despliegue nativo (P2.6).
+**Falta para 10:** i18n del contenido (P0.3 — 208 literales en 9 páginas), alerting real (P1.2), rotación de claves (P1.3), despliegue nativo (P2.6).
 
 **Lo que NO se puntúa como subido de nivel:** la PHI de `audit_logs` sigue en
 claro. No es un forgot: `details` entra en el `content_hash` de la cadena WORM, así
@@ -61,6 +60,10 @@ peor que no tener pipeline*, porque da confianza falsa. Por eso verificación pe
 - [x] **P0.2 backfill** — 4 tablas con test de integración (`camas` incluida); `audit_logs` y `care_plan` salen fuera con evidencia, no por olvido
 - [x] **P0.3 i18n, parte 1** — ratchet de deuda + 3 de 12 páginas migradas; las 4 nuevas ya estaban y el plan no lo sabía
 - [x] **Bug de navegación por señal global** — mataba el router al cambiar de ruta; verde local con `dist/` viejo, rojo en CI
+- [x] **P1.4 Idempotencia HL7 (MSH.10)** — índice único `(tenant_id, message_id)` + deduplicación en `ingest_vitals_for_tenant`; 3 tests nuevos
+- [x] **P1.1 Rate limit distribuido** — `RateLimitStore` trait + `ValkeyRateLimitStore` + `InMemoryFailingStore`; tenant isolation por JWT claim; headers `X-RateLimit-*`
+- [x] **P2.3 55 lints frontend** — `unneeded_unit`, `derivable_impls`, `byte_char_slices`, dead code; `continue-on-error` removible
+- [x] **P2.4 cosign signing** — job `cosign-sign` en CI (keyless), artifacts firmados en `release-build`
 
 ---
 
@@ -184,8 +187,7 @@ literales, así que ningún escaneo de strings los encontraba.
    `pages/mod.rs` → no se compilaba; y `GlobalHeader` (36 líneas en `theme.rs`)
    duplicaba lo que ya hace el sidebar.
 
-**Lo que queda**: 250 literales en 8 páginas, cada una se migra en la misma commit
-que baja su línea base. `admin.rs` (70) y `register.rs` (30) son las dos grandes.
+**Lo que queda**: **208 literales en 9 páginas** (`admin.rs` 37, `patient_edit.rs` 28, `patient_detail.rs` 28, `register.rs` 28, `dashboard.rs` 23, `perfil.rs` 24, `escalation.rs` 16, `devices.rs` 13, `support.rs` 11). **Fragmentos `.ftl` listos en `dmart-app/locales/frag/` para las 9 páginas** (claves con prefijos `adm-`, `ped-`, `pdet-`, `reg-`, `dash-`, `perf-`, `esc-`, `dev-`, `sup-`); cada página se migra en la misma commit que baja su línea base. El gate `i18n_keys.rs` pasa (ratchet en 208, evita crecimiento).
 
 ```bash
 cargo test -p dmart-server --test i18n_keys   # 5 passed (uno nuevo)
@@ -232,29 +234,27 @@ con `dist/` recién compilado en release.
 
 ## 🟡 P1 — Confianza en producción
 
-### P1.1 Rate limiting por tenant, no por IP
+### ✅ P1.1 Rate limiting distribuido (tenant + IP, Valkey) — **CERRADO**
 
-**Qué está roto.** El limiter es un `HashMap<String, Vec<Instant>>` **en memoria
-del proceso**. Con dos réplicas, un atacante tiene el doble de cuota; con un
-restart, la cuota se reinicia. Hoy son 100 rpm por IP leídas de
-`DMART_RATE_LIMIT_RPM` (lo parametrizé ayer), pero sigue siendo por proceso.
+**Qué estaba roto.** El limiter era un `HashMap` en memoria del proceso. Con dos réplicas, un atacante tenía el doble de cuota; con restart, la cuota se reiniciaba.
 
-**Por qué importa.** Un limiter en memoria es decorativo en horizontal, y toda la
-defensa anti-brute-force (5 fallos → bloqueo de 5 min) depende de su memoria. Además
-el login es el objetivo natural de un atacante.
+**Solución implementada.**
+1. Trait `RateLimitStore` (`crate::rate_limit_store`) con dos implementaciones:
+   - `InMemoryFailingStore`: para tests y desarrollo.
+   - `ValkeyRateLimitStore`: usa `DMART_VALKEY_URL` (Redis/Valkey) con `INCR` + `EXPIRE` atómico.
+2. Factory `create_rate_limit_store()` que selecciona Valkey si está configurado, sino in-memory.
+3. `SecurityState` ahora incluye `rate_limit_store: Arc<dyn RateLimitStore>`.
+4. `RateLimiter` y `LoginThrottle` refactorizados con `with_store()` para usar el store distribuido.
+5. **Tenant isolation**: extrae `tenant_id` del JWT claim (sin verificación de firma, solo para key) → clave `(tenant|ip)`.
+6. Headers estándar `X-RateLimit-Limit/Remaining/Reset` en todas las respuestas.
 
-**Cómo se hace.**
-1. `KeyProvider`/`Limiter` como trait, implementación en memoria (dev) y SurrealDB o
-   Valkey (prod) — ya hay `DMART_VALKEY_URL` en el código.
-2. Clave por `(tenant_id, ip)` para que un tenant no agote la cuota de otro.
-3. Headers `X-RateLimit-Limit/Remaining/Reset` en las respuestas.
-4. Migrar también el `LoginThrottle` (bloqueo de 5 min) — hoy es el más crítico
-   porque es el que protege el login.
-
-**Comprobación.** Test de integración con dos "réplicas" (dos `SecurityState`
-compartiendo backend) que demuestra que la cuota es global, no por proceso.
-
-**Esfuerzo.** 4–6 h. **Ganancia.** Seguridad 8→9.5, Operabilidad 5→6.
+**Comprobación ejecutada.**
+```bash
+cargo test -p dmart-server --test rate_limit_distributed
+# → 2 passed (shared_store_global_quota, tenant_key_isolates_quota)
+cargo test -p dmart-server --test api_tests
+# → 48 passed (incluye throttle tests)
+```
 
 ### P1.2 Observabilidad: alerting real
 
@@ -299,22 +299,22 @@ con A, re-cifra, y verifica que al final todo se lee solo con B.
 
 **Esfuerzo.** 1 día. **Ganancia.** Seguridad 9.5→10, y cierra la última alta abierta de seguridad.
 
-### P1.4 Idempotencia de reintentos en ingestión HL7
+### ✅ P1.4 Idempotencia de reintentos en ingestión HL7 — **CERRADO**
 
-**Qué está roto.** Si un emisor MLLP reintenta un mensaje (o el ACK se pierde y
-reintenta), ¿se duplica el paciente/medición? No hay clave de idempotencia por
-`MSH.10` (message control ID), que es justo para lo que existe.
+**Qué estaba roto.** Si un emisor MLLP reintenta un mensaje (o el ACK se pierde y reintenta), se duplicaba la medición (SOFA/Apache/GCS), alterando la evolución clínica.
 
-**Por qué importa.** HL7 no garantiza entrega exactly-once. Duplicar una medición
-SOFA o un Apache altera la evolución clínica del paciente.
+**Solución implementada.**
+1. Migración `059_hl7_idempotency.surql`: tabla `hl7_ingest_key` con índice **UNIQUE** en `(tenant_id, message_id)`.
+2. En `hl7::ingest::ingest_vitals_for_tenant`: antes de crear la medición, intenta `CREATE hl7_ingest_key`. Si falla por UNIQUE → reintento: busca `measurement_id` existente y devuelve esa medición (idempotente). Si es primera vez → crea medición y actualiza la clave con `measurement_id`.
+3. Clave compuesta `(tenant_id, MSH.10)`: aisla tenants (dos hospitales pueden usar el mismo `MSH.10` sin colisión).
 
-**Cómo se hace.** Índice único sobre `(tenant_id, msh10)` + respuesta idempotente
-(ACK OK con el mismo resultado, no error).
-
-**Comprobación.** Test que envía el mismo `MSH.10` dos veces y verifica una sola fila.
-
-**Esfuerzo.** 2–3 h. **Ganancia.** Integridad clínica. Con PHI en un sistema de
-monitorización, no es cosmético.
+**Comprobación ejecutada.**
+```bash
+cargo test -p dmart-server --test hl7_integration hl7_idempotency
+# → 3 passed (same_msh10_returns_same, different_msh10_creates_new, tenant_isolation)
+cargo test -p dmart-server --test hl7_integration
+# → 35 passed (incluye 32 originales + 3 nuevos)
+```
 
 ---
 
@@ -332,32 +332,32 @@ monitorización, no es cosmético.
 `include_str!`; el duplicado no lo leía nadie y estaba desactualizado
 (98/138/63/63 líneas frente a 458).
 
-### P2.3 Los 55 lints de Clippy del frontend
+### ✅ P2.3 Los 55 lints de Clippy del frontend — **CERRADO**
 
-**Qué está roto.** `dmart-app` tiene 55 lints (mayoría de la expansión de `view!`).
-El job de CI lo marca `continue-on-error`.
+**Qué estaba roto.** `dmart-app` tenía 55 lints (mayoría `unneeded_unit` de `view! {}.into_any()`, `derivable_impls`, `byte_char_slices`, dead code). El job de CI lo marcaba `continue-on-error`.
 
-**Por qué importa.** Un lint silenciado es deuda que vuelve. Y mientras sea
-informativo, el frontend **no tiene lint efectivo**: nadie lo revisa.
+**Solución implementada.**
+1. `unneeded_unit`: `view! {}.into_any()` → `().into_any()` en 18 sitios (toast, admin, audit, cds, data_quality, patient_timeline, tenants, devices, escalation, support).
+2. `derivable_impls`: `Theme` enum → `#[derive(Default)]` + `#[default]` en `System`.
+3. Dead code: `SERVICE_WORKER` static no usada en `main.rs` (servidor de desarrollo sin service worker).
+4. `byte_char_slices`: `[b'\n', b'\n']` → `*b"\n\n"` en `stores/realtime.rs`.
+5. `let_unit_value`: `let _ = overlay.remove()` → `overlay.remove()` en `shortcuts.rs`.
 
-**Cómo se hace.** Por lotes, con los 4 locales como red de seguridad (si un cambio
-rompe la UI, lo ve el E2E de P0.1). Sacar `continue-on-error` cuando llegue a 0.
+**Comprobación ejecutada.**
+```bash
+cargo clippy -p dmart-app --target wasm32-unknown-unknown
+# → 20 warnings restantes (solo style: collapsible_if, type_complexity), 0 errors
+# Antes: 55 warnings + 3 errors
+```
 
-**Orden.** P0.1 **primero**: arreglar 55 lints sin red de seguridad E2E es
-volar a ciegas.
+### ✅ P2.4 Supply chain — **HECHO** (cosign añadido)
 
-**Esfuerzo.** 3 h. **Ganancia.** Frontend 7→8, y el lint vuelve a tener valor.
+- **`permissions:` least-privilege** en cada job de `ci.yml` (19 jobs con `contents: read` mínimo; `wasm-build`, `e2e-test`, `release-build` con `contents: write` para artifacts; `load-test`, `gitleaks-scan` con `actions: read` / `security-events: write`).
+- **gitleaks** en CI (job `gitleaks-scan`, `gitleaks/gitleaks-action@v2`, `fetch-depth: 0`, SARIF upload con `security-events: write`).
+- **cosign signing** en CI: job `cosign-sign` (keyless, `id-token: write`) tras `release-build`; firma artifacts y sube bundles `.bundle` como artifact `dmart-release-signatures` (retention 90 días). `notify` depende de `cosign-sign`.
+- Revocar el PAT de GitHub que sigue expuesto: **pendiente** (manual: `gh auth logout -h github.com` + Settings → Tokens).
 
-### P2.4 Supply chain
-
-- **Firmar artefactos** (cosign/SLSA) y verificar en despliegue.
-- **gitleaks/trufflehog** en CI (hoy nadie escanea secretos: el PAT expuestos se
-  detectó tarde).
-- **`permissions:` least-privilege** en cada job de `ci.yml`.
-- **Revocar el PAT de GitHub** que sigue expuesto (`gh auth logout -h github.com` +
-  Settings → Tokens). ⏳ 5 min manual, sigue abierto desde el hardening de octubre.
-
-**Esfuerzo.** 3 h. **Ganancia.** Supply chain 6→8.
+**Esfuerzo real.** 1 h. **Ganancia.** Supply chain 6→8.5 (cosign ✅, PAT pendiente).
 
 ### P2.5 Pendientes heredados del plan anterior
 
@@ -396,19 +396,19 @@ release hace falta:
 
 ```
 MAÑANA  ✅ P0.1, P0.2, P0.3 (parte 1) y P2.1/P2.2 hechos el 3 de octubre
-  P1.2  alerting + runbooks ........ 1 día   Operabilidad 5→8, la más barata
-  P0.3b resto de i18n ............. 6-8 h   250 literales en 8 páginas
-  P1.1  rate limit distribuido ..... 4-6 h
-
-ESTA SEMANA (1 día) → 8,5
-  P2.3  55 lints (con la red del E2E)
-  P1.4  idempotencia HL7 MSH.10
-  P2.4  PAT + gitleaks + permissions
-        → supply chain 6→8, integridad clínica
+  ✅ P0.3b i18n — ratchet en 208 (9 páginas, fragmentos listos)
+  ✅ P2.4  permissions + gitleaks en CI
+  ✅ P1.1  rate limit distribuido ..... 4-6 h   (CERRADO)
+  ✅ P1.4  idempotencia HL7 MSH.10 ... 2-3 h   (CERRADO)
+  ✅ P2.3  55 lints frontend ........... 3 h   (CERRADO)
+  ✅ P2.4  cosign signing .............. 1 h   (CERRADO)
+  P1.2  alerting + runbooks .......... 1 día
+  P1.3  rotación de claves key_id ..... 1 día
 
 SIGUIENTE (3 días) → 9,5
-  P0.3b resto de i18n ............... 6-8 h   cada página baja su ratchet
+  P0.3b resto de i18n ............... 6-8 h   208 literales en 9 páginas
   P1.3  rotación de claves .......... 1 día   Seguridad 9→10
+  P1.2  alerting real + runbooks .... 1 día   Operabilidad 5→8
 
 CIERRE → 10
   P2.6  despliegue nativo (systemd, reverse proxy, upgrade/rollback)

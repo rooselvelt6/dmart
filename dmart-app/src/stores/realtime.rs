@@ -151,7 +151,7 @@ async fn read_sse_stream(token: &str, event: &RwSignal<Option<MeasurementEvent>>
 
 /// Extrae y procesa los frames SSE completos (`data: ...\n\n`) del buffer.
 fn drain_frames(buffer: &mut Vec<u8>, event: &RwSignal<Option<MeasurementEvent>>) {
-    while let Some(pos) = buffer.windows(2).position(|w| w == [b'\n', b'\n']) {
+    while let Some(pos) = buffer.windows(2).position(|w| w == *b"\n\n") {
         let frame = String::from_utf8_lossy(&buffer[..pos]).into_owned();
         buffer.drain(..=pos + 1);
         handle_frame(&frame, event);

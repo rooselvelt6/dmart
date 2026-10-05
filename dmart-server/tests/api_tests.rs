@@ -501,9 +501,34 @@ async fn seed_user(
 }
 
 async fn build_app(db: &TestDb) -> axum::Router {
+    // Disable rate limiting for tests to avoid 429 during rapid test requests
+    unsafe {
+        std::env::set_var("DMART_DISABLE_RATE_LIMIT", "true");
+        std::env::set_var("DMART_DISABLE_LOGIN_THROTTLE", "true");
+        std::env::set_var("DMART_DISABLE_MFA_THROTTLE", "true");
+    }
+    
     let auth_service = dmart_server::auth::AuthService::new(db.clone());
     let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
-    let security_state = dmart_server::security::create_security_state();
+    let security_state = dmart_server::security::create_security_state().await;
+    let database = std::sync::Arc::new(db.clone());
+    dmart_server::api::build_api_router(database, auth_config, security_state).layer(
+        axum::extract::connect_info::MockConnectInfo("127.0.0.1:0".parse::<SocketAddr>().unwrap()),
+    )
+}
+
+/// build_app variant that enables login throttle (for throttle tests)
+async fn build_app_with_throttle(db: &TestDb) -> axum::Router {
+    // Disable only rate limiting, keep login throttle enabled
+    unsafe {
+        std::env::set_var("DMART_DISABLE_RATE_LIMIT", "true");
+        std::env::set_var("DMART_DISABLE_LOGIN_THROTTLE", "false");
+        std::env::set_var("DMART_DISABLE_MFA_THROTTLE", "true");
+    }
+    
+    let auth_service = dmart_server::auth::AuthService::new(db.clone());
+    let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
+    let security_state = dmart_server::security::create_security_state().await;
     let database = std::sync::Arc::new(db.clone());
     dmart_server::api::build_api_router(database, auth_config, security_state).layer(
         axum::extract::connect_info::MockConnectInfo("127.0.0.1:0".parse::<SocketAddr>().unwrap()),
@@ -579,7 +604,7 @@ fn metrics_handle() -> metrics_exporter_prometheus::PrometheusHandle {
 async fn build_obs_app(db: &TestDb) -> axum::Router {
     let auth_service = dmart_server::auth::AuthService::new(db.clone());
     let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
-    let security_state = dmart_server::security::create_security_state();
+    let security_state = dmart_server::security::create_security_state().await;
     let database = std::sync::Arc::new(db.clone());
     let api = dmart_server::api::build_api_router(database.clone(), auth_config, security_state);
     let obs = dmart_server::observability::observability_router(database, metrics_handle());
@@ -1335,7 +1360,7 @@ async fn test_e2e_login_throttle_locks_after_failures() {
         "Admin",
     )
     .await;
-    let http = build_app(&db).await;
+    let http = build_app_with_throttle(&db).await;
 
     for i in 1..=4 {
         let (status, _) = send(

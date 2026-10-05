@@ -10,6 +10,7 @@ use crate::hl7::parser::{VitalsMessage, vitals_into_apache};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use dmart_shared::models::{ApacheIIData, GcsData, Measurement, Patient};
+use surrealdb::sql::Thing;
 
 /// Resuelve un paciente a partir de la referencia del mensaje HL7.
 /// Si `msg.patient_ref_is_uuid` busca por `patient_id`; si no, por MRN/cédula.
@@ -73,6 +74,104 @@ pub async fn ingest_vitals_for_tenant(
         .await?
         .ok_or_else(|| anyhow!("paciente no encontrado para ref {}", msg.patient_ref))?;
 
+    // ─── P1.4: Idempotencia por MSH.10 (message_id) ───
+    // La clave es (tenant_id, message_id). Si ya existe, devolvemos la
+    // medición existente en lugar de crear una duplicada.
+    let tenant = &patient.tenant_id;
+    let msh10 = &msg.message_id;
+
+    // Intentar insertar la clave de idempotencia (única por tenant+message_id).
+    // Si falla por UNIQUE, la fila ya existe → reintento.
+    let key_record_id: Option<String> = {
+        let res = db
+            .query(
+                "CREATE hl7_ingest_key CONTENT { tenant_id: $tenant, message_id: $msh10, sender: $sender, source: $source } RETURN record::id(id) as id_str"
+            )
+            .bind(("tenant", tenant.to_string()))
+            .bind(("msh10", msh10.to_string()))
+            .bind(("sender", msg.sender.clone()))
+            .bind(("source", msg.source.label().to_string()))
+            .await;
+
+        match res {
+            Ok(mut res) => {
+                // Verificar si hay errores en la respuesta (ej. UNIQUE violation)
+                if let Some((_, err)) = res.take_errors().into_iter().next() {
+                    let err_str = err.to_string();
+                    if err_str.contains("UNIQUE") || err_str.contains("already contains") {
+                        None // Clave ya existe → reintento
+                    } else {
+                        return Err(anyhow!("error creando clave idempotencia: {}", err_str));
+                    }
+                } else {
+                    // Primera vez: la fila se creó. Extraer el ID.
+                    let created_key: Option<serde_json::Value> = res.take(0)?;
+                    created_key
+                        .and_then(|v| v.get("id_str").cloned())
+                        .and_then(|v| v.as_str().map(|s| s.to_string()))
+                }
+            }
+            Err(e) => {
+                // Error de conexión/consulta - si es UNIQUE, tratar como reintento
+                let err_str = e.to_string();
+                if err_str.contains("UNIQUE") || err_str.contains("already contains") {
+                    None
+                } else {
+                    return Err(anyhow!("error creando clave idempotencia: {}", err_str));
+                }
+            }
+        }
+    };
+
+    if let Some(key_record_id) = key_record_id {
+        // Primera pasada: crear medición y actualizar clave
+        let measurement = do_ingest_vitals(db, &patient, msg).await?;
+
+        // Actualizar la clave con el measurement_id
+        let _ = db
+            .query("UPDATE $id SET measurement_id = $mid")
+            .bind(("id", Thing::from(("hl7_ingest_key", key_record_id.as_str()))))
+            .bind(("mid", measurement.measurement_id.clone()))
+            .await;
+
+        Ok(measurement)
+    } else {
+        // Clave ya existe (UNIQUE violation) → reintento.
+        // Buscar la fila existente y devolver la measurement_id asociada.
+        let existing: Vec<serde_json::Value> = db
+            .query(
+                "SELECT measurement_id FROM hl7_ingest_key WHERE tenant_id = $tenant AND message_id = $msh10 LIMIT 1"
+            )
+            .bind(("tenant", tenant.to_string()))
+            .bind(("msh10", msh10.to_string()))
+            .await?
+            .take(0)?;
+
+        if let Some(row) = existing.first()
+            && let Some(mid) = row.get("measurement_id").and_then(|v| v.as_str())
+            && !mid.is_empty()
+        {
+            // La medición ya fue creada en la primera pasada → devolverla.
+            return db_ops::get_measurement(db, mid)
+                .await?
+                .ok_or_else(|| anyhow!("medición referenciada no encontrada: {}", mid));
+        }
+
+        // Edge case: la clave existe pero measurement_id aún no se escribió
+        // (proceso murió entre insert y update). Devolvemos la última
+        // medición del paciente como fallback seguro.
+        let last = db_ops::get_last_measurement(db, &patient.patient_id).await?;
+        last.ok_or_else(|| anyhow!("reintento sin measurement_id y sin historial previo"))
+    }
+}
+
+/// Lógica interna de ingesta (extraída para no duplicar código entre primera
+/// pasada y reintento que cae al fallback).
+async fn do_ingest_vitals(
+    db: &Database,
+    patient: &Patient,
+    msg: &VitalsMessage,
+) -> Result<Measurement> {
     // Base: la última medición del paciente (para conservar labs/GCS), o neutra.
     let last = db_ops::get_last_measurement(db, &patient.patient_id).await?;
 
