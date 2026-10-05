@@ -454,6 +454,171 @@ const ALLOWED_RAW_BY_PAGE: &[(&str, &str, &str)] = &[
     ),
     ("admin.rs", "/admin/institucion", "ruta del endpoint"),
     (
+        "admin.rs",
+        "Monitor",
+        "valor de TipoEquipo en parse_tipo_equipo",
+    ),
+    (
+        "admin.rs",
+        "Computador",
+        "valor de TipoEquipo en parse_tipo_equipo",
+    ),
+    (
+        "admin.rs",
+        "BombaInfusion",
+        "valor de TipoEquipo en parse_tipo_equipo",
+    ),
+    (
+        "admin.rs",
+        "Bomba de Infusión",
+        "valor de TipoEquipo en parse_tipo_equipo",
+    ),
+    (
+        "admin.rs",
+        "Ventilador Mecánico",
+        "valor de TipoEquipo en parse_tipo_equipo",
+    ),
+    (
+        "admin.rs",
+        "Mantenimiento",
+        "valor de EstadoEquipo en parse_estado_equipo",
+    ),
+    (
+        "admin.rs",
+        "En Mantenimiento",
+        "valor de EstadoEquipo en parse_estado_equipo",
+    ),
+    (
+        "admin.rs",
+        "En Reparación",
+        "valor de EstadoEquipo en parse_estado_equipo",
+    ),
+    ("admin.rs", "General", "valor por defecto de form_tipo cama"),
+    ("admin.rs", "Libre", "valor por defecto de form_estado cama"),
+    (
+        "admin.rs",
+        "VentiladorMecanico",
+        "valor por defecto de form_tipo equipo",
+    ),
+    (
+        "admin.rs",
+        "Activo",
+        "valor por defecto de form_estado equipo",
+    ),
+    ("admin.rs", "Medico", "valor por defecto de form_rol staff"),
+    (
+        "admin.rs",
+        "Aislamiento",
+        "valor de TipoCama en option value",
+    ),
+    (
+        "admin.rs",
+        "Pediatrica",
+        "valor de TipoCama en option value",
+    ),
+    ("admin.rs", "Coronaria", "valor de TipoCama en option value"),
+    ("admin.rs", "Quemados", "valor de TipoCama en option value"),
+    ("admin.rs", "Ocupada", "valor de EstadoCama en option value"),
+    (
+        "admin.rs",
+        "Limpieza",
+        "valor de EstadoCama en option value",
+    ),
+    ("admin.rs", "Monitor", "valor de TipoEquipo en option value"),
+    (
+        "admin.rs",
+        "Computador",
+        "valor de TipoEquipo en option value",
+    ),
+    (
+        "admin.rs",
+        "BombaInfusion",
+        "valor de TipoEquipo en option value",
+    ),
+    (
+        "admin.rs",
+        "Mantenimiento",
+        "valor de EstadoEquipo en option value",
+    ),
+    (
+        "admin.rs",
+        "Inactivo",
+        "valor de EstadoEquipo en option value",
+    ),
+    (
+        "admin.rs",
+        "Reparacion",
+        "valor de EstadoEquipo en option value",
+    ),
+    ("admin.rs", "Admin", "valor de RolPersonal en option value"),
+    (
+        "admin.rs",
+        "Enfermero",
+        "valor de RolPersonal en option value",
+    ),
+    ("admin.rs", "Viewer", "valor de RolPersonal en option value"),
+    (
+        "admin.rs",
+        "Soporte",
+        "valor de RolPersonal en option value",
+    ),
+    ("admin.rs", "Cama", "formato de número de cama"),
+    ("admin.rs", "Nombre completo", "placeholder de input"),
+    (
+        "admin.rs",
+        "institucion",
+        "clave de tab interna en set_active_tab",
+    ),
+    ("admin.rs", "/admin/institucion", "ruta de endpoint API"),
+    (
+        "admin.rs",
+        "Activo",
+        "valor de EstadoEquipo/EstadoCama detectado por sufijo -ivo",
+    ),
+    (
+        "admin.rs",
+        "Inactivo",
+        "valor de EstadoEquipo detectado por sufijo -ivo",
+    ),
+    (
+        "admin.rs",
+        "Reparacion",
+        "valor de EstadoEquipo detectado por sufijo -ción",
+    ),
+    (
+        "admin.rs",
+        "Medico",
+        "valor de RolPersonal detectado por sufijo -ico",
+    ),
+    (
+        "admin.rs",
+        "Pediatrica",
+        "valor de TipoCama detectado por sufijo -ica",
+    ),
+    (
+        "admin.rs",
+        "auditoria",
+        "clave de tab interna en set_active_tab",
+    ),
+    ("admin.rs", "camas", "clave de tab interna"),
+    ("admin.rs", "equipos", "clave de tab interna"),
+    ("admin.rs", "staff", "clave de tab interna"),
+    (
+        "admin.rs",
+        "Ventilador Mecánico",
+        "valor de TipoEquipo en parse_tipo_equipo",
+    ),
+    (
+        "admin.rs",
+        "adm-audit-filter-todas",
+        "clave de traducción en AUDIT_ACTIONS",
+    ),
+    (
+        "admin.rs",
+        "Ventilador MecÃ¡nico",
+        "valor de TipoEquipo con codificación UTF-8 en parse_tipo_equipo",
+    ),
+    (
         "patient_edit.rs",
         "Electiva",
         "valor de TipoAdmision que viaja a la API",
@@ -561,8 +726,9 @@ fn spanish_screen_text(
                 // No es texto de pantalla: el primer argumento de `tr()`
                 // (`tr("dq-total", None)`) y los nombres de placeholder de los
                 // `.ftl` (`args.insert("error", ...)`).
-                let es_clave =
-                    line[..i].trim_end().ends_with("tr(") || placeholders_conocidos.contains(lit);
+                let es_clave = line[..i].trim_end().ends_with("tr(")
+                    || line[..i].trim_end().ends_with("trs(")
+                    || placeholders_conocidos.contains(lit);
                 let visible = !es_clave
                     && !lit.is_empty()
                     && !lit.contains('{')

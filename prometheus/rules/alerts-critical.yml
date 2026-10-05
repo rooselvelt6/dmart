@@ -66,3 +66,28 @@ groups:
           summary: "RSS above 4 GiB"
           description: "Process resident memory is above 4 GiB for 10 minutes."
           runbook_url: "https://wiki.dmart.io/runbooks/memory-high"
+
+      # ─── PHI / Auditoría ───────────────────────────────────────
+      - alert: PhiAccessWithoutAudit
+        expr: |
+          increase(audit_events_total{action=~"data_access|data_modification",result="failure"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: dmart
+        annotations:
+          summary: "PHI access without audit trail"
+          description: "Detected data access/modification without corresponding audit log entry."
+          runbook_url: "https://wiki.dmart.io/runbooks/phi-access-no-audit"
+
+      - alert: WormChainFailure
+        expr: |
+          audit_chain_integrity_ok == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: dmart
+        annotations:
+          summary: "WORM audit chain integrity compromised"
+          description: "The audit chain verification failed - hash chain broken or tampered."
+          runbook_url: "https://wiki.dmart.io/runbooks/worm-chain-failure"

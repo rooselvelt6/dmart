@@ -1584,7 +1584,7 @@ mod db_tests {
         assert!(!phi.is_empty());
         // El magic viaja dentro del base64, así que se comprueba sobre el blob.
         let blob = crate::crypto::base64_decode(phi).expect("base64 válido");
-        assert_eq!(&blob[..AES256_MAGIC.len()], AES256_MAGIC);
+        assert_eq!(&blob[..crate::crypto::AES256_KID_MAGIC.len()], crate::crypto::AES256_KID_MAGIC);
     }
 
     /// La búsqueda por MRN debe funcionar con el valor cifrado, ignorando

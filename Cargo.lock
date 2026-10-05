@@ -2140,6 +2140,7 @@ dependencies = [
  "dmart-shared",
  "dotenvy",
  "futures-util",
+ "hex",
  "hmac",
  "http-body-util",
  "image",

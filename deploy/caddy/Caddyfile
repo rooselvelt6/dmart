@@ -1,0 +1,148 @@
+# dMart UCI - Caddy Reverse Proxy Configuration
+# Install: cp Caddyfile /etc/caddy/Caddyfile
+# Reload: systemctl reload caddy
+
+# Global options
+{
+    # Admin endpoint (local only)
+    admin localhost:2019
+    
+    # Email for Let's Encrypt
+    email admin@dmart.local
+    
+    # ACME CA (staging for testing, production for live)
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# HTTPS - Production (auto TLS via Let's Encrypt)
+dmart.example.com {
+    # TLS configuration
+    tls {
+        # OCSP stapling
+        ocsp_stapling
+        
+        # Minimum TLS version
+        min_version tls1.2
+        
+        # Cipher suites (modern, secure)
+        ciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+    }
+    
+    # Security headers
+    header {
+        # HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        
+        # CSP
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        
+        # Other security headers
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        
+        # Remove server header
+        -Server
+    }
+    
+    # Rate limiting
+    rate_limit {
+        zone api 10r/s
+        key {remote_host}
+    }
+    
+    # Compression
+    encode zstd gzip
+    
+    # Static files (WASM, assets)
+    @staticFiles {
+        path /static/*
+        path /assets/*
+        path /wasm/*
+        path /favicon.ico
+        path /manifest.json
+    }
+    handle @staticFiles {
+        root * /opt/dmart/static
+        file_server {
+            browse off
+            precompressed zstd gzip
+        }
+        # Long-term caching for static assets
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+    
+    # Health checks (no rate limit, no auth)
+    @health {
+        path /obs/health
+        path /obs/live
+        path /obs/ready
+    }
+    handle @health {
+        reverse_proxy http://127.0.0.1:8080
+    }
+    
+    # Metrics (internal only)
+    @metrics {
+        path /obs/metrics
+    }
+    handle @metrics {
+        # Restrict to internal networks
+        @internal {
+            remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.1/32
+        }
+        handle @internal {
+            reverse_proxy http://127.0.0.1:8080
+        }
+        handle {
+            respond "Forbidden" 403
+        }
+    }
+    
+    # API and application
+    handle {
+        reverse_proxy http://127.0.0.1:8080 {
+            # Timeouts
+            transport http {
+                read_timeout 30s
+                write_timeout 30s
+                idle_timeout 60s
+            }
+            
+            # Health checks
+            health_uri /obs/live
+            health_interval 10s
+            health_timeout 3s
+            
+            # Load balancing (if multiple backends)
+            # lb_policy round_robin
+        }
+    }
+    
+    # Logging
+    log {
+        output file /var/log/caddy/dmart-access.log {
+            roll_size 100mb
+            roll_keep 10
+            roll_keep_for 7d
+        }
+        format json
+    }
+    
+    # Error pages
+    handle_errors {
+        respond "{http.error.status_code} {http.error.status_text}" {http.error.status_code}
+    }
+}
+
+# HTTP - Redirect to HTTPS
+http://dmart.example.com {
+    redir https://dmart.example.com{uri} permanent
+}
+
+# Internal metrics (for Prometheus scraping)
+localhost:9091 {
+    respond /metrics 200
+}

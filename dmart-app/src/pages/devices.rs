@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::api;
 use crate::api::{ClinicalDevice, RegisterDeviceRequest};
 use crate::components::ui_kit::{ErrorState, LoadingState};
+use crate::i18n::trs;
 use crate::stores::user_has;
 
 fn fmt_ts(ms: i64) -> String {
@@ -109,10 +110,10 @@ pub fn DevicesPage() -> impl IntoView {
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-microchip mr-2"></i>"Dispositivos y Monitores"
+                        <i class="fa-solid fa-microchip mr-2"></i>{trs("dev-title")}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Inventario, estado y heartbeat de los dispositivos clínicos"
+                        {trs("dev-subtitle")}
                     </p>
                 </div>
                 <div class="flex gap-2">
@@ -121,7 +122,7 @@ pub fn DevicesPage() -> impl IntoView {
                             class="btn-primary px-4 h-10 text-sm"
                             on:click=move |_| show_form.update(|v| *v = !*v)
                         >
-                            <i class="fa-solid fa-plus mr-2"></i>"Registrar"
+                            <i class="fa-solid fa-plus mr-2"></i>{trs("dev-btn-register")}
                         </button>
                     </Show>
                     <button
@@ -129,7 +130,7 @@ pub fn DevicesPage() -> impl IntoView {
                         style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                         on:click=move |_| refresh.update(|n| *n += 1)
                     >
-                        <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                        <i class="fa-solid fa-rotate mr-2"></i>{trs("dev-btn-refresh")}
                     </button>
                 </div>
             </div>
@@ -149,12 +150,12 @@ pub fn DevicesPage() -> impl IntoView {
                 }
             })}
 
-            <Suspense fallback=move || view! { <LoadingState label="Consultando dispositivos..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label={trs("dev-summary-loading")} /> }>
                 {move || match status.get() {
                     Some(Ok(s)) => view! { <SummaryCards summary=s /> }.into_any(),
                     Some(Err(e)) => view! {
                         <ErrorState
-                            message=format!("No se pudo cargar el resumen: {}", e)
+                            message=format!("{}: {}", trs("dev-summary-error"), e)
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
@@ -165,26 +166,26 @@ pub fn DevicesPage() -> impl IntoView {
             <Show when=move || show_form.get()>
                 <div class="glass-card p-5 my-5">
                     <h3 class="text-sm font-bold uppercase mb-4" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-plus mr-2"></i>"Nuevo dispositivo"
+                        <i class="fa-solid fa-plus mr-2"></i>{trs("dev-form-title")}
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <Field label="Tipo" sig=device_type placeholder="Monitor multiparamétrico" />
-                        <Field label="Fabricante" sig=fabricante placeholder="Philips" />
-                        <Field label="Modelo" sig=modelo placeholder="IntelliVue MX450" />
-                        <Field label="Firmware (opcional)" sig=firmware placeholder="1.2.3" />
-                        <Field label="Serial" sig=serial placeholder="SN-0001" />
-                        <Field label="Ubicación (opcional)" sig=ubicacion placeholder="UCI-Cama 3" />
+                        <Field label={trs("dev-field-type-label")} sig=device_type placeholder={trs("dev-field-type-placeholder")} />
+                        <Field label={trs("dev-field-manufacturer-label")} sig=fabricante placeholder={trs("dev-field-manufacturer-placeholder")} />
+                        <Field label={trs("dev-field-model-label")} sig=modelo placeholder={trs("dev-field-model-placeholder")} />
+                        <Field label={trs("dev-field-firmware-label")} sig=firmware placeholder={trs("dev-field-firmware-placeholder")} />
+                        <Field label={trs("dev-field-serial-label")} sig=serial placeholder={trs("dev-field-serial-placeholder")} />
+                        <Field label={trs("dev-field-location-label")} sig=ubicacion placeholder={trs("dev-field-location-placeholder")} />
                         <div>
-                            <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">"Estado"</label>
+                            <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">{trs("dev-field-status-label")}</label>
                             <select
                                 class="w-full px-3 h-9 text-sm rounded-lg"
                                 style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
                                 prop:value=move || estado.get()
                                 on:change=move |ev| estado.set(event_target_value(&ev))
                             >
-                                <option value="online">"En línea"</option>
-                                <option value="offline">"Fuera de línea"</option>
-                                <option value="mantenimiento">"Mantenimiento"</option>
+                                <option value="online">{trs("dev-status-online")}</option>
+                                <option value="offline">{trs("dev-status-offline")}</option>
+                                <option value="mantenimiento">{trs("dev-status-maintenance")}</option>
                             </select>
                         </div>
                     </div>
@@ -195,36 +196,36 @@ pub fn DevicesPage() -> impl IntoView {
                             on:click=move |_| show_form.set(false)
                             disabled=move || saving.get()
                         >
-                            "Cancelar"
+                            {trs("dev-btn-cancel")}
                         </button>
                         <button class="btn-primary px-4 h-10 text-sm" on:click=submit disabled=move || saving.get()>
-                            {move || if saving.get() { "Guardando..." } else { "Registrar" }}
+                            {move || if saving.get() { trs("dev-btn-saving") } else { trs("dev-btn-submit") }}
                         </button>
                     </div>
                 </div>
             </Show>
 
             <div class="flex items-center gap-3 my-5">
-                <label class="text-sm" style="color:var(--uci-muted);">"Filtrar por estado:"</label>
+                <label class="text-sm" style="color:var(--uci-muted);">{trs("dev-filter-label")}</label>
                 <select
                     class="px-3 h-9 text-sm rounded-lg"
                     style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                     prop:value=move || filter.get()
                     on:change=move |ev| filter.set(event_target_value(&ev))
                 >
-                    <option value="">"Todos"</option>
-                    <option value="online">"En línea"</option>
-                    <option value="offline">"Fuera de línea"</option>
-                    <option value="mantenimiento">"Mantenimiento"</option>
+                    <option value="">{trs("dev-filter-all")}</option>
+                    <option value="online">{trs("dev-filter-online")}</option>
+                    <option value="offline">{trs("dev-filter-offline")}</option>
+                    <option value="mantenimiento">{trs("dev-filter-maintenance")}</option>
                 </select>
             </div>
 
-            <Suspense fallback=move || view! { <LoadingState label="Cargando dispositivos..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label={trs("dev-table-loading")} /> }>
                 {move || match devices.get() {
                     Some(Ok(list)) => view! { <DevicesTable devices=list can_write=can_write refresh=refresh /> }.into_any(),
                     Some(Err(e)) => view! {
                         <ErrorState
-                            message=format!("No se pudo cargar la lista: {}", e)
+                            message=format!("{}: {}", trs("dev-table-error"), e)
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
@@ -237,9 +238,9 @@ pub fn DevicesPage() -> impl IntoView {
 
 #[component]
 fn Field(
-    label: &'static str,
+    label: String,
     #[prop(into)] sig: RwSignal<String>,
-    placeholder: &'static str,
+    placeholder: String,
 ) -> impl IntoView {
     view! {
         <div>
@@ -290,7 +291,7 @@ fn SummaryCards(summary: api::DeviceStatusSummary) -> impl IntoView {
     view! {
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="glass-card p-4">
-                <div class="text-xs uppercase font-semibold" style="color:var(--uci-muted);">"Total"</div>
+                <div class="text-xs uppercase font-semibold" style="color:var(--uci-muted);">{trs("dev-summary-total")}</div>
                 <div class="text-2xl font-bold mt-1" style="color:var(--uci-text);">{summary.total}</div>
             </div>
             {estado_cards}
@@ -305,11 +306,11 @@ fn DevicesTable(
     can_write: bool,
     refresh: RwSignal<u32>,
 ) -> impl IntoView {
-    if devices.is_empty() {
+if devices.is_empty() {
         return view! {
             <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                 <i class="fa-solid fa-microchip text-2xl mb-2"></i>
-                <p>"Sin dispositivos registrados"</p>
+                <p>{trs("dev-table-empty")}</p>
             </div>
         }.into_any();
     }
@@ -347,7 +348,7 @@ fn DevicesTable(
                                     });
                                 }
                             >
-                                <i class="fa-solid fa-heart-pulse mr-1"></i>"Heartbeat"
+                                <i class="fa-solid fa-heart-pulse mr-1"></i>{trs("dev-btn-heartbeat")}
                             </button>
                         </td>
                     </Show>
@@ -361,12 +362,12 @@ fn DevicesTable(
             <table class="w-full">
                 <thead style="background:var(--uci-bg);">
                     <tr>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Dispositivo"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Serial"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Estado"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Ubicación"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Últ. señal"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Registrado"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dev-col-device")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dev-col-serial")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dev-col-status")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dev-col-location")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dev-col-last-seen")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dev-col-registered")}</th>
                         <Show when=move || can_write>
                             <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">""</th>
                         </Show>

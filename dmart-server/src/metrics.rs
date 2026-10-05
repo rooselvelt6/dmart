@@ -211,6 +211,11 @@ pub fn register() {
         Unit::Count,
         "Cache connection status (1=connected, 0=disconnected)"
     );
+    describe_gauge!(
+        "cache_reconnect_attempts",
+        Unit::Count,
+        "Number of cache reconnection attempts since last successful connection"
+    );
     describe_gauge!("uptime_seconds", Unit::Seconds, "Server uptime in seconds");
     describe_gauge!(
         "process_cpu_seconds_total",
@@ -221,6 +226,16 @@ pub fn register() {
         "process_resident_memory_bytes",
         Unit::Bytes,
         "Resident memory (RSS) of this process"
+    );
+    describe_counter!(
+        "audit_events_total",
+        Unit::Count,
+        "Audit events by action and result"
+    );
+    describe_gauge!(
+        "audit_chain_integrity_ok",
+        Unit::Count,
+        "Audit chain integrity status (1=ok, 0=compromised)"
     );
 
     crate::slo::describe_metrics();
@@ -402,6 +417,31 @@ pub fn support_system_status(system: &str, status: u8) {
     gauge!("support_systems_status", "system" => system.to_string()).set(status as f64);
 }
 
+/// Incrementa el contador de eventos de auditoría.
+pub fn audit_event(action: &str, result: &str) {
+    counter!(
+        "audit_events_total",
+        "action" => action.to_string(),
+        "result" => result.to_string()
+    )
+    .increment(1);
+}
+
+/// Establece el estado de integridad de la cadena WORM (1=ok, 0=comprometida).
+pub fn audit_chain_integrity(ok: bool) {
+    gauge!("audit_chain_integrity_ok").set(if ok { 1.0 } else { 0.0 });
+}
+
+/// Incrementa el contador de intentos de reconexión de cache.
+pub fn cache_reconnect_attempt() {
+    counter!("cache_reconnect_attempts_total").increment(1);
+}
+
+/// Establece el contador de intentos de reconexión de cache (para resetear tras éxito).
+pub fn cache_reconnect_attempts_set(n: u64) {
+    gauge!("cache_reconnect_attempts").set(n as f64);
+}
+
 // ─── Sistema (Linux) ─────────────────────────────────────────────────────
 
 /// Devuelve (cpu_user+sys en segundos, rss en bytes) leyendo /proc/self.
@@ -556,6 +596,11 @@ pub fn touch_zero_counters(extended: bool) {
         gauge!("ingest_fault_devices").set(0.0);
         counter!("ingest_throttled_total").increment(0);
         gauge!("ingest_error_avg").set(0.0);
+        // Nuevas métricas de auditoría y cache
+        counter!("audit_events_total", "action" => "data_access", "result" => "success").increment(0);
+        counter!("audit_events_total", "action" => "data_modification", "result" => "failure").increment(0);
+        gauge!("audit_chain_integrity_ok").set(1.0);
+        gauge!("cache_reconnect_attempts").set(0.0);
     }
 }
 

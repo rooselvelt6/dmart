@@ -1,4 +1,5 @@
 use crate::api;
+use crate::i18n::trs;
 use crate::stores::current_user;
 use leptos::prelude::*;
 use leptos_router::hooks::*;
@@ -337,10 +338,10 @@ pub fn PerfilPage() -> impl IntoView {
         <div class="max-w-2xl mx-auto">
             <div class="mb-6">
                 <h1 class="text-2xl font-bold mb-1" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-user-gear mr-2" style="color:var(--uci-accent);"></i>"Mi Perfil"
+                    <i class="fa-solid fa-user-gear mr-2" style="color:var(--uci-accent);"></i>{trs("perf-title")}
                 </h1>
                 <p class="text-sm" style="color:var(--uci-muted);">
-                    "Sesión, identidad y cambio de contraseña."
+                    {trs("perf-subtitle")}
                 </p>
             </div>
 
@@ -365,7 +366,7 @@ pub fn PerfilPage() -> impl IntoView {
 
             <div class="rounded-xl p-5" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                 <h2 class="text-base font-bold mb-4" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-key mr-2" style="color:var(--uci-accent);"></i>"Cambiar contraseña"
+                    <i class="fa-solid fa-key mr-2" style="color:var(--uci-accent);"></i>{trs("perf-change-password-title")}
                 </h2>
 
                 {move || error_msg.get().map(|e| view! {
@@ -384,43 +385,43 @@ pub fn PerfilPage() -> impl IntoView {
 
                 <form on:submit=on_submit class="space-y-4">
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Contraseña actual"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("perf-current-password-label")}</label>
                         <input class="form-input" type="password" autocomplete="current-password"
-                            placeholder="••••••••" required
+                            placeholder={trs("perf-current-password-placeholder")} required
                             prop:value=move || current.get()
                             on:input=move |ev| set_current.set(event_target_value(&ev)) />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Nueva contraseña"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("perf-new-password-label")}</label>
                         <input class="form-input" type="password" autocomplete="new-password"
-                            placeholder="Mínimo 8 caracteres" required
+                            placeholder={trs("perf-new-password-placeholder")} required
                             prop:value=move || new_pass.get()
                             on:input=move |ev| set_new_pass.set(event_target_value(&ev)) />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Confirmar nueva contraseña"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("perf-confirm-password-label")}</label>
                         <input class="form-input" type="password" autocomplete="new-password"
-                            placeholder="Repite la nueva contraseña" required
+                            placeholder={trs("perf-confirm-password-placeholder")} required
                             prop:value=move || confirm.get()
                             on:input=move |ev| set_confirm.set(event_target_value(&ev)) />
                     </div>
 
                     <button type="submit" class="btn-primary w-full py-3 text-sm font-bold" disabled=saving>
-                        {move || if saving.get() { "Guardando..." } else { "Cambiar contraseña" }}
+                        {move || if saving.get() { trs("perf-btn-saving") } else { trs("perf-btn-change") }}
                     </button>
                 </form>
 
                 <p class="mt-4 text-xs" style="color:var(--uci-muted);">
-                    "Al cambiar la contraseña todas tus sesiones se cierran y deberás iniciar sesión de nuevo."
+                    {trs("perf-password-change-note")}
                 </p>
             </div>
 
             <div class="rounded-xl p-5 mt-6" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                 <h2 class="text-base font-bold mb-1" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-shield-halved mr-2" style="color:var(--uci-accent);"></i>"Verificación en dos pasos"
+                    <i class="fa-solid fa-shield-halved mr-2" style="color:var(--uci-accent);"></i>{trs("perf-mfa-title")}
                 </h2>
                 <p class="text-xs mb-4" style="color:var(--uci-muted);">
-                    "Protege tu cuenta con un código temporal (TOTP) generado por una aplicación autenticadora."
+                    {trs("perf-mfa-description")}
                 </p>
 
                 {move || mfa_error.get().map(|e| view! {
@@ -444,12 +445,12 @@ pub fn PerfilPage() -> impl IntoView {
                         disabled=mfa_busy
                         on:click=on_start_setup
                     >
-                        {move || if mfa_busy.get() { "Generando..." } else { "Activar verificación en dos pasos" }}
+                        {move || if mfa_busy.get() { trs("perf-btn-generating") } else { trs("perf-btn-enable-mfa") }}
                     </button>
 
                     <div class=move || if mfa_setup.get().is_some() { "space-y-4" } else { "hidden" }>
                         <div class="text-xs font-bold" style="color:var(--uci-muted);">
-                            "1. Agrega esta cuenta en tu autenticadora (Google Authenticator, Authy, FreeOTP)."
+                            {trs("perf-mfa-step1")}
                         </div>
                         <div class="p-3 rounded-lg font-mono text-sm break-all"
                             style="background:var(--uci-bg); border:1px solid var(--uci-border); color:var(--uci-text);">
@@ -459,7 +460,7 @@ pub fn PerfilPage() -> impl IntoView {
                             {move || mfa_setup.get().map(|i| i.otpauth_uri).unwrap_or_default()}
                         </p>
                         <div class="text-xs font-bold" style="color:var(--uci-muted);">
-                            "Códigos de respaldo (guárdalos en un lugar seguro; se muestran una sola vez):"
+                            {trs("perf-backup-codes-label")}
                         </div>
                         <div class="grid grid-cols-2 gap-1 font-mono text-xs" style="color:var(--uci-text);">
                             {move || mfa_setup.get().map(|i| i.backup_codes).unwrap_or_default()
@@ -468,7 +469,7 @@ pub fn PerfilPage() -> impl IntoView {
                                 .collect_view()}
                         </div>
                         <div class="text-xs font-bold" style="color:var(--uci-muted);">
-                            "2. Ingresa el código de 6 dígitos para confirmar:"
+                            {trs("perf-mfa-step2")}
                         </div>
                         <input
                             class="form-input text-center tracking-[0.4em] font-mono"
@@ -481,7 +482,7 @@ pub fn PerfilPage() -> impl IntoView {
                         />
                         <button type="button" class="btn-primary w-full py-3 text-sm font-bold"
                             disabled=mfa_busy on:click=on_confirm_mfa>
-                            {move || if mfa_busy.get() { "Verificando..." } else { "Confirmar y activar" }}
+                            {move || if mfa_busy.get() { trs("perf-btn-verifying") } else { trs("perf-btn-confirm-enable") }}
                         </button>
                     </div>
                 </div>
@@ -490,10 +491,10 @@ pub fn PerfilPage() -> impl IntoView {
                 <div class=move || if mfa_enabled.get() == Some(true) { "space-y-4" } else { "hidden" }>
                     <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold"
                         style="background:rgba(16,185,129,0.12); color:#059669;">
-                        <i class="fa-solid fa-lock"></i>"Activado"
+                        <i class="fa-solid fa-lock"></i>{trs("perf-mfa-enabled-badge")}
                     </span>
                     <p class="text-xs" style="color:var(--uci-muted);">
-                        "Para desactivarlo, ingresa un código válido de tu autenticadora."
+                        {trs("perf-mfa-disable-hint")}
                     </p>
                     <input
                         class="form-input text-center tracking-[0.4em] font-mono"
@@ -508,16 +509,16 @@ pub fn PerfilPage() -> impl IntoView {
                         class="w-full py-3 text-sm font-bold rounded-lg"
                         style="background:rgba(239,68,68,0.12); color:#DC2626; border:1px solid rgba(239,68,68,0.3);"
                         disabled=mfa_busy on:click=on_disable_mfa>
-                        {move || if mfa_busy.get() { "Desactivando..." } else { "Desactivar verificación en dos pasos" }}
+                        {move || if mfa_busy.get() { trs("perf-btn-disabling") } else { trs("perf-btn-disable-mfa") }}
                     </button>
                 </div>
             </div>
         <div class="rounded-xl p-5 mt-6" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                 <h2 class="text-base font-bold mb-1" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-bell mr-2" style="color:var(--uci-accent);"></i>"Notificaciones del navegador"
+                    <i class="fa-solid fa-bell mr-2" style="color:var(--uci-accent);"></i>{trs("perf-push-title")}
                 </h2>
                 <p class="text-xs mb-4" style="color:var(--uci-muted);">
-                    "Recibe alertas de escalamiento clínico aunque no tengas la app abierta. Las notificaciones no incluyen datos del paciente (solo tipo y nivel)."
+                    {trs("perf-push-description")}
                 </p>
 
                 {move || push_msg.get().map(|(kind, text)| view! {
@@ -538,21 +539,21 @@ pub fn PerfilPage() -> impl IntoView {
                         class=move || if push_enabled.get() { "hidden" } else { "btn-primary flex-1 py-3 text-sm font-bold" }
                         disabled=push_busy
                         on:click=on_enable_push>
-                        {move || if push_busy.get() { "Configurando..." } else { "Activar notificaciones" }}
+                        {move || if push_busy.get() { trs("perf-btn-configuring") } else { trs("perf-btn-enable-push") }}
                     </button>
                     <button type="button"
                         class=move || if push_enabled.get() { "flex-1 py-3 text-sm font-bold rounded-lg" } else { "hidden" }
                         style="background:rgba(239,68,68,0.12); color:#DC2626; border:1px solid rgba(239,68,68,0.3);"
                         disabled=push_busy
                         on:click=on_disable_push>
-                        {move || if push_busy.get() { "Desactivando..." } else { "Desactivar notificaciones" }}
+                        {move || if push_busy.get() { trs("perf-btn-disabling-push") } else { trs("perf-btn-disable-push") }}
                     </button>
                 </div>
                 <p class="mt-3 text-xs" style="color:var(--uci-muted);">
                     {move || if push_enabled.get() {
-                        "Estado: activadas. Debes permitir las notificaciones en el navegador la primera vez."
+                        trs("perf-push-enabled-note")
                     } else {
-                        "¿No ves el botón? Asegúrate de estar en una conexión segura (https) y de que el servidor tenga Web Push habilitado."
+                        trs("perf-push-disabled-note")
                     }}
                 </p>
             </div>

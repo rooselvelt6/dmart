@@ -507,7 +507,7 @@ async fn build_app(db: &TestDb) -> axum::Router {
         std::env::set_var("DMART_DISABLE_LOGIN_THROTTLE", "true");
         std::env::set_var("DMART_DISABLE_MFA_THROTTLE", "true");
     }
-    
+
     let auth_service = dmart_server::auth::AuthService::new(db.clone());
     let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
     let security_state = dmart_server::security::create_security_state().await;
@@ -525,7 +525,7 @@ async fn build_app_with_throttle(db: &TestDb) -> axum::Router {
         std::env::set_var("DMART_DISABLE_LOGIN_THROTTLE", "false");
         std::env::set_var("DMART_DISABLE_MFA_THROTTLE", "true");
     }
-    
+
     let auth_service = dmart_server::auth::AuthService::new(db.clone());
     let auth_config = dmart_server::middleware::auth_mod::AuthMiddlewareConfig::new(auth_service);
     let security_state = dmart_server::security::create_security_state().await;

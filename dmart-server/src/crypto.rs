@@ -25,6 +25,117 @@ pub const ENCRYPTED_MAGIC: &[u8] = b"DMART_V1";
 /// Envelope vigente: AES-256-GCM. Es el que se usa para todo dato nuevo.
 pub const AES256_MAGIC: &[u8] = b"DMART_A2";
 
+/// Envelope con key_id para rotación de claves: AES-256-GCM + key_id (4 bytes).
+/// Formato: DMART_K1 | key_id(4) | nonce(12) | ciphertext+tag
+pub const AES256_KID_MAGIC: &[u8] = b"DMART_K1";
+pub const KEY_ID_SIZE: usize = 4;
+
+/// Proveedor de claves con soporte para rotación (key_id).
+///
+/// Cada clave tiene un `key_id` único (u32). El cifrado usa la clave activa
+/// (key_id más alto), el descifrado busca por key_id en el envelope.
+/// El key_id va en el envelope (4 bytes big-endian tras el magic).
+#[derive(Clone)]
+pub struct KeyProvider {
+    keys: Vec<(u32, Aes256Gcm)>,
+    active_key_id: u32,
+}
+
+impl KeyProvider {
+    /// Crea un proveedor a partir de `DMART_MASTER_KEY` (clave única, key_id=1).
+    pub fn from_env() -> Result<Self, CryptoError> {
+        match std::env::var("DMART_MASTER_KEY") {
+            Ok(secret) if !secret.trim().is_empty() => {
+                let key_bytes = Zeroizing::new(secret.trim().as_bytes().to_vec());
+                let master = MasterKey::from_password_bytes(key_bytes.as_slice());
+                let aes = Aes256Gcm::new_from_slice(master.as_bytes())
+                    .expect("AES-256 con clave de 256 bits");
+                Ok(Self {
+                    keys: vec![(1, aes)],
+                    active_key_id: 1,
+                })
+            }
+            _ if crate::deployment::is_production() => {
+                tracing::error!("DMART_MASTER_KEY no configurada en producción");
+                Err(CryptoError::MissingMasterKey)
+            }
+            _ => {
+                tracing::warn!("DMART_MASTER_KEY no configurada: usando clave efímera");
+                let master = MasterKey::new();
+                let aes = Aes256Gcm::new_from_slice(master.as_bytes())
+                    .expect("AES-256 con clave de 256 bits");
+                Ok(Self {
+                    keys: vec![(1, aes)],
+                    active_key_id: 1,
+                })
+            }
+        }
+    }
+
+    /// Crea un proveedor con clave única (para tests/backfill).
+    pub fn single_key(key: MasterKey) -> Self {
+        let aes = Aes256Gcm::new_from_slice(key.as_bytes()).expect("AES-256");
+        Self {
+            keys: vec![(1, aes)],
+            active_key_id: 1,
+        }
+    }
+
+    /// Añade una nueva clave y la marca como activa.
+    /// Devuelve el nuevo key_id.
+    pub fn add_key(&mut self, key: MasterKey) -> u32 {
+        let new_id = self.active_key_id + 1;
+        let aes = Aes256Gcm::new_from_slice(key.as_bytes()).expect("AES-256");
+        self.keys.push((new_id, aes));
+        self.active_key_id = new_id;
+        new_id
+    }
+
+    /// Añade una clave a partir de bytes de clave maestra (32 bytes).
+    pub fn add_key_from_bytes(&mut self, key_bytes: &[u8]) -> Result<u32, CryptoError> {
+        if key_bytes.len() != KEY_SIZE {
+            return Err(CryptoError::InvalidKey);
+        }
+        let mut key_arr = [0u8; KEY_SIZE];
+        key_arr.copy_from_slice(key_bytes);
+        let master = MasterKey(key_arr);
+        Ok(self.add_key(master))
+    }
+
+    /// Obtiene el cifrador para una clave dada (por key_id).
+    pub fn get(&self, key_id: u32) -> Option<&Aes256Gcm> {
+        self.keys.iter().find(|(id, _)| *id == key_id).map(|(_, aes)| aes)
+    }
+
+    /// Obtiene el cifrador activo (para cifrar nuevos datos).
+    pub fn active(&self) -> (&Aes256Gcm, u32) {
+        let aes = self
+            .keys
+            .iter()
+            .find(|(id, _)| *id == self.active_key_id)
+            .map(|(_, aes)| aes)
+            .expect("active key always exists");
+        (aes, self.active_key_id)
+    }
+
+    /// Lista todos los key_ids disponibles.
+    pub fn key_ids(&self) -> Vec<u32> {
+        self.keys.iter().map(|(id, _)| *id).collect()
+    }
+
+    /// Genera una nueva clave aleatoria, la añade y la marca como activa.
+    /// Devuelve el nuevo key_id.
+    pub fn rotate_key(&mut self) -> u32 {
+        self.add_key(MasterKey::new())
+    }
+}
+
+impl Default for KeyProvider {
+    fn default() -> Self {
+        Self::single_key(MasterKey::new())
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CryptoError {
     #[error("Encryption failed")]
@@ -386,7 +497,7 @@ impl PhiContext {
 ///
 /// Modelo de datos:
 /// - El documento se serializa entero y se guarda en una única columna `phi`
-///   como envelope `DMART_A2|<base64>`; dentro quedan **todos** los campos,
+///   como envelope `DMART_A2|<base64>` o `DMART_K1|key_id|<base64>`; dentro quedan **todos** los campos,
 ///   incluidos los que no se consultan, para que no quede PHI suelta por error.
 /// - Las columnas que sí se necesitan para filtrar o paginar (`patient_id`,
 ///   `tenant_id`, estados no identificables) permanecen en claro.
@@ -396,8 +507,8 @@ impl PhiContext {
 ///   hacer diccionario, y el índice no filtra el texto.
 #[derive(Clone)]
 pub struct PhiCipher {
-    master_key: MasterKey,
-    cipher: Aes256Gcm,
+    pub master_key: MasterKey,
+    pub provider: KeyProvider,
     /// Cifrador con el que se escribieron los envelopes anteriores al
     /// endurecimiento: clave maestra en crudo y AAD v1.
     ///
@@ -424,19 +535,20 @@ impl PhiCipher {
     pub fn new(master_key: MasterKey) -> Self {
         let phi_key = derive_subkey(master_key.as_bytes(), LABEL_PHI);
         let index_key = derive_subkey(master_key.as_bytes(), LABEL_INDEX);
-        let cipher =
+        let provider = KeyProvider::single_key(master_key.clone());
+        let _cipher =
             Aes256Gcm::new_from_slice(phi_key.as_slice()).expect("AES-256 con clave de 256 bits");
         let legacy_cipher = Aes256Gcm::new_from_slice(master_key.as_bytes())
             .expect("AES-256 con clave de 256 bits");
         Self {
             master_key,
-            cipher,
+            provider,
             legacy_cipher,
             index_key: Zeroizing::new(index_key),
         }
     }
 
-    /// Cifrador desde `DMART_MASTER_KEY`.
+    /// Cifrador desde `DMART_MASTER_KEY` usando KeyProvider con rotación.
     ///
     /// En producción la clave es obligatoria y el arranque falla si falta
     /// (fail-closed). Sin este error, un despliegue mal configurado cifraría con
@@ -445,27 +557,26 @@ impl PhiCipher {
     ///
     /// En desarrollo se permite una clave efímera, con aviso explícito.
     pub fn from_env() -> Result<Self, CryptoError> {
-        match std::env::var("DMART_MASTER_KEY") {
+        let master_key = match std::env::var("DMART_MASTER_KEY") {
             Ok(secret) if !secret.trim().is_empty() => {
                 let key_bytes = Zeroizing::new(secret.trim().as_bytes().to_vec());
-                Ok(Self::new(MasterKey::from_password_bytes(
-                    key_bytes.as_slice(),
-                )))
+                MasterKey::from_password_bytes(key_bytes.as_slice())
             }
             _ if crate::deployment::is_production() => {
                 tracing::error!(
                     "DMART_MASTER_KEY no configurada en producción: no se puede cifrar la PHI"
                 );
-                Err(CryptoError::MissingMasterKey)
+                return Err(CryptoError::MissingMasterKey);
             }
             _ => {
                 tracing::warn!(
                     "DMART_MASTER_KEY no configurada: cifrando PHI con clave efímera. Los datos \\
                      serán ilegibles tras reiniciar. OBLIGATORIO en producción."
                 );
-                Ok(Self::new(MasterKey::new()))
+                MasterKey::new()
             }
-        }
+        };
+        Ok(Self::new(master_key))
     }
 
     /// Cifra un documento completo y devuelve el valor para la columna `phi`.
@@ -484,8 +595,9 @@ impl PhiCipher {
         AesOsRng.fill_bytes(&mut nonce_bytes);
         let aad = ctx.aad();
 
-        let ciphertext = self
-            .cipher
+        let (aes, key_id) = self.provider.active();
+
+        let ciphertext = aes
             .encrypt(
                 AesNonce::from_slice(&nonce_bytes),
                 Payload {
@@ -495,8 +607,9 @@ impl PhiCipher {
             )
             .map_err(|_| CryptoError::EncryptionFailed)?;
 
-        let mut raw = Vec::with_capacity(AES256_MAGIC.len() + NONCE_SIZE + ciphertext.len());
-        raw.extend_from_slice(AES256_MAGIC);
+        let mut raw = Vec::with_capacity(AES256_KID_MAGIC.len() + KEY_ID_SIZE + NONCE_SIZE + ciphertext.len());
+        raw.extend_from_slice(AES256_KID_MAGIC);
+        raw.extend_from_slice(&key_id.to_be_bytes());
         raw.extend_from_slice(&nonce_bytes);
         raw.extend_from_slice(&ciphertext);
         Ok(base64_encode(&raw))
@@ -515,59 +628,94 @@ impl PhiCipher {
     /// Abre bytes arbitrarios.
     pub fn open_bytes(&self, ctx: &PhiContext, sealed: &str) -> Result<Vec<u8>, CryptoError> {
         let raw = base64_decode(sealed).map_err(|_| CryptoError::InvalidFormat)?;
-        let header = AES256_MAGIC.len();
-        if raw.len() < header + NONCE_SIZE || &raw[..header] != AES256_MAGIC {
-            // Registros heredados con el envelope ChaCha (`DMART_V1`) se abren
-            // con la misma clave para no dejar filas ilegibles durante la
-            // migración.
-            if raw.len() >= ENCRYPTED_MAGIC.len() + NONCE_SIZE
-                && &raw[..ENCRYPTED_MAGIC.len()] == ENCRYPTED_MAGIC
-            {
-                let nonce = Nonce::from_slice(&raw[header..header + NONCE_SIZE]);
-                return ChaCha20Poly1305::new_from_slice(self.master_key.as_bytes())
-                    .map_err(|_| CryptoError::InvalidKey)?
-                    .decrypt(
-                        nonce,
-                        Payload {
-                            msg: &raw[header + NONCE_SIZE..],
-                            aad: &[],
-                        },
-                    )
-                    .map_err(|_| CryptoError::DecryptionFailed);
-            }
-            return Err(CryptoError::InvalidFormat);
-        }
-
-        let nonce = AesNonce::from_slice(&raw[header..header + NONCE_SIZE]);
-        let msg = &raw[header + NONCE_SIZE..];
-
-        // Se escribe siempre con el AAD v2 (longitudes prefijadas). Se acepta
-        // también el v1 de sólo lectura, para que los envelopes anteriores al
-        // cambio no queden ilegibles. El v1 es ambiguo ante identificadores con
-        // saltos de línea, así que todo registro nuevo queda automáticamente
-        // protegido en cuanto se re-sella al escribirlo.
-        let legacy_aad = ctx.legacy_aad();
-        let current_aad = ctx.aad();
-        // Se intenta en orden de preferencia: el esquema vigente primero, para
-        // que un envelope antiguo no se acepte por una coincidencia del tag.
-        let attempts: [(&Aes256Gcm, &[u8]); 4] = [
-            (&self.cipher, &current_aad),
-            (&self.cipher, legacy_aad.as_bytes()),
-            (&self.legacy_cipher, legacy_aad.as_bytes()),
-            (&self.legacy_cipher, &[]),
-        ];
-        for (i, (cipher, aad)) in attempts.into_iter().enumerate() {
-            if let Ok(p) = cipher.decrypt(nonce, Payload { msg, aad }) {
-                if i > 0 {
-                    tracing::warn!(
-                        "envelope PHI abierto con el esquema anterior (AAD v1 / clave maestra); \
-                         se re-sella al escribir"
-                    );
+        
+        // Nuevo formato con key_id: DMART_K1 | key_id(4) | nonce(12) | ciphertext
+        let kid_header = AES256_KID_MAGIC.len();
+        if raw.len() >= kid_header + KEY_ID_SIZE + NONCE_SIZE
+            && &raw[..kid_header] == AES256_KID_MAGIC
+        {
+            let key_id = u32::from_be_bytes([
+                raw[kid_header],
+                raw[kid_header + 1],
+                raw[kid_header + 2],
+                raw[kid_header + 3],
+            ]);
+            let nonce_start = kid_header + KEY_ID_SIZE;
+            let nonce = AesNonce::from_slice(&raw[nonce_start..nonce_start + NONCE_SIZE]);
+            let msg = &raw[nonce_start + NONCE_SIZE..];
+            
+            if let Some(aes) = self.provider.get(key_id) {
+                let legacy_aad = ctx.legacy_aad();
+                let current_aad = ctx.aad();
+                let attempts: [(&Aes256Gcm, &[u8]); 4] = [
+                    (aes, &current_aad),
+                    (aes, legacy_aad.as_bytes()),
+                    (&self.legacy_cipher, legacy_aad.as_bytes()),
+                    (&self.legacy_cipher, &[]),
+                ];
+                for (i, (cipher, aad)) in attempts.into_iter().enumerate() {
+                    if let Ok(p) = cipher.decrypt(nonce, Payload { msg, aad }) {
+                        if i > 0 {
+                            tracing::warn!(
+                                "envelope PHI abierto con el esquema anterior (AAD v1 / clave maestra); \
+                                 se re-sella al escribir"
+                            );
+                        }
+                        return Ok(p);
+                    }
                 }
-                return Ok(p);
             }
+            return Err(CryptoError::DecryptionFailed);
         }
-        Err(CryptoError::DecryptionFailed)
+
+        // Formato antiguo sin key_id: DMART_A2 | nonce(12) | ciphertext
+        let header = AES256_MAGIC.len();
+        if raw.len() >= header + NONCE_SIZE && &raw[..header] == AES256_MAGIC {
+            let nonce = AesNonce::from_slice(&raw[header..header + NONCE_SIZE]);
+            let msg = &raw[header + NONCE_SIZE..];
+
+            let legacy_aad = ctx.legacy_aad();
+            let current_aad = ctx.aad();
+            let attempts: [(&Aes256Gcm, &[u8]); 4] = [
+                (&self.provider.active().0, &current_aad),
+                (&self.provider.active().0, legacy_aad.as_bytes()),
+                (&self.legacy_cipher, legacy_aad.as_bytes()),
+                (&self.legacy_cipher, &[]),
+            ];
+            for (i, (cipher, aad)) in attempts.into_iter().enumerate() {
+                if let Ok(p) = cipher.decrypt(nonce, Payload { msg, aad }) {
+                    if i > 0 {
+                        tracing::warn!(
+                            "envelope PHI abierto con el esquema anterior (AAD v1 / clave maestra); \
+                             se re-sella al escribir"
+                        );
+                    }
+                    return Ok(p);
+                }
+            }
+            return Err(CryptoError::DecryptionFailed);
+        }
+
+        // Registros heredados con el envelope ChaCha (`DMART_V1`) se abren
+        // con la misma clave para no dejar filas ilegibles durante la
+        // migración.
+        if raw.len() >= ENCRYPTED_MAGIC.len() + NONCE_SIZE
+            && &raw[..ENCRYPTED_MAGIC.len()] == ENCRYPTED_MAGIC
+        {
+            let nonce = Nonce::from_slice(&raw[header..header + NONCE_SIZE]);
+            return ChaCha20Poly1305::new_from_slice(self.master_key.as_bytes())
+                .map_err(|_| CryptoError::InvalidKey)?
+                .decrypt(
+                    nonce,
+                    Payload {
+                        msg: &raw[header + NONCE_SIZE..],
+                        aad: &[],
+                    },
+                )
+                .map_err(|_| CryptoError::DecryptionFailed);
+        }
+
+        Err(CryptoError::InvalidFormat)
     }
 
     /// Índice ciego de un valor buscable (coincidencia **exacta**).
@@ -621,6 +769,15 @@ impl PhiCipher {
         msg.extend_from_slice(normalized.as_bytes());
         let tag = hmac_sha256_tag(&key, &msg);
         base64_encode(tag.as_ref())
+    }
+
+    /// Rota la clave maestra: genera una nueva clave aleatoria, la añade al
+    /// proveedor y la marca como activa. Todos los nuevos envelopes usarán
+    /// la nueva clave (key_id incrementado). Los envelopes existentes siguen
+    /// siendo legibles porque se conserva el key_id en el envelope.
+    /// Devuelve el nuevo key_id.
+    pub fn rotate_key(&mut self) -> u32 {
+        self.provider.rotate_key()
     }
 }
 

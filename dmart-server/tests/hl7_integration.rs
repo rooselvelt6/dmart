@@ -1005,17 +1005,26 @@ mod hl7_idempotency {
         let m1 = ingest_vitals(&db, &msg).await.expect("first ingest");
 
         // Second ingestion with same MSH.10 (simulating retry)
-        let m2 = ingest_vitals(&db, &msg).await.expect("second ingest (retry)");
+        let m2 = ingest_vitals(&db, &msg)
+            .await
+            .expect("second ingest (retry)");
 
         // Should return the SAME measurement_id (idempotent)
-        assert_eq!(m1.measurement_id, m2.measurement_id, "retry must return same measurement");
+        assert_eq!(
+            m1.measurement_id, m2.measurement_id,
+            "retry must return same measurement"
+        );
         assert_eq!(m1.patient_id, created.patient_id);
 
         // Verify only ONE measurement was created for this patient
         let measurements = db_ops::get_measurements_for_patient(&db, &created.patient_id)
             .await
             .expect("measurements");
-        assert_eq!(measurements.len(), 1, "idempotency: only one measurement should exist");
+        assert_eq!(
+            measurements.len(),
+            1,
+            "idempotency: only one measurement should exist"
+        );
 
         // Verify hl7_ingest_key table has the record
         let keys: Vec<serde_json::Value> = db
@@ -1026,15 +1035,22 @@ mod hl7_idempotency {
             .take(0)
             .expect("take");
         assert_eq!(keys.len(), 1, "hl7_ingest_key should have one record");
-        assert_eq!(keys[0].get("message_id").and_then(|v| v.as_str()), Some("IDEMPOTENT001"));
-        assert_eq!(keys[0].get("measurement_id").and_then(|v| v.as_str()), Some(m1.measurement_id.as_str()));
+        assert_eq!(
+            keys[0].get("message_id").and_then(|v| v.as_str()),
+            Some("IDEMPOTENT001")
+        );
+        assert_eq!(
+            keys[0].get("measurement_id").and_then(|v| v.as_str()),
+            Some(m1.measurement_id.as_str())
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
     async fn test_hl7_idempotency_different_msh10_creates_new_measurement() {
-        let dir = std::env::temp_dir().join(format!("dmart-hl7-idempotent-diff-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("dmart-hl7-idempotent-diff-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
 
         let db = dmart_server::db::connect(&dir.join("test.surreal").to_string_lossy())
@@ -1066,20 +1082,30 @@ mod hl7_idempotency {
         let m2 = ingest_vitals(&db, &msg2).await.expect("ingest 2");
 
         // Different MSH.10 should create a NEW measurement
-        assert_ne!(m1.measurement_id, m2.measurement_id, "different MSH.10 creates new measurement");
+        assert_ne!(
+            m1.measurement_id, m2.measurement_id,
+            "different MSH.10 creates new measurement"
+        );
         assert_eq!(m1.patient_id, m2.patient_id);
 
         let measurements = db_ops::get_measurements_for_patient(&db, &created.patient_id)
             .await
             .expect("measurements");
-        assert_eq!(measurements.len(), 2, "two different messages = two measurements");
+        assert_eq!(
+            measurements.len(),
+            2,
+            "two different messages = two measurements"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
     async fn test_hl7_idempotency_tenant_isolation() {
-        let dir = std::env::temp_dir().join(format!("dmart-hl7-idempotent-tenant-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "dmart-hl7-idempotent-tenant-{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
 
         let db = dmart_server::db::connect(&dir.join("test.surreal").to_string_lossy())
@@ -1092,7 +1118,9 @@ mod hl7_idempotency {
         patient_a.apellido = "Test".into();
         patient_a.historia_clinica = "111111".into();
         patient_a.tenant_id = "tenant_a".into();
-        let created_a = db_ops::create_patient(&db, patient_a).await.expect("create A");
+        let created_a = db_ops::create_patient(&db, patient_a)
+            .await
+            .expect("create A");
 
         // Patient in tenant B
         let mut patient_b = Patient::new();
@@ -1100,7 +1128,9 @@ mod hl7_idempotency {
         patient_b.apellido = "Test".into();
         patient_b.historia_clinica = "222222".into();
         patient_b.tenant_id = "tenant_b".into();
-        let created_b = db_ops::create_patient(&db, patient_b).await.expect("create B");
+        let created_b = db_ops::create_patient(&db, patient_b)
+            .await
+            .expect("create B");
 
         // Same MSH.10 in both tenants should create separate measurements
         let hl7_a = "MSH|^~\\&|BeneVision|ICU01|DMART|UCI|20240821141031||ORU^R01|SAME001|P|2.5\r\
@@ -1120,7 +1150,10 @@ mod hl7_idempotency {
         let m_b = ingest_vitals(&db, &msg_b).await.expect("ingest B");
 
         // Different tenants = different measurements even with same MSH.10
-        assert_ne!(m_a.measurement_id, m_b.measurement_id, "tenant isolation: same MSH.10 different tenants = different measurements");
+        assert_ne!(
+            m_a.measurement_id, m_b.measurement_id,
+            "tenant isolation: same MSH.10 different tenants = different measurements"
+        );
         assert_eq!(m_a.tenant_id, "tenant_a");
         assert_eq!(m_b.tenant_id, "tenant_b");
 
@@ -1131,8 +1164,15 @@ mod hl7_idempotency {
             .expect("query keys")
             .take(0)
             .expect("take");
-        assert_eq!(keys.len(), 2, "hl7_ingest_key should have two records (one per tenant)");
-        let tenants: Vec<_> = keys.iter().map(|k| k.get("tenant_id").and_then(|v| v.as_str()).unwrap()).collect();
+        assert_eq!(
+            keys.len(),
+            2,
+            "hl7_ingest_key should have two records (one per tenant)"
+        );
+        let tenants: Vec<_> = keys
+            .iter()
+            .map(|k| k.get("tenant_id").and_then(|v| v.as_str()).unwrap())
+            .collect();
         assert!(tenants.contains(&"tenant_a"));
         assert!(tenants.contains(&"tenant_b"));
 

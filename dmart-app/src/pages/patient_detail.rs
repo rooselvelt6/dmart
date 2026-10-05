@@ -1,6 +1,7 @@
 use crate::api;
 use crate::components::chart::EvolutionChart;
 use crate::components::severity_badge::SeverityBadge;
+use crate::i18n::trs;
 use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_router::hooks::*;
@@ -85,7 +86,7 @@ pub fn PatientDetailPage() -> impl IntoView {
 
     view! {
         <div class="page-enter">
-            <Suspense fallback=move || view! { <div class="p-10 text-uci-muted">"Cargando detalles..."</div> }>
+            <Suspense fallback=move || view! { <div class="p-10 text-uci-muted">{trs("pdet-loading-details")}</div> }>
                 {move || patient_res.get().map(|res_wrapper| match res_wrapper {
                     Ok(p_wrapper) => {
                         let p = p_wrapper.clone();
@@ -112,7 +113,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <a href=format!("/patients/{}/edit", p.patient_id) class="btn-outline p-2" title="Editar">
+                                            <a href=format!("/patients/{}/edit", p.patient_id) class="btn-outline p-2" title={trs("pdet-tooltip-edit")}>
                                                 <i class="fa-solid fa-pen"></i>
                                             </a>
                                             <button
@@ -125,9 +126,8 @@ pub fn PatientDetailPage() -> impl IntoView {
                                                     });
                                                 }
                                                 type="button"
-                                                class="btn-outline px-4 py-3" title="PDF"
-                                            >
-                                                <i class="fa-solid fa-file-pdf mr-2"></i>"PDF"
+                                                class="btn-outline px-4 py-3" title={trs("pdet-tooltip-pdf")}>
+                                                <i class="fa-solid fa-file-pdf mr-2"></i>{trs("pdet-btn-pdf")}
                                             </button>
                                             <button
                                                 on:click=move |_| {
@@ -139,44 +139,43 @@ pub fn PatientDetailPage() -> impl IntoView {
                                                     });
                                                 }
                                                 type="button"
-                                                class="btn-outline px-4 py-3" title="CSV"
-                                            >
-                                                <i class="fa-solid fa-file-csv mr-2"></i>"CSV"
+                                                class="btn-outline px-4 py-3" title={trs("pdet-tooltip-csv")}>
+                                                <i class="fa-solid fa-file-csv mr-2"></i>{trs("pdet-btn-csv")}
                                             </button>
                                             {if p.fecha_egreso_uci.is_empty() {
                                                 Either::Left(view! {
-                                                    <button on:click=move |_| show_egreso_modal.set(true) class="btn-outline px-4 py-3" title="Egresar paciente">
-                                                        <i class="fa-solid fa-door-open mr-2"></i>"Egresar"
+                                                    <button on:click=move |_| show_egreso_modal.set(true) class="btn-outline px-4 py-3" title={trs("pdet-tooltip-discharge")}>
+                                                        <i class="fa-solid fa-door-open mr-2"></i>{trs("pdet-btn-discharge")}
                                                     </button>
                                                 })
                                             } else {
                                                 Either::Right(view! {
                                                     <span class="px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap" style="background:rgba(148,163,184,0.15); color:#94A3B8;">
                                                         <i class="fa-solid fa-door-open mr-1"></i>
-                                                        {if p.desenlace_uci.is_empty() { "Egresado".to_string() } else { format!("Egresado · {}", p.desenlace_uci) }}
+                                                        {if p.desenlace_uci.is_empty() { trs("pdet-badge-discharged") } else { format!("{} · {}", trs("pdet-badge-discharged-with-outcome"), p.desenlace_uci) }}
                                                     </span>
                                                 })
                                             }}
-                                            <button on:click=move |_| show_delete_modal.set(true) class="btn-danger p-2" title="Eliminar" aria-label="Eliminar paciente">
+                                            <button on:click=move |_| show_delete_modal.set(true) class="btn-danger p-2" title={trs("pdet-tooltip-delete")} aria-label={trs("pdet-tooltip-delete")}>
                                                 <i class="fa-solid fa-trash" aria-hidden="true"></i>
                                             </button>
                                         </div>
                                     </div>
                                     <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-uci-border">
                                         <a href=format!("/patients/{}/measure?escala=apache", p.patient_id) class="scale-chip">
-                                            <i class="fa-solid fa-heart-pulse"></i>"APACHE II"
+                                            <i class="fa-solid fa-heart-pulse"></i>{trs("pdet-chip-apache")}
                                         </a>
                                         <a href=format!("/patients/{}/measure?escala=gcs", p.patient_id) class="scale-chip">
-                                            <i class="fa-solid fa-brain"></i>"GCS"
+                                            <i class="fa-solid fa-brain"></i>{trs("pdet-chip-gcs")}
                                         </a>
                                         <a href=format!("/patients/{}/measure?escala=saps3", p.patient_id) class="scale-chip">
-                                            <i class="fa-solid fa-chart-line"></i>"SAPS III"
+                                            <i class="fa-solid fa-chart-line"></i>{trs("pdet-chip-saps3")}
                                         </a>
                                         <a href=format!("/patients/{}/measure?escala=news2", p.patient_id) class="scale-chip">
-                                            <i class="fa-solid fa-bell"></i>"NEWS2"
+                                            <i class="fa-solid fa-bell"></i>{trs("pdet-chip-news2")}
                                         </a>
                                         <a href=format!("/patients/{}/measure?escala=sofa", p.patient_id) class="scale-chip">
-                                            <i class="fa-solid fa-lungs"></i>"SOFA"
+                                            <i class="fa-solid fa-lungs"></i>{trs("pdet-chip-sofa")}
                                         </a>
                                     </div>
                                 </div>
@@ -184,26 +183,26 @@ pub fn PatientDetailPage() -> impl IntoView {
                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                                     <div class="glass-card p-4 text-center">
                                         <i class="fa-solid fa-heart-pulse text-rose-500 text-xl mb-2"></i>
-                                        <div class="text-2xl font-bold text-uci-text">"APACHE"</div>
-                                        <div class="text-xs text-uci-muted">"Score de Severidad"</div>
+                                        <div class="text-2xl font-bold text-uci-text">{trs("pdet-card-apache-title")}</div>
+                                        <div class="text-xs text-uci-muted">{trs("pdet-card-apache-subtitle")}</div>
                                         <div class="text-lg font-bold text-rose-500 mt-1">{p.ultimo_apache_score.map(|s| s.to_string()).unwrap_or("-".into())}</div>
                                     </div>
                                     <div class="glass-card p-4 text-center">
                                         <i class="fa-solid fa-brain text-purple-500 text-xl mb-2"></i>
-                                        <div class="text-2xl font-bold text-uci-text">"GCS"</div>
-                                        <div class="text-xs text-uci-muted">"Escala de Coma"</div>
+                                        <div class="text-2xl font-bold text-uci-text">{trs("pdet-card-gcs-title")}</div>
+                                        <div class="text-xs text-uci-muted">{trs("pdet-card-gcs-subtitle")}</div>
                                         <div class="text-lg font-bold text-purple-500 mt-1">{p.ultimo_gcs_score.map(|s| s.to_string()).unwrap_or("-".into())}"/15"</div>
                                     </div>
                                     <div class="glass-card p-4 text-center">
                                         <i class="fa-solid fa-lungs text-emerald-500 text-xl mb-2"></i>
-                                        <div class="text-2xl font-bold text-uci-text">"SOFA"</div>
-                                        <div class="text-xs text-uci-muted">"Falla Orgánica"</div>
+                                        <div class="text-2xl font-bold text-uci-text">{trs("pdet-card-sofa-title")}</div>
+                                        <div class="text-xs text-uci-muted">{trs("pdet-card-sofa-subtitle")}</div>
                                         <div class="text-lg font-bold text-emerald-500 mt-1">{p.ultimo_sofa_score.map(|s| s.to_string()).unwrap_or("-".into())}</div>
                                     </div>
                                     <div class="glass-card p-4 text-center">
                                         <i class="fa-solid fa-skull text-red-600 text-xl mb-2"></i>
-                                        <div class="text-2xl font-bold text-uci-text">"Riesgo"</div>
-                                        <div class="text-xs text-uci-muted">"Mortalidad UCI"</div>
+                                        <div class="text-2xl font-bold text-uci-text">{trs("pdet-card-risk-title")}</div>
+                                        <div class="text-xs text-uci-muted">{trs("pdet-card-risk-subtitle")}</div>
                                         <div class="text-lg font-bold text-red-600 mt-1">{p.mortality_risk.map(|m| format!("{:.0}%", m)).unwrap_or("-".into())}</div>
                                     </div>
                                 </div>
@@ -211,31 +210,31 @@ pub fn PatientDetailPage() -> impl IntoView {
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                     <div class="glass-card p-5">
                                         <h3 class="text-xs font-bold text-uci-accent uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <i class="fa-solid fa-user"></i>"Datos del Paciente"
+                                            <i class="fa-solid fa-user"></i>{trs("pdet-section-patient-data")}
                                         </h3>
                                         <div class="space-y-3">
-                                            <InfoRow icon="fa-venus-mars" label="Sexo" value=format!("{:?}", p.sexo) />
-                                            <InfoRow icon="fa-flag" label="Nacionalidad" value=format!("{:?}", p.nacionalidad) />
-                                            <InfoRow icon="fa-palette" label="Color Piel" value=p.color_piel.label().to_string() />
-                                            <InfoRow icon="fa-location-dot" label="Lugar de Nac." value=p.lugar_nacimiento.clone() />
-                                            <InfoRow icon="fa-house" label="Dirección" value=p.direccion.clone() />
-                                            <InfoRow icon="fa-user-shield" label="Familiar" value=p.familiar_encargado.clone() />
+                                            <InfoRow icon="fa-venus-mars" label={trs("pdet-label-sex")} value=format!("{:?}", p.sexo) />
+                                            <InfoRow icon="fa-flag" label={trs("pdet-label-nationality")} value=format!("{:?}", p.nacionalidad) />
+                                            <InfoRow icon="fa-palette" label={trs("pdet-label-skin-color")} value=p.color_piel.label().to_string() />
+                                            <InfoRow icon="fa-location-dot" label={trs("pdet-label-birth-place")} value=p.lugar_nacimiento.clone() />
+                                            <InfoRow icon="fa-house" label={trs("pdet-label-address")} value=p.direccion.clone() />
+                                            <InfoRow icon="fa-user-shield" label={trs("pdet-label-relative")} value=p.familiar_encargado.clone() />
                                         </div>
                                     </div>
 
                                     <div class="glass-card p-5">
                                         <h3 class="text-xs font-bold text-uci-accent uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <i class="fa-solid fa-stethoscope"></i>"Estado Clínico"
+                                            <i class="fa-solid fa-stethoscope"></i>{trs("pdet-section-clinical-status")}
                                         </h3>
                                         <div class="space-y-3">
-                                            <InfoRow icon="fa-hospital" label="Diag. Hospital" value=p.diagnostico_hospital.clone() />
-                                            <InfoRow icon="fa-truck-medical" label="Diag. UCI" value=p.diagnostico_uci.clone() />
-                                            <InfoRow icon="fa-door-open" label="Admisión" value=format!("{:?}", p.tipo_admision) />
-                                            <InfoRow icon="fa-mask-ventilator" label="Ventilación" value=if p.ventilacion_mecanica { "Sí".into() } else { "No".into() } />
-                                            <InfoRow icon="fa-building-arrow-turn-right" label="Procedencia" value=if p.migracion_otro_centro { p.centro_origen.clone().unwrap_or("Otro centro".into()) } else { "Directa".into() } />
+                                            <InfoRow icon="fa-hospital" label={trs("pdet-label-hospital-diag")} value=p.diagnostico_hospital.clone() />
+                                            <InfoRow icon="fa-truck-medical" label={trs("pdet-label-icu-diag")} value=p.diagnostico_uci.clone() />
+                                            <InfoRow icon="fa-door-open" label={trs("pdet-label-admission-type")} value=format!("{:?}", p.tipo_admision) />
+                                            <InfoRow icon="fa-mask-ventilator" label={trs("pdet-label-ventilation")} value=if p.ventilacion_mecanica { trs("pdet-yes") } else { trs("pdet-no") } />
+                                            <InfoRow icon="fa-building-arrow-turn-right" label={trs("pdet-label-origin")} value=if p.migracion_otro_centro { p.centro_origen.clone().unwrap_or(trs("pdet-label-other-center")) } else { trs("pdet-label-direct-admission") } />
                                         </div>
                                         <div class="mt-4 pt-3 border-t border-uci-border">
-                                            <div class="text-xs text-uci-muted mb-2">"Procesos Invasivos"</div>
+                                            <div class="text-xs text-uci-muted mb-2">{trs("pdet-label-invasive-processes")}</div>
                                             <div class="flex flex-wrap gap-1">
                                                 {p.procesos_invasivos.iter().map(|pr| {
                                                     let pr_str = pr.to_string();
@@ -246,7 +245,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                                     }
                                                 }).collect_view()}
                                                 {if p.procesos_invasivos.is_empty() {
-                                                    Either::Left(view! { <span class="text-xs text-uci-muted">"Ninguno"</span> })
+                                                    Either::Left(view! { <span class="text-xs text-uci-muted">{trs("pdet-none")}</span> })
                                                 } else { Either::Right(view! { "" }) }}
                                             </div>
                                         </div>
@@ -255,16 +254,16 @@ pub fn PatientDetailPage() -> impl IntoView {
 
                                 <div class="glass-card p-5 mb-6">
                                     <h3 class="text-xs font-bold text-uci-accent uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <i class="fa-solid fa-notes-medical"></i>"Antecedentes Clínicos"
+                                        <i class="fa-solid fa-notes-medical"></i>{trs("pdet-section-history")}
                                     </h3>
-                                    <p class="text-sm text-uci-text leading-relaxed">{if p.antecedentes.is_empty() { "Sin antecedentes registrados".into() } else { p.antecedentes.clone() }}</p>
+                                    <p class="text-sm text-uci-text leading-relaxed">{if p.antecedentes.is_empty() { trs("pdet-no-history").into() } else { p.antecedentes.clone() }}</p>
                                 </div>
 
                                 <div class="glass-card p-6 mb-6">
                                     <h3 class="text-xs font-bold text-uci-accent uppercase tracking-widest mb-5 flex items-center gap-2">
-                                        <i class="fa-solid fa-chart-line"></i>"Evolución del APACHE II"
+                                        <i class="fa-solid fa-chart-line"></i>{trs("pdet-section-evolution")}
                                     </h3>
-                                    <Suspense fallback=move || view! { <div class="h-48 flex items-center justify-center"><crate::components::ui_kit::LoadingState label="Cargando evolución..." /></div> }>
+                                    <Suspense fallback=move || view! { <div class="h-48 flex items-center justify-center"><crate::components::ui_kit::LoadingState label={trs("pdet-loading-evolution")} /></div> }>
                                         {move || measurements_res.get().map(|res_wrapper| match res_wrapper {
                                             Ok(ms) if ms.is_empty() => Either::Left(view! {
                                                 <div class="h-48 flex flex-col items-center justify-center text-uci-muted bg-uci-bg/30 rounded-xl">
@@ -281,20 +280,20 @@ pub fn PatientDetailPage() -> impl IntoView {
                                 <div class="glass-card overflow-hidden">
                                     <div class="px-6 py-4 border-b border-uci-border flex items-center justify-between">
                                         <h3 class="text-xs font-bold text-uci-accent uppercase tracking-widest flex items-center gap-2">
-                                            <i class="fa-solid fa-list"></i>"Historial de Mediciones"
+                                            <i class="fa-solid fa-list"></i>{trs("pdet-section-measurements-history")}
                                         </h3>
-                                        <span class="text-xs text-uci-muted">"registros"</span>
+                                        <span class="text-xs text-uci-muted">{trs("pdet-measurements-count")}</span>
                                     </div>
                                     <div class="overflow-x-auto">
                                         <table class="w-full text-left border-collapse">
                                             <thead class="bg-uci-surface/50 text-[11px] font-bold text-uci-muted uppercase tracking-wider">
                                                 <tr>
-                                                    <th class="px-5 py-3 border-b border-uci-border">"Fecha / Hora"</th>
-                                                    <th class="px-5 py-3 border-b border-uci-border">"APACHE"</th>
-                                                    <th class="px-5 py-3 border-b border-uci-border">"GCS"</th>
-                                                    <th class="px-5 py-3 border-b border-uci-border">"Estado"</th>
-                                                    <th class="px-5 py-3 border-b border-uci-border">"Riesgo"</th>
-                                                    <th class="px-5 py-3 border-b border-uci-border">"Notas"</th>
+                                                    <th class="px-5 py-3 border-b border-uci-border">{trs("pdet-table-header-datetime")}</th>
+                                                    <th class="px-5 py-3 border-b border-uci-border">{trs("pdet-table-header-apache")}</th>
+                                                    <th class="px-5 py-3 border-b border-uci-border">{trs("pdet-table-header-gcs")}</th>
+                                                    <th class="px-5 py-3 border-b border-uci-border">{trs("pdet-table-header-status")}</th>
+                                                    <th class="px-5 py-3 border-b border-uci-border">{trs("pdet-table-header-risk")}</th>
+                                                    <th class="px-5 py-3 border-b border-uci-border">{trs("pdet-table-header-notes")}</th>
                                                 </tr>
                                             </thead>
                                             <tbody class="text-sm">
@@ -320,7 +319,7 @@ pub fn PatientDetailPage() -> impl IntoView {
                                                                 </tr>
                                                             }
                                                         }).collect_view()),
-                                                        Err(_) => Either::Right(view! { <tr><td colspan="6" class="p-10 text-center text-uci-critical">"Error cargando datos"</td></tr> }),
+                                                        Err(_) => Either::Right(view! { <tr><td colspan="6" class="p-10 text-center text-uci-critical">{trs("pdet-error-loading-data")}</td></tr> }),
                                                     })}
                                                 </Suspense>
                                             </tbody>
@@ -338,23 +337,23 @@ pub fn PatientDetailPage() -> impl IntoView {
                 <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
                     <div class="glass-card p-8 max-w-md mx-4">
                         <h3 class="text-xl font-bold text-uci-text mb-4 flex items-center gap-2">
-                            <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>"Confirmar Eliminación"
+                            <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>{trs("pdet-modal-delete-title")}
                         </h3>
-                        <p class="text-uci-muted mb-6">"¿Está seguro de eliminar este paciente? Esta acción no se puede deshacer y se eliminarán todas las mediciones asociadas."</p>
+                        <p class="text-uci-muted mb-6">{trs("pdet-modal-delete-text")}</p>
                         <div class="flex gap-3 justify-end">
                             <button
                                 on:click=move |_| show_delete_modal.set(false)
                                 class="btn-outline"
                                 disabled=deleting
                             >
-                                "Cancelar"
+                                {trs("pdet-btn-cancel")}
                             </button>
                             <button
                                 on:click=move |_| do_delete.with_value(|f| f())
                                 class="btn-danger"
                                 disabled=deleting
                             >
-                                {move || if deleting.get() { "Eliminando..." } else { "Eliminar Paciente" }}
+                                {move || if deleting.get() { trs("pdet-btn-deleting") } else { trs("pdet-btn-delete-patient") }}
                             </button>
                         </div>
                     </div>
@@ -365,16 +364,16 @@ pub fn PatientDetailPage() -> impl IntoView {
                 <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
                     <div class="glass-card p-8 max-w-md mx-4">
                         <h3 class="text-xl font-bold text-uci-text mb-4 flex items-center gap-2">
-                            <i class="fa-solid fa-door-open text-uci-accent"></i>"Confirmar Egreso"
+                            <i class="fa-solid fa-door-open text-uci-accent"></i>{trs("pdet-modal-discharge-title")}
                         </h3>
-                        <p class="text-uci-muted mb-4">"El paciente saldrá de la UCI y se liberarán su cama y equipos asignados. Seleccione el desenlace clínico:"</p>
+                        <p class="text-uci-muted mb-4">{trs("pdet-modal-discharge-text")}</p>
                         <select
                             class="form-input w-full mb-6"
                             on:change=move |ev| desenlace.set(event_target_value(&ev))
                         >
-                            <option value="Mejorado" selected>"Mejorado"</option>
-                            <option value="Trasladado">"Trasladado"</option>
-                            <option value="Fallecido">"Fallecido"</option>
+                            <option value="Mejorado" selected>{trs("pdet-option-improved")}</option>
+                            <option value="Trasladado">{trs("pdet-option-transferred")}</option>
+                            <option value="Fallecido">{trs("pdet-option-deceased")}</option>
                         </select>
                         <div class="flex gap-3 justify-end">
                             <button
@@ -382,14 +381,14 @@ pub fn PatientDetailPage() -> impl IntoView {
                                 class="btn-outline"
                                 disabled=egresando
                             >
-                                "Cancelar"
+                                {trs("pdet-btn-cancel")}
                             </button>
                             <button
                                 on:click=move |_| do_egreso.with_value(|f| f())
                                 class="btn-primary"
                                 disabled=egresando
                             >
-                                {move || if egresando.get() { "Egresando..." } else { "Confirmar Egreso" }}
+                                {move || if egresando.get() { trs("pdet-btn-discharging") } else { trs("pdet-btn-confirm-discharge") }}
                             </button>
                         </div>
                     </div>
@@ -400,7 +399,7 @@ pub fn PatientDetailPage() -> impl IntoView {
 }
 
 #[component]
-fn InfoRow(icon: &'static str, label: &'static str, value: String) -> impl IntoView {
+fn InfoRow(icon: &'static str, label: String, value: String) -> impl IntoView {
     view! {
         <div class="flex items-center justify-between min-w-0">
             <span class="text-xs text-uci-muted flex items-center gap-1 shrink-0"><i class={format!("fa-solid {}", icon)}></i>{label}</span>

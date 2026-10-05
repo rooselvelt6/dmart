@@ -173,6 +173,11 @@ pub fn tr(key: &str, args: Option<&std::collections::HashMap<String, String>>) -
     key.to_string()
 }
 
+/// Translate a key without arguments
+pub fn trs(key: &str) -> String {
+    tr(key, None)
+}
+
 /// Hook reactivo: devuelve el idioma actual como Signal (re-renderiza al cambiar)
 pub fn use_lang() -> ReadSignal<String> {
     lang_signal().read_only()

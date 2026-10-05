@@ -3,6 +3,7 @@ use crate::api::{EjecutivoKpi, GravedadStats, PromedioScores, UciStatsResponse};
 use crate::components::chart::EvolutionChart;
 use crate::components::dashboard_kit::{DonutChart, PromedioScoresCard};
 use crate::components::severity_badge::SeverityBadge;
+use crate::i18n::trs;
 use dmart_shared::models::*;
 use leptos::either::Either;
 use leptos::prelude::*;
@@ -73,11 +74,11 @@ pub fn DashboardPage() -> impl IntoView {
     view! {
         <div class="page-enter">
             <div class="mb-5 md:mb-7">
-                <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">"Panel de Monitoreo UCI"</h1>
-                <p style="color:var(--uci-muted); font-size:13px; margin:0;">"Pacientes activos, scores, recursos — vision general"</p>
+                <h1 class="text-xl md:text-2xl lg:text-3xl font-extrabold" style="color:var(--uci-text); margin:0 0 4px;">{trs("dash-title")}</h1>
+                <p style="color:var(--uci-muted); font-size:13px; margin:0;">{trs("dash-subtitle")}</p>
             </div>
 
-            <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label="Cargando panel..." /> }>
+            <Suspense fallback=move || view! { <crate::components::ui_kit::LoadingState label={trs("dash-loading")} /> }>
                 {move || {
                     stats.get().map(|s| {
                         let pacientes = patients.get().unwrap_or_default();
@@ -107,12 +108,12 @@ pub fn DashboardPage() -> impl IntoView {
 fn SummaryCards(stats: UciStatsResponse) -> impl IntoView {
     view! {
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 mb-6 md:mb-7">
-            {stat_card("Total Pacientes", &stats.total_pacientes.to_string(), "#3B82F6", "fa-users")}
-            {stat_card("Activos", &stats.pacientes_activos.to_string(), "#6366F1", "fa-heart-pulse")}
-            {stat_card("Criticos", &stats.por_gravedad.criticos.to_string(), "#EF4444", "fa-skull")}
-            {stat_card("Severos", &stats.por_gravedad.severos.to_string(), "#F97316", "fa-triangle-exclamation")}
-            {stat_card("Moderados", &stats.por_gravedad.moderados.to_string(), "#F59E0B", "fa-circle-exclamation")}
-            {stat_card("Estables", &stats.por_gravedad.bajos.to_string(), "#10B981", "fa-check-circle")}
+            {stat_card(trs("dash-stat-total-patients"), stats.total_pacientes.to_string(), "#3B82F6", "fa-users")}
+            {stat_card(trs("dash-stat-active"), stats.pacientes_activos.to_string(), "#6366F1", "fa-heart-pulse")}
+            {stat_card(trs("dash-stat-critical"), stats.por_gravedad.criticos.to_string(), "#EF4444", "fa-skull")}
+            {stat_card(trs("dash-stat-severe"), stats.por_gravedad.severos.to_string(), "#F97316", "fa-triangle-exclamation")}
+            {stat_card(trs("dash-stat-moderate"), stats.por_gravedad.moderados.to_string(), "#F59E0B", "fa-circle-exclamation")}
+            {stat_card(trs("dash-stat-stable"), stats.por_gravedad.bajos.to_string(), "#10B981", "fa-check-circle")}
         </div>
     }
 }
@@ -134,46 +135,46 @@ fn EjecutivoKpiSection(ejecutivo: EjecutivoKpi) -> impl IntoView {
     view! {
         <div class="mb-6 md:mb-7">
             <h3 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-muted);">
-                <i class="fa-solid fa-chart-line mr-2"></i>"KPIs Ejecutivos — Mortalidad Real vs Predicha & LOS"
+                <i class="fa-solid fa-chart-line mr-2"></i>{trs("dash-section-kpis")}
             </h3>
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
                 {kpi_card(
-                    "Egresados".to_string(),
+                    trs("dash-kpi-discharged"),
                     ejecutivo.egresados.to_string(),
                     "#6366F1".to_string(),
                     "fa-door-open".to_string(),
-                    "Pacientes dados de alta".to_string()
+                    trs("dash-kpi-discharged-tooltip")
                 )}
                 {kpi_card(
-                    "Fallecidos".to_string(),
+                    trs("dash-kpi-deceased"),
                     ejecutivo.fallecidos.to_string(),
                     "#EF4444".to_string(),
                     "fa-skull-crossbones".to_string(),
-                    "Pacientes fallecidos en UCI".to_string()
+                    trs("dash-kpi-deceased-tooltip")
                 )}
                 {kpi_card(
-                    "Mortalidad Real".to_string(),
+                    trs("dash-kpi-real-mortality"),
                     format!("{:.1}%", ejecutivo.mortalidad_real_pct),
                     "#EF4444".to_string(),
                     "fa-heart-crack".to_string(),
-                    "Fallecidos / Egresados * 100".to_string()
+                    trs("dash-kpi-real-mortality-tooltip")
                 )}
                 {kpi_card(
-                    "Mortalidad Predicha".to_string(),
+                    trs("dash-kpi-predicted-mortality"),
                     format!("{:.1}%", ejecutivo.mortalidad_predicha_pct),
                     "#8B5CF6".to_string(),
                     "fa-brain".to_string(),
-                    "Promedio risk_score Apache/SAPS".to_string()
+                    trs("dash-kpi-predicted-mortality-tooltip")
                 )}
                 {kpi_card(
-                    "Delta (Real - Pred)".to_string(),
+                    trs("dash-kpi-delta"),
                     format!("{:+.1}%", delta_mortalidad),
                     delta_color.to_string(),
                     delta_icon.to_string(),
-                    "Real menor que predicha = bueno".to_string()
+                    trs("dash-kpi-delta-tooltip")
                 )}
                 {kpi_card(
-                    "LOS Promedio (días)".to_string(),
+                    trs("dash-kpi-los"),
                     format!("{:.1}", ejecutivo.los_dias_promedio),
                     "#06B6D4".to_string(),
                     "fa-calendar-days".to_string(),
@@ -190,7 +191,7 @@ fn StatsSection(stats: UciStatsResponse) -> impl IntoView {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 md:mb-7">
             <PromedioScoresCard promedios=stats.promedios.clone() />
             <div class="p-6 rounded-xl" style="background:var(--uci-surface);">
-                <h3 class="text-sm font-bold uppercase mb-4" style="color:var(--uci-text);">"Distribucion por Gravedad"</h3>
+                <h3 class="text-sm font-bold uppercase mb-4" style="color:var(--uci-text);">{trs("dash-section-severity-dist")}</h3>
                 <DonutChart data=stats.por_gravedad.clone() total=stats.total_pacientes />
             </div>
         </div>
@@ -203,15 +204,15 @@ fn AdminStatsSection(admin: Option<AdminStats>) -> impl IntoView {
         Some(a) => Either::Left(view! {
             <div class="mb-6 md:mb-7">
                 <h3 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-muted);">
-                    <i class="fa-solid fa-cube mr-2"></i>"Recursos de la Unidad"
+                    <i class="fa-solid fa-cube mr-2"></i>{trs("dash-section-resources")}
                 </h3>
                 <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
-                    {resource_card("Camas Totales", &a.total_camas.to_string(), "#6366F1", "fa-bed")}
-                    {resource_card("Libres", &a.camas_libres.to_string(), "#10B981", "fa-bed-empty")}
-                    {resource_card("Ocupadas", &a.camas_ocupadas.to_string(), "#EF4444", "fa-bed-occupied")}
-                    {resource_card("Eq. Disponibles", &a.equipos_disponibles.to_string(), "#3B82F6", "fa-monitor-heart")}
-                    {resource_card("Medicos", &a.medicos_activos.to_string(), "#8B5CF6", "fa-user-doctor")}
-                    {resource_card("Enfermeros", &a.enfermeros_activos.to_string(), "#EC4899", "fa-user-nurse")}
+                    {resource_card(trs("dash-resource-total-beds"), a.total_camas.to_string(), "#6366F1", "fa-bed")}
+                    {resource_card(trs("dash-resource-free-beds"), a.camas_libres.to_string(), "#10B981", "fa-bed-empty")}
+                    {resource_card(trs("dash-resource-occupied-beds"), a.camas_ocupadas.to_string(), "#EF4444", "fa-bed-occupied")}
+                    {resource_card(trs("dash-resource-available-equipment"), a.equipos_disponibles.to_string(), "#3B82F6", "fa-monitor-heart")}
+                    {resource_card(trs("dash-resource-active-doctors"), a.medicos_activos.to_string(), "#8B5CF6", "fa-user-doctor")}
+                    {resource_card(trs("dash-resource-active-nurses"), a.enfermeros_activos.to_string(), "#EC4899", "fa-user-nurse")}
                 </div>
             </div>
         }),
@@ -225,9 +226,9 @@ fn ActivePatientsSection(patients: Vec<PatientListItem>) -> impl IntoView {
         return Either::Right(view! {
             <div style="text-align:center; padding:80px 40px; color:var(--uci-muted);">
                 <div style="font-size:48px; margin-bottom:16px; opacity:0.3;"><i class="fa-solid fa-hospital"></i></div>
-                <div style="font-size:20px; font-weight:600; margin-bottom:8px;" class="text-uci-text">"No hay pacientes registrados"</div>
-                <p style="font-size:14px; margin:0 0 20px;">"Comience registrando el primer paciente"</p>
-                <a href="/patients/new" class="btn-primary" style="display:inline-block; text-decoration:none;"><i class="fa-solid fa-plus mr-2"></i>"Nuevo Paciente"</a>
+                <div style="font-size:20px; font-weight:600; margin-bottom:8px;" class="text-uci-text">{trs("dash-empty-no-patients")}</div>
+                <p style="font-size:14px; margin:0 0 20px;">{trs("dash-empty-start-registering")}</p>
+                <a href="/patients/new" class="btn-primary" style="display:inline-block; text-decoration:none;"><i class="fa-solid fa-plus mr-2"></i>{trs("dash-btn-new-patient")}</a>
             </div>
         });
     }
@@ -261,18 +262,18 @@ fn RecentPatientsSection(reciente: Vec<PatientListItem>) -> impl IntoView {
     let content = view! {
         <div class="mb-6 md:mb-7">
             <h3 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-muted);">
-                <i class="fa-solid fa-clock mr-2"></i>{"Pacientes Recientes ("}{mostrar.len()}{")"}
+                <i class="fa-solid fa-clock mr-2"></i>{trs("dash-section-recent-patients")}{mostrar.len()}{")"}
             </h3>
             <div class="rounded-xl overflow-hidden" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                 <table class="w-full">
                     <thead style="background:var(--uci-bg);">
                         <tr>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Paciente"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Cedula"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Edad"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"APACHE"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Gravedad"</th>
-                            <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">"Accion"</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dash-table-header-patient")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dash-table-header-id")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dash-table-header-age")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dash-table-header-apache")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("dash-table-header-severity")}</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">{trs("dash-table-header-action")}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y" style="border-color:var(--uci-border);">
@@ -289,7 +290,7 @@ fn RecentPatientsSection(reciente: Vec<PatientListItem>) -> impl IntoView {
                                         <a href=format!("/patients/{}", pid)
                                             class="text-xs px-3 py-1.5 rounded-lg font-semibold"
                                             style="background:var(--uci-accent); color:white; text-decoration:none;">
-                                            <i class="fa-solid fa-address-card mr-1"></i>"Ver"
+                                            <i class="fa-solid fa-address-card mr-1"></i>{trs("dash-btn-view")}
                                         </a>
                                     </td>
                                 </tr>
@@ -445,9 +446,7 @@ fn InfoBadge(icon: &'static str, value: String, color: String) -> impl IntoView 
     }
 }
 
-fn stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView + use<> {
-    let title = title.to_string();
-    let value = value.to_string();
+fn stat_card(title: String, value: String, color: &str, icon: &str) -> impl IntoView + use<> {
     let color = color.to_string();
     view! {
         <div class="glass-card p-3 md:p-4 lg:p-5" style=format!("border-top:3px solid {};", color)>
@@ -483,9 +482,7 @@ fn kpi_card(
     }
 }
 
-fn resource_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView + use<> {
-    let title = title.to_string();
-    let value = value.to_string();
+fn resource_card(title: String, value: String, color: &str, icon: &str) -> impl IntoView + use<> {
     let color = color.to_string();
     view! {
         <div class="glass-card p-3" style=format!("border-top:2px solid {}; border-radius:12px;", color)>

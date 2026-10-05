@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::api;
 use crate::api::{Escalation, EscalationPolicy, SetPolicyRequest};
 use crate::components::ui_kit::{ErrorState, LoadingState};
+use crate::i18n::trs;
 use crate::stores::user_has;
 
 fn severity_meta(sev: &str) -> (&'static str, &'static str) {
@@ -85,10 +86,10 @@ pub fn EscalationPage() -> impl IntoView {
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-bell mr-2"></i>"Alertas y Escalamiento"
+                        <i class="fa-solid fa-bell mr-2"></i>{trs("esc-title")}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Ciclo de vida de alertas clínicas y políticas de escalamiento por severidad"
+                        {trs("esc-subtitle")}
                     </p>
                 </div>
                 <button
@@ -96,7 +97,7 @@ pub fn EscalationPage() -> impl IntoView {
                     style="background:var(--uci-surface); color:var(--uci-text); border:1px solid var(--uci-border);"
                     on:click=move |_| refresh.update(|n| *n += 1)
                 >
-                    <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                    <i class="fa-solid fa-rotate mr-2"></i>{trs("esc-btn-refresh")}
                 </button>
             </div>
 
@@ -118,12 +119,12 @@ pub fn EscalationPage() -> impl IntoView {
             <h2 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-text);">
                 <i class="fa-solid fa-triangle-exclamation mr-2" style="color:#EF4444;"></i>"Escalaciones activas"
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Cargando escalaciones..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label={trs("esc-active-loading")} /> }>
                 {move || match active.get() {
                     Some(Ok(list)) => view! { <ActiveTable escalations=list can_act=can_act refresh=refresh running=running feedback=feedback /> }.into_any(),
                     Some(Err(e)) => view! {
                         <ErrorState
-                            message=format!("No se pudo cargar las escalaciones: {}", e)
+                            message=format!("{}: {}", trs("esc-active-error"), e)
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
@@ -132,14 +133,14 @@ pub fn EscalationPage() -> impl IntoView {
             </Suspense>
 
             <h2 class="text-sm font-bold uppercase mt-6 mb-3" style="color:var(--uci-text);">
-                <i class="fa-solid fa-sliders mr-2"></i>"Políticas por severidad"
+                <i class="fa-solid fa-sliders mr-2"></i>{trs("esc-policies-title")}
             </h2>
-            <Suspense fallback=move || view! { <LoadingState label="Cargando políticas..." /> }>
+            <Suspense fallback=move || view! { <LoadingState label={trs("esc-policies-loading")} /> }>
                 {move || match policies.get() {
                     Some(Ok(list)) => view! { <PoliciesTable policies=list can_config=can_config on_edit=open_edit /> }.into_any(),
                     Some(Err(e)) => view! {
                         <ErrorState
-                            message=format!("No se pudo cargar las políticas: {}", e)
+                            message=format!("{}: {}", trs("esc-policies-error"), e)
                             on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                         />
                     }.into_any(),
@@ -163,11 +164,11 @@ pub fn EscalationPage() -> impl IntoView {
                             <span style=format!("color:{color};")>{label}</span>
                         </h3>
                         <p class="text-xs mb-4" style="color:var(--uci-muted);">
-                            "Upsert idempotente por severidad; los cambios quedan auditados."
+                            {trs("esc-dialog-description")}
                         </p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">"Respuesta máx. (min)"</label>
+                                <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">{trs("esc-label-max-response")}</label>
                                 <input type="number" min="0"
                                     class="w-full px-3 h-9 text-sm rounded-lg"
                                     style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
@@ -176,7 +177,7 @@ pub fn EscalationPage() -> impl IntoView {
                                 />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">"Timeout (min)"</label>
+                                <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">{trs("esc-label-timeout")}</label>
                                 <input type="number" min="0"
                                     class="w-full px-3 h-9 text-sm rounded-lg"
                                     style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
@@ -185,7 +186,7 @@ pub fn EscalationPage() -> impl IntoView {
                                 />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">"Rol destino"</label>
+                                <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">{trs("esc-label-target-role")}</label>
                                 <input type="text"
                                     class="w-full px-3 h-9 text-sm rounded-lg"
                                     style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
@@ -198,7 +199,7 @@ pub fn EscalationPage() -> impl IntoView {
                                     prop:checked=move || e_enabled.get()
                                     on:change=move |ev| e_enabled.set(event_target_checked(&ev))
                                 />
-                                <label class="text-sm" style="color:var(--uci-text);">"Habilitada"</label>
+                                <label class="text-sm" style="color:var(--uci-text);">{trs("esc-label-enabled")}</label>
                             </div>
                         </div>
                         <div class="flex justify-end gap-3 mt-6">
@@ -207,11 +208,11 @@ pub fn EscalationPage() -> impl IntoView {
                                 style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
                                 on:click=move |_| editing.set(None)
                             >
-                                "Cancelar"
+                                {trs("esc-btn-cancel")}
                             </button>
                             <button class="btn-primary px-4 h-10 text-sm" on:click=save_policy
                                 disabled=move || running.get().is_some()>
-                                {move || if running.get().as_deref() == Some("policy") { "Guardando..." } else { "Guardar" }}
+                                {move || if running.get().as_deref() == Some("policy") { trs("esc-btn-saving") } else { trs("esc-btn-save") }}
                             </button>
                         </div>
                     </div>
@@ -233,7 +234,7 @@ fn ActiveTable(
         return view! {
             <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                 <i class="fa-solid fa-circle-check text-2xl mb-2" style="color:#10B981;"></i>
-                <p>"Sin escalaciones activas"</p>
+                <p>{trs("esc-active-empty")}</p>
             </div>
         }.into_any();
     }
@@ -277,7 +278,7 @@ fn ActiveTable(
                                     });
                                 }
                             >
-                                <i class="fa-solid fa-check mr-1"></i>"Acusar"
+                                <i class="fa-solid fa-check mr-1"></i>{trs("esc-btn-acknowledge")}
                             </button>
                             <button
                                 class="text-xs px-3 py-1 rounded-lg"
@@ -289,7 +290,7 @@ fn ActiveTable(
                                     feedback.set(None);
                                     spawn_local(async move {
                                         let r = match api::escalate_escalation(&id).await {
-                                            Ok(_) => (true, "Alerta escalada.".to_string()),
+                                            Ok(_) => (true, trs("esc-feedback-escalated")),
                                             Err(e) => (false, e),
                                         };
                                         feedback.set(Some(r));
@@ -298,7 +299,7 @@ fn ActiveTable(
                                     });
                                 }
                             >
-                                <i class="fa-solid fa-arrow-up-right-dots mr-1"></i>"Escalar"
+                                <i class="fa-solid fa-arrow-up-right-dots mr-1"></i>{trs("esc-btn-escalate")}
                             </button>
                         </td>
                     </Show>
@@ -364,7 +365,7 @@ fn PoliciesTable(
                                 style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
                                 on:click=move |_| on_edit.run(editable.get_value())
                             >
-                                <i class="fa-solid fa-pen mr-1"></i>"Editar"
+                                <i class="fa-solid fa-pen mr-1"></i>{trs("esc-btn-edit")}
                             </button>
                         </td>
                     </Show>
@@ -378,11 +379,11 @@ fn PoliciesTable(
             <table class="w-full">
                 <thead style="background:var(--uci-bg);">
                     <tr>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Severidad"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Respuesta máx."</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Timeout"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Rol destino"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Habilitada"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("esc-col-severity")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("esc-col-max-response")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("esc-col-timeout")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("esc-col-target-role")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("esc-col-enabled")}</th>
                         <Show when=move || can_config>
                             <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">""</th>
                         </Show>

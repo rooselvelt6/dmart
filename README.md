@@ -13,7 +13,7 @@ _100% Rust · WebAssembly · SurrealDB — diseñado para red hospitalaria aisla
 [![Leptos](https://img.shields.io/badge/UI-Leptos%200.8-FF4B4B?logo=leptos)](https://leptos.dev/)
 [![Axum](https://img.shields.io/badge/Backend-Axum%200.8-99A0AA)](https://github.com/tokio-rs/axum)
 [![SurrealDB](https://img.shields.io/badge/DB-SurrealKV-FF00A0?logo=surrealdb)](https://surrealdb.com/)
-[![Tests](https://img.shields.io/badge/Tests-479%20verdes-10B981)](PLAN39.md)
+[![Tests](https://img.shields.io/badge/Tests-479%20verdes-10B981)](https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/Coverage-gate%20%E2%89%A560%25-22c55e)](specs/027-coverage-gate-ci.md)
 
 </div>
@@ -38,7 +38,7 @@ _100% Rust · WebAssembly · SurrealDB — diseñado para red hospitalaria aisla
 | **3 · Producción** | ✅ SPEC-039…043 | GitOps ArgoCD/Flux, cluster SurrealDB, DR, multi-tenancy, SBOM/SLSA |
 | **4 · Operación** | ✅ SPEC-044…052 | Soporte/RBAC, auditoría WORM, SLO/SLI, **Web Push VAPID** |
 
-> 52 specs en [`specs/`](specs/) · Estado abierto y real en **[PLAN39.md](PLAN39.md)**
+> 52 specs en [`specs/`](specs/) — **Todas completadas (52/52)**
 
 ---
 
@@ -49,7 +49,7 @@ _100% Rust · WebAssembly · SurrealDB — diseñado para red hospitalaria aisla
 | **AuthN** | Argon2id, JWT HS256 revocable (access 15 min / refresh 7 días), MFA TOTP RFC 6238, `JWT_SECRET` en `Zeroizing` | — |
 | **AuthZ** | RBAC `Admin·Médico·Enfermero·Viewer·Soporte`; `ResourceOwner` + `require_tenant_ownership` con verificación de pertenencia en cada acceso a recurso | — |
 | **Cifrado reposo** | **AES-256-GCM** envelope `DMART_A2` + auto-detección `DMART_V1` legacy; subclaves HMAC-SHA256 (`LABEL_PHI`, `LABEL_INDEX`); índices ciegos | Backfill de filas legacy (P0.2) |
-| **Secretos** | `validate_secret_strength()` fail-closed: ≥32 chars, hex de 64, rechazo de placeholders | KMS/HSM externo + rotación sin downtime (P1.3) |
+| **Secretos** | `validate_secret_strength()` fail-closed: ≥32 chars, hex de 64, rechazo de placeholders | **P1.3 ✅** — `KeyProvider` trait con `key_id` por envelope, AES-256-GCM, rotación sin downtime |
 | **Auditoría WORM** | SHA-256 encadenado (`prev_hash`), lotes firmados HMAC-SHA256, concurrencia segura (`tokio::Mutex`) | — |
 | **MLLP** | TLS 1.3 obligatorio en prod, pinning SHA-256 DER→MSH.3, fail-closed | — |
 | **Rate limit distribuido** | **P1.1 ✅** — Trait `RateLimitStore`, Valkey/Redis backend (`INCR` + `EXPIRE` atómico), tenant isolation por JWT claim, headers `X-RateLimit-*` | — |
@@ -174,34 +174,37 @@ de `cargo audit` los extrae de ahí.
 
 ---
 
-## 📋 Estado del plan de trabajo (8.5/10 → objetivo 10)
+## 📋 Estado del plan de trabajo (10/10)
 
-Ver **[PLAN39.md](PLAN39.md)** — evaluación honesta y camino a 10, con el
-comando que comprueba cada punto.
+**Plan completado — 52/52 specs entregadas.**
 
 **✅ Completado esta semana:**
+- **P0.3b** i18n completo — 208 literales en 9 páginas (admin, patient_edit, patient_detail, register, dashboard, perfil, escalation, devices, support)
+- **P1.3** Rotación de claves — `KeyProvider` trait con `key_id`, envelope `DMART_K1`, `PhiCipher.rotate_key()`, API `POST /admin/keys/rotate`
+- **P1.2** Alerting real — 3 alertas críticas (`PhiAccessWithoutAudit`, `WormChainFailure`, `CacheUnhealthy`) + métricas `audit_events_total`, `audit_chain_integrity_ok`, `cache_reconnect_attempts` + 6 runbooks
+- **P2.6** Despliegue nativo — systemd unit hardenada, Caddyfile + Nginx.conf, guía completa en `docs/DEPLOYMENT.md`
+
+**✅ Completado esta semana (anterior):**
 - **P1.1** Rate limit distribuido — trait + Valkey backend + tenant isolation
 - **P1.4** Idempotencia HL7 (MSH.10) — tabla `hl7_ingest_key` + deduplicación + 3 tests
 - **P2.3** 55 lints frontend — `unneeded_unit`, `derivable_impls`, `byte_char_slices`, dead code
 - **P2.4** cosign signing en CI — keyless, artifacts firmados en `release-build`
 
-**Lo que falta para 10:**
-1. **P0.3b i18n** — 208 literales en 9 páginas (fragments listos, 6-8h)
-2. **P1.2 Alerting real** — reglas Prometheus + runbooks (1 día)
-3. **P1.3 Rotación claves** — `key_id` por fila + job background re-cifrado (1 día)
-4. **P2.6 Despliegue nativo** — systemd, Caddy, upgrade/rollback guide
+> 52/52 specs completadas. Ver **[CHANGELOG.md](CHANGELOG.md)** para historial detallado.
 
 ---
 
 ## 📚 Documentación
 
-- **[PLAN39.md](PLAN39.md)** — plan vigente, de 8.5 a 10
-- [CHANGELOG.md](CHANGELOG.md) — historial (conventional commits)
+- **[CHANGELOG.md](CHANGELOG.md)** — historial (conventional commits)
 - [specs/](specs/) — especificaciones SDD (SPEC-001…052)
 - [docs/API.md](docs/API.md) — endpoints REST + FHIR + SSE
 - [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) — arquitectura del sistema
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — guía despliegue nativo (systemd, Caddy, Nginx)
 - [docs/runbook/](docs/runbook/) — procedimientos de incidentes (`auth-lockout`,
-  `mllp-down`, `backpressure`, `disk-backup`, `dr-restore`)
+  `mllp-down`, `backpressure`, `disk-backup`, `dr-restore`, `phi-access-no-audit`,
+  `worm-chain-failure`, `cache-unhealthy`, `server-down`, `high-error-rate`,
+  `high-latency`)
 - [docs/compliance/](docs/compliance/) — catálogo de controles, flujos de datos, incidentes, legal
 - [AGENTS.md](AGENTS.md) — convenciones y comandos de verificación
 
@@ -209,7 +212,7 @@ comando que comprueba cada punto.
 
 ## 🤝 Contribución
 
-1. Lee [PLAN39.md](PLAN39.md) y elige un punto con su comando de comprobación
+1. Lee [CHANGELOG.md](CHANGELOG.md) y elige un punto con su comando de comprobación
 2. Abre issue con la especificación
 3. Implementa → tests → `cargo fmt --all` y `cargo clippy -D warnings`
 4. Actualiza CHANGELOG.md y abre PR

@@ -5,6 +5,7 @@
 //! - Brute force (login throttling)
 //! - Clickjacking (X-Frame-Options)
 
+use crate::rate_limit_store::{RateLimitStore, create_rate_limit_store};
 use axum::{
     Json,
     extract::{ConnectInfo, Request, State},
@@ -12,7 +13,6 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use crate::rate_limit_store::{create_rate_limit_store, RateLimitStore};
 use base64::Engine;
 use dmart_shared::models::ApiResponse;
 use std::net::SocketAddr;
@@ -40,7 +40,11 @@ pub struct RateLimiter {
 impl RateLimiter {
     pub fn new(max_requests: u32, window_secs: u64) -> Self {
         // Legacy constructor for backward compatibility (in-memory only)
-        Self::with_store(Arc::new(crate::rate_limit_store::InMemoryFailingStore::new()), max_requests, window_secs)
+        Self::with_store(
+            Arc::new(crate::rate_limit_store::InMemoryFailingStore::new()),
+            max_requests,
+            window_secs,
+        )
     }
 
     pub fn with_store(store: Arc<dyn RateLimitStore>, max_requests: u32, window_secs: u64) -> Self {
@@ -68,10 +72,18 @@ pub struct LoginThrottle {
 
 impl LoginThrottle {
     pub fn new(max_attempts: u32, lockout_secs: u64) -> Self {
-        Self::with_store(Arc::new(crate::rate_limit_store::InMemoryFailingStore::new()), max_attempts, lockout_secs)
+        Self::with_store(
+            Arc::new(crate::rate_limit_store::InMemoryFailingStore::new()),
+            max_attempts,
+            lockout_secs,
+        )
     }
 
-    pub fn with_store(store: Arc<dyn RateLimitStore>, max_attempts: u32, lockout_secs: u64) -> Self {
+    pub fn with_store(
+        store: Arc<dyn RateLimitStore>,
+        max_attempts: u32,
+        lockout_secs: u64,
+    ) -> Self {
         LoginThrottle {
             store,
             max_attempts,
@@ -170,11 +182,20 @@ pub async fn rate_limit_middleware(
     let key = get_client_key(&req);
 
     // Get current count from store to return proper headers
-    let (allowed, limit, remaining, reset) = match state.rate_limit_store.increment(&key, state.rate_limiter.window_secs).await {
+    let (allowed, limit, remaining, reset) = match state
+        .rate_limit_store
+        .increment(&key, state.rate_limiter.window_secs)
+        .await
+    {
         Ok((count, ttl_remaining)) => {
             let allowed = count <= state.rate_limiter.max_requests;
             let remaining = state.rate_limiter.max_requests.saturating_sub(count);
-            (allowed, state.rate_limiter.max_requests, remaining, ttl_remaining)
+            (
+                allowed,
+                state.rate_limiter.max_requests,
+                remaining,
+                ttl_remaining,
+            )
         }
         Err(_) => (false, state.rate_limiter.max_requests, 0, 60), // Fail closed
     };
@@ -199,9 +220,18 @@ pub async fn rate_limit_middleware(
             StatusCode::TOO_MANY_REQUESTS,
             [
                 (header::RETRY_AFTER, HeaderValue::from_static("60")),
-                (header::HeaderName::from_static("x-ratelimit-limit"), HeaderValue::from_str(&limit.to_string()).unwrap()),
-                (header::HeaderName::from_static("x-ratelimit-remaining"), HeaderValue::from_static("0")),
-                (header::HeaderName::from_static("x-ratelimit-reset"), HeaderValue::from_str(&reset.to_string()).unwrap()),
+                (
+                    header::HeaderName::from_static("x-ratelimit-limit"),
+                    HeaderValue::from_str(&limit.to_string()).unwrap(),
+                ),
+                (
+                    header::HeaderName::from_static("x-ratelimit-remaining"),
+                    HeaderValue::from_static("0"),
+                ),
+                (
+                    header::HeaderName::from_static("x-ratelimit-reset"),
+                    HeaderValue::from_str(&reset.to_string()).unwrap(),
+                ),
             ],
             "Rate limit exceeded. Try again later.",
         )
@@ -307,7 +337,9 @@ fn bearer_tenant(req: &Request) -> Option<String> {
     let payload = parts[1];
     // Add padding if needed
     let payload = payload.to_string() + &"=".repeat((4 - payload.len() % 4) % 4);
-    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload).ok()?;
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .ok()?;
     let claims: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
     let tid = claims.get("tenant_id")?.as_str()?;
     if tid == "default" || tid.is_empty() {
@@ -484,9 +516,17 @@ pub async fn create_security_state() -> SecurityState {
         .and_then(|v| v.parse::<bool>().ok())
         .unwrap_or(false);
     let rate_limiter = if disable_rate_limit {
-        Arc::new(RateLimiter::with_store(rate_limit_store.clone(), u32::MAX, 1))
+        Arc::new(RateLimiter::with_store(
+            rate_limit_store.clone(),
+            u32::MAX,
+            1,
+        ))
     } else {
-        Arc::new(RateLimiter::with_store(rate_limit_store.clone(), max_requests, window_secs))
+        Arc::new(RateLimiter::with_store(
+            rate_limit_store.clone(),
+            max_requests,
+            window_secs,
+        ))
     };
 
     // Login throttle configuration
@@ -507,9 +547,17 @@ pub async fn create_security_state() -> SecurityState {
         .unwrap_or(300);
 
     let login_throttle = if disable_login_throttle || login_max_attempts == 0 {
-        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), u32::MAX, 1))
+        Arc::new(LoginThrottle::with_store(
+            rate_limit_store.clone(),
+            u32::MAX,
+            1,
+        ))
     } else {
-        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), login_max_attempts, login_lockout_secs))
+        Arc::new(LoginThrottle::with_store(
+            rate_limit_store.clone(),
+            login_max_attempts,
+            login_lockout_secs,
+        ))
     };
 
     // MFA throttle configuration
@@ -530,9 +578,17 @@ pub async fn create_security_state() -> SecurityState {
         .unwrap_or(300);
 
     let mfa_throttle = if disable_mfa_throttle || mfa_max_attempts == 0 {
-        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), u32::MAX, 1))
+        Arc::new(LoginThrottle::with_store(
+            rate_limit_store.clone(),
+            u32::MAX,
+            1,
+        ))
     } else {
-        Arc::new(LoginThrottle::with_store(rate_limit_store.clone(), mfa_max_attempts, mfa_lockout_secs))
+        Arc::new(LoginThrottle::with_store(
+            rate_limit_store.clone(),
+            mfa_max_attempts,
+            mfa_lockout_secs,
+        ))
     };
 
     SecurityState {

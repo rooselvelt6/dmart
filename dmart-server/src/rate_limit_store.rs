@@ -80,8 +80,8 @@ pub struct ValkeyRateLimitStore {
 
 impl ValkeyRateLimitStore {
     pub fn new(url: &str) -> Result<Self, String> {
-        let client = redis::Client::open(url)
-            .map_err(|e| format!("Valkey connection error: {}", e))?;
+        let client =
+            redis::Client::open(url).map_err(|e| format!("Valkey connection error: {}", e))?;
         Ok(Self { client })
     }
 
@@ -168,7 +168,9 @@ pub async fn create_rate_limit_store() -> Arc<dyn RateLimitStore> {
             return Arc::new(store);
         }
     }
-    tracing::warn!("Rate limiting: usando store en memoria (no distribuido). Configure DMART_VALKEY_URL para producción.");
+    tracing::warn!(
+        "Rate limiting: usando store en memoria (no distribuido). Configure DMART_VALKEY_URL para producción."
+    );
     Arc::new(InMemoryFailingStore::new())
 }
 

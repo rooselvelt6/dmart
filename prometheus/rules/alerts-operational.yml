@@ -36,18 +36,7 @@ groups:
       description: "Free space < 10% on /app/data ({{ $value | humanizePercentage }} free)"
       runbook_url: "https://github.com/dmart/runbooks#disk-space"
 
-  # ─── Aplicación ──────────────────────────────────────────
-  - alert: DatabaseDown
-    expr: up{job="dmart-server"} == 0
-    for: 1m
-    labels:
-      severity: critical
-      component: database
-    annotations:
-      summary: "dmart-server down on {{ $labels.instance }}"
-      description: "Healthcheck /obs/health failing for 1m"
-      runbook_url: "https://github.com/dmart/runbooks#database-down"
-
+  # ─── Cache / Redis ────────────────────────────────────────
   - alert: CacheDisconnected
     expr: cache_connected == 0
     for: 2m
@@ -58,6 +47,20 @@ groups:
       summary: "Valkey cache disconnected on {{ $labels.instance }}"
       description: "Cache connection lost for 2m"
       runbook_url: "https://github.com/dmart/runbooks#cache-disconnected"
+
+  - alert: CacheUnhealthy
+    expr: |
+      cache_reconnect_attempts > 3
+      or
+      cache_connected == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: cache
+    annotations:
+      summary: "Cache unhealthy after multiple reconnection attempts"
+      description: "Cache has failed to reconnect after 3 attempts or is disconnected."
+      runbook_url: "https://github.com/dmart/runbooks#cache-unhealthy"
 
   - alert: HighRequestLatency
     expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1

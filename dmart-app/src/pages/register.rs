@@ -1,5 +1,6 @@
 use crate::api;
 use crate::components::{location_picker::LocationPicker, skin_picker::SkinPicker, toggle::Toggle};
+use crate::i18n::trs;
 use dmart_shared::models::*;
 use leptos::either::Either;
 use leptos::prelude::*;
@@ -154,23 +155,23 @@ pub fn RegisterPage() -> impl IntoView {
             <div class="mb-8 md:mb-10 text-center">
                 <a href="/patients" class="text-xs md:text-sm flex items-center justify-center gap-2 mb-4 md:mb-6 no-underline font-medium" style="color:var(--uci-muted);" onmouseenter="this.style.color='var(--uci-accent)'" onmouseleave="this.style.color='var(--uci-muted)'">
                     <i class="fa-solid fa-chevron-left"></i>
-                    "Volver a Listado"
+                    {trs("reg-link-back-to-list")}
                 </a>
-                <h1 class="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight" style="color:var(--uci-text);">"Expediente Clínico"</h1>
-                <p class="text-sm md:text-base mt-2" style="color:var(--uci-muted);">"Registro formal de ingreso a la Unidad de Cuidados Intensivos"</p>
+                <h1 class="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight" style="color:var(--uci-text);">{trs("reg-title")}</h1>
+                <p class="text-sm md:text-base mt-2" style="color:var(--uci-muted);">{trs("reg-subtitle")}</p>
             </div>
 
             {move || sin_camas.get().then(|| view! {
                 <div class="p-4 md:p-5 rounded-xl mb-6 md:mb-8 text-sm font-semibold flex items-center gap-3" style="background:rgba(234,179,8,0.1); border:1px solid rgba(234,179,8,0.3); color:#CA8A04;">
                     <i class="fa-solid fa-bed-empty text-lg"></i>
-                    "No hay camas disponibles. No es posible registrar pacientes en este momento."
+                    {trs("reg-alert-no-beds")}
                 </div>
             })}
 
             {move || cama_disponible.get().map(|(_cama_id, cama_num, _tipo)| view! {
                 <div class="p-4 rounded-xl mb-6 md:mb-8 text-sm flex items-center gap-3" style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); color:#16A34A;">
                     <i class="fa-solid fa-bed text-lg"></i>
-                    <span>Cama asignada: <strong>{format!("#{}", cama_num)}</strong> <span class="opacity-75">(General)</span></span>
+                    <span>{trs("reg-info-bed-assigned")}</span>
                 </div>
             })}
 
@@ -182,22 +183,22 @@ pub fn RegisterPage() -> impl IntoView {
             })}
 
             <form on:submit=on_submit class="space-y-6 md:space-y-8">
-                <FormSection title="Identificación del Paciente" icon=move || view! { <i class="fa-solid fa-id-card"></i> }>
+                <FormSection title={trs("reg-section-identification")} icon=view! { <i class="fa-solid fa-id-card"></i> }.into_any()>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
-                        <FormField label="Nombre(s) *" icon=move || view! { <i class="fa-solid fa-user"></i> }>
-                            <input class="form-input" type="text" placeholder="Ej: Juan Alberto" required
+                        <FormField label={trs("reg-field-first-name")} icon=view! { <i class="fa-solid fa-user"></i> }.into_any()>
+                            <input class="form-input" type="text" placeholder={trs("reg-placeholder-first-name")} required
                                 prop:value=move || patient.get().nombre
                                 on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.nombre = v); } />
                         </FormField>
-                        <FormField label="Apellido(s) *" icon=move || view! { <i class="fa-solid fa-user-group"></i> }>
-                            <input class="form-input" type="text" placeholder="Ej: Pérez García" required
+                        <FormField label={trs("reg-field-last-name")} icon=view! { <i class="fa-solid fa-user-group"></i> }.into_any()>
+                            <input class="form-input" type="text" placeholder={trs("reg-placeholder-last-name")} required
                                 prop:value=move || patient.get().apellido
                                 on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.apellido = v); } />
                         </FormField>
 
-                        <FormField label="Cédula de Identidad *" icon=move || view! { <i class="fa-solid fa-address-card"></i> }>
+                        <FormField label={trs("reg-field-id-number")} icon=view! { <i class="fa-solid fa-address-card"></i> }.into_any()>
                             <input class=move || format!("form-input transition-all {}", if cedula_valid.get() { "border-emerald-500/50 bg-emerald-500/5" } else if !patient.get().cedula.is_empty() { "border-rose-500/50 bg-rose-500/5" } else { "" })
-                                type="text" placeholder="V-00000000" required maxlength="10"
+                                type="text" placeholder={trs("reg-placeholder-id-number")} required maxlength="10"
                                 prop:value=move || patient.get().cedula
                                 on:input=move |ev| {
                                     let mut v = event_target_value(&ev).to_uppercase();
@@ -212,7 +213,7 @@ pub fn RegisterPage() -> impl IntoView {
                                 class:text-emerald-600=move || cedula_valid.get()
                                 class:text-rose-500=move || !cedula_valid.get() && !patient.get().cedula.is_empty()>
                                 <span>
-                                    {move || if cedula_valid.get() { "✓ Formato válido" } else if !patient.get().cedula.is_empty() { "✗ Use formato V-00000000" } else { "Requerido" }}
+                                    {move || if cedula_valid.get() { trs("reg-valid-format") } else if !patient.get().cedula.is_empty() { trs("reg-invalid-id-format") } else { trs("reg-required") }}
                                 </span>
                                 <span style="color:var(--uci-muted);">
                                     {move || format!("{}/10", patient.get().cedula.len())}
@@ -220,9 +221,9 @@ pub fn RegisterPage() -> impl IntoView {
                             </p>
                         </FormField>
 
-                        <FormField label="Historia Clínica *" icon=move || view! { <i class="fa-solid fa-folder-open"></i> }>
+                        <FormField label={trs("reg-field-medical-record")} icon=view! { <i class="fa-solid fa-folder-open"></i> }.into_any()>
                             <input class=move || format!("form-input transition-all {}", if hc_valid.get() { "border-emerald-500/50 bg-emerald-500/5" } else if !patient.get().historia_clinica.is_empty() { "border-rose-500/50 bg-rose-500/5" } else { "" })
-                                type="text" placeholder="HC-00000" required maxlength="9"
+                                type="text" placeholder={trs("reg-placeholder-medical-record")} required maxlength="9"
                                 prop:value=move || patient.get().historia_clinica
                                 on:input=move |ev| {
                                     let mut v = event_target_value(&ev).to_uppercase();
@@ -237,7 +238,7 @@ pub fn RegisterPage() -> impl IntoView {
                                 class:text-emerald-600=move || hc_valid.get()
                                 class:text-rose-500=move || !hc_valid.get() && !patient.get().historia_clinica.is_empty()>
                                 <span>
-                                    {move || if hc_valid.get() { "✓ Formato válido" } else if !patient.get().historia_clinica.is_empty() { "✗ Use formato HC-00000" } else { "Requerido" }}
+                                    {move || if hc_valid.get() { trs("reg-valid-format") } else if !patient.get().historia_clinica.is_empty() { trs("reg-invalid-hc-format") } else { trs("reg-required") }}
                                 </span>
                                 <span style="color:var(--uci-muted);">
                                     {move || format!("{}/9", patient.get().historia_clinica.len())}
@@ -245,19 +246,19 @@ pub fn RegisterPage() -> impl IntoView {
                             </p>
                         </FormField>
 
-                        <FormField label="Sexo" icon=move || view! { <i class="fa-solid fa-venus-mars"></i> }>
+                        <FormField label={trs("reg-field-sex")} icon=view! { <i class="fa-solid fa-venus-mars"></i> }.into_any()>
                             <select class="form-select"
                                 on:change=move |ev| {
                                     let v = event_target_value(&ev);
                                     patient.update(|p| p.sexo = if v == "Masculino" { Sexo::Masculino } else { Sexo::Femenino });
                                 }>
-                                <option value="Masculino">"Masculino"</option>
-                                <option value="Femenino">"Femenino"</option>
+                                <option value="Masculino">{trs("reg-option-male")}</option>
+                                <option value="Femenino">{trs("reg-option-female")}</option>
                             </select>
                         </FormField>
 
-                        <FormField label="Fecha de Nacimiento *" icon=move || view! { <i class="fa-solid fa-calendar-day"></i> }>
-                            <input class="form-input" type="date" required
+                        <FormField label={trs("reg-field-birth-date")} icon=view! { <i class="fa-solid fa-calendar-day"></i> }.into_any()>
+                            <input class="form-input" r#type="date" required
                                 prop:value=move || patient.get().fecha_nacimiento
                                 on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.fecha_nacimiento = v); } />
                             <div class="mt-2 flex items-center gap-2 text-xs font-bold rounded-lg" style="background:rgba(59,130,246,0.1); color:var(--uci-accent); padding:8px 12px;">
@@ -270,7 +271,7 @@ pub fn RegisterPage() -> impl IntoView {
                     <div class="mt-6 md:mt-8 p-4 md:p-6 rounded-2xl border" style="background:var(--uci-surface); border-color:var(--uci-border);">
                         <label class="form-label mb-3 md:mb-5 flex items-center gap-2 text-sm">
                             <i class="fa-solid fa-palette" style="color:var(--uci-accent);"></i>
-                            "Color de Piel (Escala Fitzpatrick)"
+                            {trs("reg-label-skin-color")}
                         </label>
                         <SkinPicker
                             value=Signal::derive(move || patient.get().color_piel)
@@ -279,9 +280,9 @@ pub fn RegisterPage() -> impl IntoView {
                     </div>
                 </FormSection>
 
-                <FormSection title="Procedencia y Contacto" icon=move || view! { <i class="fa-solid fa-location-dot"></i> }>
+                <FormSection title={trs("reg-section-origin-contact")} icon=view! { <i class="fa-solid fa-location-dot"></i> }.into_any()>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
-                        <FormField label="Nacionalidad" icon=move || view! { <i class="fa-solid fa-flag"></i> }>
+                        <FormField label={trs("reg-field-nationality")} icon=view! { <i class="fa-solid fa-flag"></i> }.into_any()>
                             <select class="form-select"
                                 on:change=move |ev| {
                                     let v = event_target_value(&ev);
@@ -296,8 +297,8 @@ pub fn RegisterPage() -> impl IntoView {
                                         }
                                     });
                                 }>
-                                <option value="Venezolano">"🇻🇪 Venezolano"</option>
-                                <option value="Extranjero">"🌍 Extranjero"</option>
+                                <option value="Venezolano">{trs("reg-option-venezuelan")}</option>
+                                <option value="Extranjero">{trs("reg-option-foreigner")}</option>
                             </select>
                         </FormField>
 
@@ -319,14 +320,14 @@ pub fn RegisterPage() -> impl IntoView {
                             />
                         </div>
 
-                        <FormField label="Familiar Encargado" icon=move || view! { <i class="fa-solid fa-user-shield"></i> }>
-                            <input class="form-input" type="text" placeholder="Nombre del responsable"
+                        <FormField label={trs("reg-field-relative")} icon=view! { <i class="fa-solid fa-user-shield"></i> }.into_any()>
+                            <input class="form-input" type="text" placeholder={trs("reg-placeholder-relative")}
                                 prop:value=move || patient.get().familiar_encargado
                                 on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.familiar_encargado = v); } />
                         </FormField>
                         <div class="lg:col-span-2">
-                            <FormField label="Dirección de Residencia" icon=move || view! { <i class="fa-solid fa-house-medical"></i> }>
-                                <input class="form-input" type="text" placeholder="Dirección completa"
+                            <FormField label={trs("reg-field-address")} icon=view! { <i class="fa-solid fa-house-medical"></i> }.into_any()>
+                                <input class="form-input" type="text" placeholder={trs("reg-placeholder-address")}
                                     prop:value=move || patient.get().direccion
                                     on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.direccion = v); } />
                             </FormField>
@@ -334,9 +335,9 @@ pub fn RegisterPage() -> impl IntoView {
                     </div>
                 </FormSection>
 
-                <FormSection title="Ingreso Hospitalario" icon=move || view! { <i class="fa-solid fa-hospital-user"></i> }>
+                <FormSection title={trs("reg-section-hospital-admission")} icon=view! { <i class="fa-solid fa-hospital-user"></i> }.into_any()>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8 lg:mb-10">
-                        <FormField label="Ingreso Hospitalario *" icon=move || view! { <i class="fa-solid fa-calendar-plus"></i> }>
+                        <FormField label={trs("reg-field-hospital-admission")} icon=view! { <i class="fa-solid fa-calendar-plus"></i> }.into_any()>
                             <input class="form-input" type="datetime-local" required
                                 prop:value=move || { let p = patient.get(); p.fecha_ingreso_hospital.trim_end_matches('Z').chars().take(16).collect::<String>() }
                                 on:input=move |ev| {
@@ -344,7 +345,7 @@ pub fn RegisterPage() -> impl IntoView {
                                     patient.update(|p| p.fecha_ingreso_hospital = format!("{}:00Z", v));
                                 } />
                         </FormField>
-                        <FormField label="Ingreso UCI *" icon=move || view! { <i class="fa-solid fa-truck-medical"></i> }>
+                        <FormField label={trs("reg-field-icu-admission")} icon=view! { <i class="fa-solid fa-truck-medical"></i> }.into_any()>
                             <input class="form-input" style="border-color:var(--uci-accent);" type="datetime-local" required
                                 prop:value=move || { let p = patient.get(); p.fecha_ingreso_uci.trim_end_matches('Z').chars().take(16).collect::<String>() }
                                 on:input=move |ev| {
@@ -352,7 +353,7 @@ pub fn RegisterPage() -> impl IntoView {
                                     patient.update(|p| p.fecha_ingreso_uci = format!("{}:00Z", v));
                                 } />
                         </FormField>
-                        <FormField label="Tiempo de Estadía" icon=move || view! { <i class="fa-solid fa-clock-rotate-left"></i> }>
+                        <FormField label={trs("reg-field-stay-time")} icon=view! { <i class="fa-solid fa-clock-rotate-left"></i> }.into_any()>
                             <div class="form-input flex items-center h-10 md:h-11 lg:h-12 text-sm md:text-base font-bold" style="background:rgba(59,130,246,0.05); border-color:var(--uci-accent); color:var(--uci-accent);">
                                 {move || tiempo_estadia.get()}
                             </div>
@@ -360,24 +361,24 @@ pub fn RegisterPage() -> impl IntoView {
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8 lg:mb-10">
-                        <FormField label="Tipo de Admisión" icon=move || view! { <i class="fa-solid fa-shield-virus"></i> }>
+                        <FormField label={trs("reg-field-admission-type")} icon=view! { <i class="fa-solid fa-shield-virus"></i> }.into_any()>
                             <select class="form-select"
                                 on:change=move |ev| {
                                     let v = event_target_value(&ev);
                                     patient.update(|p| p.tipo_admision = if v == "Urgente" { TipoAdmision::Urgente } else { TipoAdmision::Electiva });
                                 }>
-                                <option value="Urgente">"🚨 Urgente (No programada)"</option>
-                                <option value="Electiva">"📅 Electiva (Programada)"</option>
+                                <option value="Urgente">{trs("reg-option-urgent")}</option>
+                                <option value="Electiva">{trs("reg-option-elective")}</option>
                             </select>
                         </FormField>
-                        <FormField label="Referido / Traslado" icon=move || view! { <i class="fa-solid fa-right-left"></i> }>
+                        <FormField label={trs("reg-field-referral")} icon=view! { <i class="fa-solid fa-right-left"></i> }.into_any()>
                             <div class="flex items-center gap-3 md:gap-4 h-10 md:h-11 lg:h-12 px-3 md:px-4 rounded-2xl border" style="background:var(--uci-surface); border-color:var(--uci-border);">
                                 <Toggle
                                     value=Signal::derive(move || patient.get().migracion_otro_centro)
                                     on_change=move |v| patient.update(|p| p.migracion_otro_centro = v)
                                 />
                                 <span class="text-xs font-bold uppercase tracking-widest" style="color:var(--uci-text);">
-                                    {move || if patient.get().migracion_otro_centro { "Desde otro centro" } else { "Ingreso directo" }}
+                                    {move || if patient.get().migracion_otro_centro { trs("reg-label-from-other-center") } else { trs("reg-label-direct-admission") }}
                                 </span>
                             </div>
                         </FormField>
@@ -386,8 +387,8 @@ pub fn RegisterPage() -> impl IntoView {
                     {move || if patient.get().migracion_otro_centro {
                         Either::Left(view! {
                             <div class="mb-6 md:mb-8 lg:mb-10">
-                                <FormField label="Centro de Salud de Origen" icon=move || view! { <i class="fa-solid fa-building-circle-arrow-right"></i> }>
-                                    <input class="form-input" type="text" placeholder="Nombre del hospital o clínica de origen"
+                                <FormField label={trs("reg-field-origin-center")} icon=view! { <i class="fa-solid fa-building-circle-arrow-right"></i> }.into_any()>
+                                    <input class="form-input" type="text" placeholder={trs("reg-placeholder-origin-center")}
                                         on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.centro_origen = Some(v)); } />
                                 </FormField>
                             </div>
@@ -401,8 +402,8 @@ pub fn RegisterPage() -> impl IntoView {
                                     <i class="fa-solid fa-mask-ventilator"></i>
                                 </div>
                                 <div>
-                                    <div class="font-bold text-sm md:text-base" style="color:var(--uci-text);">"Ventilación Mecánica"</div>
-                                    <div class="text-[10px] uppercase font-bold" style="color:var(--uci-muted); letter-spacing:0.5px;">"Soporte Invasivo"</div>
+                                    <div class="font-bold text-sm md:text-base" style="color:var(--uci-text);">{trs("reg-field-ventilation")}</div>
+                                    <div class="text-[10px] uppercase font-bold" style="color:var(--uci-muted); letter-spacing:0.5px;">{trs("reg-label-invasive-support")}</div>
                                 </div>
                             </div>
                             <Toggle
@@ -412,8 +413,8 @@ pub fn RegisterPage() -> impl IntoView {
                         </div>
                     </div>
 
-                    <FormField label="Procesos Invasivos Actuales" icon=move || view! { <i class="fa-solid fa-stretcher"></i> }>
-                        <textarea class="form-input" placeholder="Ej: Catéter venoso central, Sonda vesical, Línea arterial..." rows="3"
+                    <FormField label={trs("reg-field-invasive-processes")} icon=view! { <i class="fa-solid fa-stretcher"></i> }.into_any()>
+                        <textarea class="form-input" placeholder={trs("reg-placeholder-invasive-processes")} rows="3"
                             on:input=move |ev| {
                                 let v = event_target_value(&ev);
                                 patient.update(|p| p.procesos_invasivos = v.lines().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect());
@@ -421,22 +422,22 @@ pub fn RegisterPage() -> impl IntoView {
                     </FormField>
                 </FormSection>
 
-                <FormSection title="Diagnóstico y Clínica" icon=move || view! { <i class="fa-solid fa-file-medical"></i> }>
+                <FormSection title={trs("reg-section-diagnosis")} icon=view! { <i class="fa-solid fa-file-medical"></i> }.into_any()>
                     <div class="space-y-4 md:space-y-6">
-                        <FormField label="Descripción del Cuadro Clínico" icon=move || view! { <i class="fa-solid fa-comment-medical"></i> }>
-                            <textarea class="form-input" placeholder="Resumen del motivo de ingreso y evolución reciente..." rows="3"
+                        <FormField label={trs("reg-field-clinical-description")} icon=view! { <i class="fa-solid fa-comment-medical"></i> }.into_any()>
+                            <textarea class="form-input" placeholder={trs("reg-placeholder-clinical-description")} rows="3"
                                 prop:value=move || patient.get().descripcion_ingreso
                                 on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.descripcion_ingreso = v); }></textarea>
                         </FormField>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                            <FormField label="Diagnóstico de Ingreso" icon=move || view! { <i class="fa-solid fa-notes-medical"></i> }>
-                                <textarea class="form-input" placeholder="Diagnóstico presuntivo de hospitalización..." rows="4"
+                            <FormField label={trs("reg-field-hospital-diagnosis")} icon=view! { <i class="fa-solid fa-notes-medical"></i> }.into_any()>
+                                <textarea class="form-input" placeholder={trs("reg-placeholder-hospital-diagnosis")} rows="4"
                                     prop:value=move || patient.get().diagnostico_hospital
                                     on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.diagnostico_hospital = v); }></textarea>
                             </FormField>
-                            <FormField label="Diagnóstico UCI Confirmado" icon=move || view! { <i class="fa-solid fa-stethoscope" style="color:var(--uci-accent);"></i> }>
-                                <textarea class="form-input font-bold" style="border-color:var(--uci-accent);" placeholder="Diagnóstico definitivo de ingreso a cuidados intensivos..." rows="4"
+                            <FormField label={trs("reg-field-icu-diagnosis")} icon=view! { <i class="fa-solid fa-stethoscope" style="color:var(--uci-accent);"></i> }.into_any()>
+                                <textarea class="form-input font-bold" style="border-color:var(--uci-accent);" placeholder={trs("reg-placeholder-icu-diagnosis")} rows="4"
                                     prop:value=move || patient.get().diagnostico_uci
                                     on:input=move |ev| { let v = event_target_value(&ev); patient.update(|p| p.diagnostico_uci = v); }></textarea>
                             </FormField>
@@ -445,8 +446,8 @@ pub fn RegisterPage() -> impl IntoView {
                 </FormSection>
 
                 <Show when=move || !equipos_disponibles.get().is_empty()>
-                    <FormSection title="Equipos a Asignar" icon=move || view! { <i class="fa-solid fa-kit-medical"></i> }>
-                        <p class="text-sm mb-4" style="color:var(--uci-muted);">"Seleccione los equipos disponibles que se asignarán a la cama del paciente:"</p>
+                    <FormSection title={trs("reg-section-equipment")} icon=view! { <i class="fa-solid fa-kit-medical"></i> }.into_any()>
+                        <p class="text-sm mb-4" style="color:var(--uci-muted);">{trs("reg-equipment-description")}</p>
                         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             {move || {
                                 let equipos = equipos_disponibles.get();
@@ -496,7 +497,7 @@ pub fn RegisterPage() -> impl IntoView {
                 <div class="flex flex-col md:flex-row justify-end gap-3 md:gap-4 lg:gap-6 mt-10 md:mt-12 lg:mt-16 pb-16 md:pb-20 lg:pb-24">
                     <a href="/patients" class="btn-outline flex items-center justify-center gap-2 px-6 md:px-8 lg:px-10 h-11 md:h-12 lg:h-14 text-sm md:text-base group">
                         <i class="fa-solid fa-xmark group-hover:rotate-90 transition-transform"></i>
-                        "Cancelar"
+                        {trs("reg-btn-cancel")}
                     </a>
                     <button type="submit" class="btn-primary flex items-center justify-center gap-2 px-8 md:px-10 lg:px-12 h-11 md:h-12 lg:h-14 text-base md:text-lg" disabled=move || saving.get() || !camas_listas.get()>
                         {move || {
@@ -504,36 +505,31 @@ pub fn RegisterPage() -> impl IntoView {
                                 Either::Left(view! {
                                     <span class="flex items-center gap-2">
                                         <i class="fa-solid fa-circle-notch animate-spin"></i>
-                                        "Procesando..."
+                                        {trs("reg-btn-processing")}
                                     </span>
                                 })
                             } else {
                                 Either::Right(view! {
                                     <span class="flex items-center gap-2">
                                         <i class="fa-solid fa-floppy-disk"></i>
-                                        "Registrar Paciente"
+                                        {trs("reg-btn-register")}
                                     </span>
                                 })
                             }
                         }}
                     </button>
-                </div>
+</div>
             </form>
         </div>
     }
 }
-
 #[component]
-fn FormSection<F, IV>(title: &'static str, icon: F, children: Children) -> impl IntoView
-where
-    F: Fn() -> IV + 'static,
-    IV: IntoView + 'static,
-{
+fn FormSection(title: String, icon: AnyView, children: Children) -> impl IntoView {
     view! {
         <div class="glass-card p-4 md:p-6 lg:p-8 md:p-10 mb-6 md:mb-8 lg:mb-10 animate-fade-in" style="border-color:rgba(100,116,139,0.6);">
             <div class="flex items-center gap-3 md:gap-4 mb-6 md:mb-8 lg:mb-10 pb-4 md:pb-6" style="border-bottom:1px solid var(--uci-border);">
                 <div class="w-10 h-10 md:w-12 lg:w-14 rounded-xl md:rounded-2xl flex items-center justify-center text-lg md:text-xl lg:text-2xl shrink-0" style="background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(99,102,241,0.2)); color:var(--uci-accent); border:1px solid rgba(59,130,246,0.1);">
-                    {icon()}
+                    {icon}
                 </div>
                 <div>
                     <h2 class="text-base md:text-lg lg:text-xl font-black tracking-tight uppercase" style="color:var(--uci-text);">{title}</h2>
@@ -546,15 +542,11 @@ where
 }
 
 #[component]
-fn FormField<F, IV>(label: &'static str, icon: F, children: Children) -> impl IntoView
-where
-    F: Fn() -> IV + 'static,
-    IV: IntoView + 'static,
-{
+fn FormField(label: String, icon: AnyView, children: Children) -> impl IntoView {
     view! {
         <div class="space-y-2 md:space-y-3 w-full">
             <label class="form-label flex items-center gap-2 text-xs font-black uppercase tracking-widest" style="color:var(--uci-muted);">
-                {icon()}
+                {icon}
                 {label}
             </label>
             <div class="relative">

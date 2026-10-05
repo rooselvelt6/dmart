@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::api;
 use crate::api::{Diagnostic, SupportEvent, SupportSystem};
 use crate::components::ui_kit::{ErrorState, LoadingState};
+use crate::i18n::trs;
 
 /// Acciones del runbook expuestas por el backend (`support::ACTIONS`).
 const ACTIONS: &[(&str, &str, &str)] = &[
@@ -124,10 +125,10 @@ pub fn SupportConsole() -> impl IntoView {
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
-                        <i class="fa-solid fa-screwdriver-wrench mr-2"></i>"Consola de Soporte"
+                        <i class="fa-solid fa-screwdriver-wrench mr-2"></i>{trs("sup-title")}
                     </h1>
                     <p class="text-sm mt-1" style="color:var(--uci-muted);">
-                        "Estado, diagnóstico y runbook de la plataforma UCI"
+                        {trs("sup-subtitle")}
                     </p>
                 </div>
                 <button
@@ -135,7 +136,7 @@ pub fn SupportConsole() -> impl IntoView {
                     on:click=move |_| refresh.update(|n| *n += 1)
                     disabled=move || running.get()
                 >
-                    <i class="fa-solid fa-rotate mr-2"></i>"Actualizar"
+                    <i class="fa-solid fa-rotate mr-2"></i>{trs("sup-btn-refresh")}
                 </button>
             </div>
 
@@ -160,33 +161,33 @@ pub fn SupportConsole() -> impl IntoView {
                     style=move || if active_tab.get() == Tab::Systems { "background:var(--uci-accent); color:white;" } else { "background:var(--uci-surface); color:var(--uci-text);" }
                     on:click=move |_| active_tab.set(Tab::Systems)
                 >
-                    <i class="fa-solid fa-server mr-2"></i>"Sistemas"
+                    <i class="fa-solid fa-server mr-2"></i>{trs("sup-tab-systems")}
                 </button>
                 <button
                     class=move || tab_class(Tab::Diagnostics)
                     style=move || if active_tab.get() == Tab::Diagnostics { "background:var(--uci-accent); color:white;" } else { "background:var(--uci-surface); color:var(--uci-text);" }
                     on:click=move |_| active_tab.set(Tab::Diagnostics)
                 >
-                    <i class="fa-solid fa-stethoscope mr-2"></i>"Diagnóstico"
+                    <i class="fa-solid fa-stethoscope mr-2"></i>{trs("sup-tab-diagnostics")}
                 </button>
                 <button
                     class=move || tab_class(Tab::History)
                     style=move || if active_tab.get() == Tab::History { "background:var(--uci-accent); color:white;" } else { "background:var(--uci-surface); color:var(--uci-text);" }
                     on:click=move |_| active_tab.set(Tab::History)
                 >
-                    <i class="fa-solid fa-clock-rotate-left mr-2"></i>"Historial"
+                    <i class="fa-solid fa-clock-rotate-left mr-2"></i>{trs("sup-tab-history")}
                 </button>
             </div>
 
             <div class="mb-6">
                 {move || match active_tab.get() {
                     Tab::Systems => view! {
-                        <Suspense fallback=move || view! { <LoadingState label="Consultando subsistemas..." /> }>
+                        <Suspense fallback=move || view! { <LoadingState label={trs("sup-systems-loading")} /> }>
                             {move || match systems.get() {
                                 Some(Ok(list)) => view! { <SystemsTable systems=list refresh=refresh /> }.into_any(),
                                 Some(Err(e)) => view! {
                                     <ErrorState
-                                        message=format!("No se pudo consultar los subsistemas: {}", e)
+                                        message=format!("{}: {}", trs("sup-systems-error"), e)
                                         on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                                     />
                                 }.into_any(),
@@ -195,12 +196,12 @@ pub fn SupportConsole() -> impl IntoView {
                         </Suspense>
                     }.into_any(),
                     Tab::Diagnostics => view! {
-                        <Suspense fallback=move || view! { <LoadingState label="Generando diagnóstico..." /> }>
+                        <Suspense fallback=move || view! { <LoadingState label={trs("sup-diagnostics-loading")} /> }>
                             {move || match diagnostics.get() {
                                 Some(Ok(list)) => view! { <DiagnosticsList diagnostics=list /> }.into_any(),
                                 Some(Err(e)) => view! {
                                     <ErrorState
-                                        message=format!("No se pudo generar el diagnóstico: {}", e)
+                                        message=format!("{}: {}", trs("sup-diagnostics-error"), e)
                                         on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                                     />
                                 }.into_any(),
@@ -209,12 +210,12 @@ pub fn SupportConsole() -> impl IntoView {
                         </Suspense>
                     }.into_any(),
                     Tab::History => view! {
-                        <Suspense fallback=move || view! { <LoadingState label="Cargando historial..." /> }>
+                        <Suspense fallback=move || view! { <LoadingState label={trs("sup-history-loading")} /> }>
                             {move || match history.get() {
                                 Some(Ok(events)) => view! { <HistoryTable events=events /> }.into_any(),
                                 Some(Err(e)) => view! {
                                     <ErrorState
-                                        message=format!("No se pudo cargar el historial: {}", e)
+                                        message=format!("{}: {}", trs("sup-history-error"), e)
                                         on_retry=Some(Callback::new(move |()| refresh.update(|n| *n += 1)))
                                     />
                                 }.into_any(),
@@ -241,18 +242,18 @@ pub fn SupportConsole() -> impl IntoView {
                     style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.55);"
                     role="dialog"
                     aria-modal="true"
-                    aria-label="Confirmar acción de soporte"
+                    aria-label={trs("sup-confirm-title")}
                 >
                     <div class="glass-card" style="max-width:440px; width:90%; padding:24px;">
                         <h3 class="text-lg font-bold mb-2" style="color:var(--uci-text);">
                             <i class="fa-solid fa-triangle-exclamation mr-2" style="color:#F59E0B;"></i>
-                            "Confirmar acción"
+                            {trs("sup-confirm-title")}
                         </h3>
                         <p class="text-sm mb-1" style="color:var(--uci-text);">
                             {action_label(&act)}
                         </p>
                         <p class="text-xs mb-6" style="color:var(--uci-muted);">
-                            "Se ejecutará en el servidor y quedará registrado en el historial y la auditoría."
+                            {trs("sup-confirm-description")}
                         </p>
                         <div class="flex justify-end gap-3">
                             <button
@@ -261,14 +262,14 @@ pub fn SupportConsole() -> impl IntoView {
                                 on:click=move |_| pending.set(None)
                                 disabled=move || running.get()
                             >
-                                "Cancelar"
+                                {trs("sup-btn-cancel")}
                             </button>
                             <button
                                 class="btn-primary px-4 h-10 text-sm"
                                 on:click=move |_| on_exec.run(act.clone())
                                 disabled=move || running.get()
                             >
-                                {move || if running.get() { "Ejecutando..." } else { "Ejecutar" }}
+                                {move || if running.get() { trs("sup-btn-executing") } else { trs("sup-btn-execute") }}
                             </button>
                         </div>
                     </div>
@@ -317,13 +318,13 @@ fn SystemsTable(systems: Vec<SupportSystem>, refresh: RwSignal<u32>) -> impl Int
             <table class="w-full">
                 <thead style="background:var(--uci-bg);">
                     <tr>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Subsistema"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Estado"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Latencia"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"OK"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Errores"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Frescura"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Detalle"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-subsystem")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-status")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-latency")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-ok")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-errors")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-freshness")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-details")}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y" style="border-color:var(--uci-border);">
@@ -336,7 +337,7 @@ fn SystemsTable(systems: Vec<SupportSystem>, refresh: RwSignal<u32>) -> impl Int
                     style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
                     on:click=move |_| refresh.update(|n| *n += 1)
                 >
-                    <i class="fa-solid fa-rotate mr-1"></i>"Reconsultar"
+                    <i class="fa-solid fa-rotate mr-1"></i>{trs("sup-btn-requery")}
                 </button>
             </div>
         </div>
@@ -386,9 +387,9 @@ fn DiagnosticsList(diagnostics: Vec<Diagnostic>) -> impl IntoView {
                     <div class="space-y-1">{indicators}</div>
                     <div class="mt-3 pt-3 text-xs" style="border-top:1px solid var(--uci-border); color:var(--uci-muted);">
                         {if suggested.is_empty() {
-                            "Sin acciones sugeridas".to_string()
+                            trs("sup-diagnostics-no-actions")
                         } else {
-                            format!("Runbook: {}", suggested.join(", "))
+                            format!("{}: {}", trs("sup-diagnostics-runbook"), suggested.join(", "))
                         }}
                     </div>
                     <div class="text-xs mt-1" style="color:var(--uci-muted);">{d.notes.clone()}</div>
@@ -406,7 +407,7 @@ fn HistoryTable(events: Vec<SupportEvent>) -> impl IntoView {
         return view! {
             <div class="p-10 text-center rounded-xl" style="background:var(--uci-surface); color:var(--uci-muted);">
                 <i class="fa-solid fa-clock-rotate-left text-2xl mb-2"></i>
-                <p>"Sin eventos registrados"</p>
+                <p>{trs("sup-history-empty")}</p>
             </div>
         }.into_any();
     }
@@ -448,13 +449,13 @@ fn HistoryTable(events: Vec<SupportEvent>) -> impl IntoView {
             <table class="w-full">
                 <thead style="background:var(--uci-bg);">
                     <tr>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Fecha"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Origen"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Subsistema"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Acción"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Actor"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">""</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Mensaje"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-date")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-origin")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-subsystem")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-action")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-actor")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-result")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("sup-col-message")}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y" style="border-color:var(--uci-border);">
@@ -493,10 +494,10 @@ fn ActionsPanel(
     view! {
         <div class="glass-card p-5">
             <h3 class="text-sm font-bold uppercase mb-1" style="color:var(--uci-text);">
-                <i class="fa-solid fa-bolt mr-2"></i>"Runbook de corrección"
+                <i class="fa-solid fa-bolt mr-2"></i>{trs("sup-runbook-title")}
             </h3>
             <p class="text-xs mb-4" style="color:var(--uci-muted);">
-                "Cada acción es idempotente y queda auditada. Se solicita confirmación antes de ejecutar."
+                {trs("sup-runbook-description")}
             </p>
 
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -506,7 +507,7 @@ fn ActionsPanel(
             <div class="flex flex-wrap items-end gap-3 mt-5 pt-4" style="border-top:1px solid var(--uci-border);">
                 <div>
                     <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">
-                        "Modelo (model_swap)"
+                        {trs("sup-field-model-label")}
                     </label>
                     <input
                         type="text"
@@ -519,7 +520,7 @@ fn ActionsPanel(
                 </div>
                 <div>
                     <label class="block text-xs font-semibold mb-1" style="color:var(--uci-muted);">
-                        "Versión (opcional)"
+                        {trs("sup-field-version-label")}
                     </label>
                     <input
                         type="text"
@@ -531,7 +532,7 @@ fn ActionsPanel(
                     />
                 </div>
                 <span class="text-xs" style="color:var(--uci-muted);">
-                    "Solo aplica a «Reactivar modelo ML»."
+                    {trs("sup-field-version-note")}
                 </span>
             </div>
         </div>

@@ -130,7 +130,10 @@ pub async fn ingest_vitals_for_tenant(
         // Actualizar la clave con el measurement_id
         let _ = db
             .query("UPDATE $id SET measurement_id = $mid")
-            .bind(("id", Thing::from(("hl7_ingest_key", key_record_id.as_str()))))
+            .bind((
+                "id",
+                Thing::from(("hl7_ingest_key", key_record_id.as_str())),
+            ))
             .bind(("mid", measurement.measurement_id.clone()))
             .await;
 

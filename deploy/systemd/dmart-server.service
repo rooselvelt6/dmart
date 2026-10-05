@@ -1,0 +1,69 @@
+# dmart-server systemd service unit
+# Install: cp dmart-server.service /etc/systemd/system/
+# Enable: systemctl enable dmart-server
+# Start: systemctl start dmart-server
+
+[Unit]
+Description=dMart UCI Server
+Documentation=https://github.com/dmart/dmart
+After=network.target surrealdb.service valkey.service
+Wants=surrealdb.service valkey.service
+
+[Service]
+Type=notify
+User=dmart
+Group=dmart
+
+# Working directory
+WorkingDirectory=/opt/dmart
+
+# Environment
+EnvironmentFile=-/etc/dmart/dmart.env
+Environment=RUST_LOG=info
+Environment=RUST_BACKTRACE=1
+
+# Executable
+ExecStart=/opt/dmart/bin/dmart-server
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+PrivateDevices=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ProcSubset=pid
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=32768
+MemoryMax=2G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dmart-server
+
+[Install]
+WantedBy=multi-user.target

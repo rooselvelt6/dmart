@@ -1,5 +1,6 @@
 use crate::api;
 use crate::components::ui_kit::{ErrorState, LoadingState};
+use crate::i18n::trs;
 use dmart_shared::models::*;
 use leptos::either::Either;
 use leptos::prelude::*;
@@ -29,9 +30,9 @@ pub fn AdminPage() -> impl IntoView {
                 <div class="mb-8">
                     <h1 class="text-2xl font-bold" style="color:var(--uci-text);">
                         <i class="fa-solid fa-gear mr-2" style="color:var(--uci-accent);"></i>
-                        "Panel de Administración"
+                        {trs("adm-panel-title")}
                     </h1>
-                    <p class="mt-1" style="color:var(--uci-muted);">"Gestión de UCI: Camas, Equipos y Personal"</p>
+                    <p class="mt-1" style="color:var(--uci-muted);">{trs("adm-panel-subtitle")}</p>
                 </div>
 
                 <Suspense fallback=move || view! {
@@ -47,18 +48,18 @@ pub fn AdminPage() -> impl IntoView {
                     {move || admin_stats.get().map(|a| match a {
                         Some(stats) => Either::Left(view! {
                             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-                                {admin_stat_card("Camas", &stats.total_camas.to_string(), "#6366F1", "fa-bed")}
-                                {admin_stat_card("Libres", &stats.camas_libres.to_string(), "#10B981", "fa-check")}
-                                {admin_stat_card("Ocupadas", &stats.camas_ocupadas.to_string(), "#EF4444", "fa-xmark")}
-                                {admin_stat_card("Equipos", &stats.total_equipos.to_string(), "#3B82F6", "fa-monitor-heart")}
-                                {admin_stat_card("Disponibles", &stats.equipos_disponibles.to_string(), "#8B5CF6", "fa-box")}
-                                {admin_stat_card("Medicos", &stats.medicos_activos.to_string(), "#F59E0B", "fa-user-doctor")}
-                                {admin_stat_card("Enfermeros", &stats.enfermeros_activos.to_string(), "#EC4899", "fa-user-nurse")}
+                                {admin_stat_card(trs("adm-stat-camas"), stats.total_camas.to_string(), "#6366F1", "fa-bed")}
+                                {admin_stat_card(trs("adm-stat-libres"), stats.camas_libres.to_string(), "#10B981", "fa-check")}
+                                {admin_stat_card(trs("adm-stat-ocupadas"), stats.camas_ocupadas.to_string(), "#EF4444", "fa-xmark")}
+                                {admin_stat_card(trs("adm-stat-equipos"), stats.total_equipos.to_string(), "#3B82F6", "fa-monitor-heart")}
+                                {admin_stat_card(trs("adm-stat-disponibles"), stats.equipos_disponibles.to_string(), "#8B5CF6", "fa-box")}
+                                {admin_stat_card(trs("adm-stat-medicos"), stats.medicos_activos.to_string(), "#F59E0B", "fa-user-doctor")}
+                                {admin_stat_card(trs("adm-stat-enfermeros"), stats.enfermeros_activos.to_string(), "#EC4899", "fa-user-nurse")}
                             </div>
                         }),
                         None => Either::Right(view! {
                             <div class="p-4 mb-6 rounded-xl text-sm" style="background:rgba(239,68,68,0.1); color:#DC2626;">
-                                <i class="fa-solid fa-triangle-exclamation mr-2"></i>"No se pudieron cargar las estadísticas del servidor"
+                                <i class="fa-solid fa-triangle-exclamation mr-2"></i>{trs("adm-stats-load-error")}
                             </div>
                         }),
                     })}
@@ -66,19 +67,19 @@ pub fn AdminPage() -> impl IntoView {
 
                 <div class="tabs flex gap-2 mb-6 pb-4" style="border-bottom:1px solid var(--uci-border);">
                     <button class=tab_class("camas") on:click=move |_| set_active_tab.set("camas".to_string())>
-                        <i class="fa-solid fa-bed mr-2"></i>"Camas"
+                        <i class="fa-solid fa-bed mr-2"></i>{trs("adm-tab-camas")}
                     </button>
                     <button class=tab_class("equipos") on:click=move |_| set_active_tab.set("equipos".to_string())>
-                        <i class="fa-solid fa-monitor-heart mr-2"></i>"Equipos"
+                        <i class="fa-solid fa-monitor-heart mr-2"></i>{trs("adm-tab-equipos")}
                     </button>
                     <button class=tab_class("staff") on:click=move |_| set_active_tab.set("staff".to_string())>
-                        <i class="fa-solid fa-users mr-2"></i>"Personal"
+                        <i class="fa-solid fa-users mr-2"></i>{trs("adm-tab-staff")}
                     </button>
                     <button class=tab_class("institucion") on:click=move |_| set_active_tab.set("institucion".to_string())>
-                        <i class="fa-solid fa-hospital mr-2"></i>"Institución"
+                        <i class="fa-solid fa-hospital mr-2"></i>{trs("adm-tab-institucion")}
                     </button>
                     <button class=tab_class("auditoria") on:click=move |_| set_active_tab.set("auditoria".to_string())>
-                        <i class="fa-solid fa-shield-halved mr-2"></i>"Auditoría"
+                        <i class="fa-solid fa-shield-halved mr-2"></i>{trs("adm-tab-auditoria")}
                     </button>
                 </div>
 
@@ -102,9 +103,7 @@ pub fn AdminPage() -> impl IntoView {
     }
 }
 
-fn admin_stat_card(title: &str, value: &str, color: &str, icon: &str) -> impl IntoView + use<> {
-    let title = title.to_string();
-    let value = value.to_string();
+fn admin_stat_card(title: String, value: String, color: &str, icon: &str) -> impl IntoView + use<> {
     let c = color;
     view! {
         <div class="p-4 rounded-xl" style=format!("background:var(--uci-surface); border-top:2px solid {};", c)>
@@ -175,7 +174,7 @@ fn InstitucionPanel() -> impl IntoView {
     view! {
         <div>
             <h2 class="text-lg font-bold mb-6" style="color:var(--uci-text);">
-                <i class="fa-solid fa-hospital mr-2" style="color:var(--uci-accent);"></i>"Configuración de la Institución"
+                <i class="fa-solid fa-hospital mr-2" style="color:var(--uci-accent);"></i>{trs("adm-institucion-title")}
             </h2>
 
             {move || error_msg.get().map(|e| view! {
@@ -188,44 +187,44 @@ fn InstitucionPanel() -> impl IntoView {
             {move || (guardado.get()).then(|| view! {
                 <div class="p-3 rounded-lg mb-4 text-sm font-semibold flex items-center gap-2"
                     style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10B981;">
-                    <i class="fa-solid fa-check-circle"></i>"Configuración guardada correctamente"
+                    <i class="fa-solid fa-check-circle"></i>{trs("adm-institucion-saved")}
                 </div>
             })}
 
             <div class="p-6 rounded-xl" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Nombre de la Institución"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-institucion-nombre-label")}</label>
                         <input class="form-input w-full" type="text"
                             prop:value=move || config.get().nombre
                             on:input=move |ev| set_config.update(|c| c.nombre = event_target_value(&ev)) />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"RIF"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-institucion-rif-label")}</label>
                         <input class="form-input w-full" type="text"
                             prop:value=move || config.get().rif
                             on:input=move |ev| set_config.update(|c| c.rif = event_target_value(&ev)) />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Dirección"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-institucion-direccion-label")}</label>
                         <input class="form-input w-full" type="text"
                             prop:value=move || config.get().direccion
                             on:input=move |ev| set_config.update(|c| c.direccion = event_target_value(&ev)) />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Teléfono"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-institucion-telefono-label")}</label>
                         <input class="form-input w-full" type="text"
                             prop:value=move || config.get().telefono
                             on:input=move |ev| set_config.update(|c| c.telefono = event_target_value(&ev)) />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Email"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-institucion-email-label")}</label>
                         <input class="form-input w-full" type="email"
                             prop:value=move || config.get().email
                             on:input=move |ev| set_config.update(|c| c.email = event_target_value(&ev)) />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"URL del Logo"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-institucion-logo-label")}</label>
                         <input class="form-input w-full" type="text"
                             prop:value=move || config.get().logo_url.unwrap_or_default()
                             on:input=move |ev| set_config.update(|c| c.logo_url = Some(event_target_value(&ev))) />
@@ -233,7 +232,7 @@ fn InstitucionPanel() -> impl IntoView {
                 </div>
                 <div class="flex justify-end mt-6">
                     <button on:click=move |_| save() class="btn-primary px-6 h-10 text-sm" disabled=loading>
-                        {move || if loading.get() { "Guardando..." } else { "Guardar" }}
+                        {move || if loading.get() { trs("adm-btn-saving") } else { trs("adm-btn-save") }}
                     </button>
                 </div>
             </div>
@@ -320,12 +319,12 @@ fn CamasPanel() -> impl IntoView {
         <div>
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-bold" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-bed mr-2" style="color:var(--uci-accent);"></i>"Gestión de Camas"
+                    <i class="fa-solid fa-bed mr-2" style="color:var(--uci-accent);"></i>{trs("adm-camas-title")}
                 </h2>
                 <button on:click=move |_| { reset_form(); set_show_form.update(|v| *v = !*v); }
                     class="px-4 py-2 rounded-lg text-sm font-medium text-white"
                     style="background:var(--uci-accent);">
-                    <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { "Cancelar" } else { "Nueva Cama" }}
+                    <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { trs("adm-btn-cancel") } else { trs("adm-btn-new-bed") }}
                 </button>
             </div>
 
@@ -340,37 +339,37 @@ fn CamasPanel() -> impl IntoView {
                 <div class="p-4 rounded-xl mb-6 flex flex-wrap items-end gap-4"
                     style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Número"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-cama-numero-label")}</label>
                         <input type="number" min="1" class="form-input w-24"
                             prop:value=move || form_numero.get().to_string()
                             on:input=move |ev| { let v = event_target_value(&ev).parse().unwrap_or(1); set_form_numero.set(v); } />
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Tipo"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-cama-tipo-label")}</label>
                         <select class="form-select"
                             prop:value=move || form_tipo.get()
                             on:change=move |ev| { set_form_tipo.set(event_target_value(&ev)); }>
-                            <option value="General">"General"</option>
-                            <option value="Aislamiento">"Aislamiento"</option>
-                            <option value="Pediatrica">"Pediátrica"</option>
-                            <option value="Coronaria">"Coronaria"</option>
-                            <option value="Quemados">"Quemados"</option>
-                            <option value="Otro">"Otro"</option>
+                            <option value="General">{trs("adm-cama-tipo-general")}</option>
+                            <option value="Aislamiento">{trs("adm-cama-tipo-aislamiento")}</option>
+                            <option value="Pediatrica">{trs("adm-cama-tipo-pediatrica")}</option>
+                            <option value="Coronaria">{trs("adm-cama-tipo-coronaria")}</option>
+                            <option value="Quemados">{trs("adm-cama-tipo-quemados")}</option>
+                            <option value="Otro">{trs("adm-cama-tipo-otro")}</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Estado"</label>
+                        <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-cama-estado-label")}</label>
                         <select class="form-select"
                             prop:value=move || form_estado.get()
                             on:change=move |ev| { set_form_estado.set(event_target_value(&ev)); }>
-                            <option value="Libre">"Libre"</option>
-                            <option value="Ocupada">"Ocupada"</option>
-                            <option value="Mantenimiento">"Mantenimiento"</option>
-                            <option value="Limpieza">"Limpieza"</option>
+                            <option value="Libre">{trs("adm-cama-estado-libre")}</option>
+                            <option value="Ocupada">{trs("adm-cama-estado-ocupada")}</option>
+                            <option value="Mantenimiento">{trs("adm-cama-estado-mantenimiento")}</option>
+                            <option value="Limpieza">{trs("adm-cama-estado-limpieza")}</option>
                         </select>
                     </div>
                     <button on:click=move |_| save() class="btn-primary px-6 h-10 text-sm" disabled=saving>
-                        {move || if saving.get() { "Guardando..." } else if edit_cama.get().is_some() { "Actualizar" } else { "Crear" }}
+                        {move || if saving.get() { trs("adm-btn-saving") } else if edit_cama.get().is_some() { trs("adm-btn-update") } else { trs("adm-btn-create") }}
                     </button>
                 </div>
             </Show>
@@ -419,18 +418,18 @@ fn CamasPanel() -> impl IntoView {
 
             <div class="mt-6">
                 <h3 class="text-sm font-bold uppercase mb-3" style="color:var(--uci-muted);">
-                    <i class="fa-solid fa-table mr-2"></i>"Registro de Camas"
+                    <i class="fa-solid fa-table mr-2"></i>{trs("adm-camas-registry-title")}
                 </h3>
                 <div class="rounded-xl overflow-hidden" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                     <table class="w-full">
                         <thead style="background:var(--uci-bg);">
                             <tr>
                                 <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"#"</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Numero"</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Tipo"</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Estado"</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Paciente"</th>
-                                <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">"Acciones"</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-numero")}</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-tipo")}</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-estado")}</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-paciente")}</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-acciones")}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y" style="border-color:var(--uci-border);">
@@ -590,12 +589,12 @@ fn EquiposPanel() -> impl IntoView {
         <div>
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-bold" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-monitor-heart mr-2" style="color:var(--uci-accent);"></i>"Gestión de Equipos"
+                    <i class="fa-solid fa-monitor-heart mr-2" style="color:var(--uci-accent);"></i>{trs("adm-equipos-title")}
                 </h2>
                 <button on:click=move |_| { reset_form(); set_show_form.update(|v| *v = !*v); }
                     class="px-4 py-2 rounded-lg text-sm font-medium text-white"
                     style="background:var(--uci-accent);">
-                    <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { "Cancelar" } else { "Nuevo Equipo" }}
+                    <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { trs("adm-btn-cancel") } else { trs("adm-btn-new-equipo") }}
                 </button>
             </div>
 
@@ -610,37 +609,37 @@ fn EquiposPanel() -> impl IntoView {
                 <div class="p-4 rounded-xl mb-6" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Nombre"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-equipo-nombre-label")}</label>
                             <input class="form-input" type="text"
                                 prop:value=move || form_nombre.get()
                                 on:input=move |ev| set_form_nombre.set(event_target_value(&ev)) />
                         </div>
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Tipo"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-equipo-tipo-label")}</label>
                             <select class="form-select"
                                 prop:value=move || form_tipo.get()
                                 on:change=move |ev| set_form_tipo.set(event_target_value(&ev))>
-                                <option value="VentiladorMecanico">"Ventilador Mecánico"</option>
-                                <option value="Monitor">"Monitor"</option>
-                                <option value="Computador">"Computador"</option>
-                                <option value="BombaInfusion">"Bomba de Infusión"</option>
-                                <option value="Otro">"Otro"</option>
+                                <option value="VentiladorMecanico">{trs("adm-equipo-tipo-ventilador")}</option>
+                                <option value="Monitor">{trs("adm-equipo-tipo-monitor")}</option>
+                                <option value="Computador">{trs("adm-equipo-tipo-computador")}</option>
+                                <option value="BombaInfusion">{trs("adm-equipo-tipo-bomba")}</option>
+                                <option value="Otro">{trs("adm-equipo-tipo-otro")}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Marca"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-equipo-marca-label")}</label>
                             <input class="form-input" type="text"
                                 prop:value=move || form_marca.get()
                                 on:input=move |ev| set_form_marca.set(event_target_value(&ev)) />
                         </div>
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Modelo"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-equipo-modelo-label")}</label>
                             <input class="form-input" type="text"
                                 prop:value=move || form_modelo.get()
                                 on:input=move |ev| set_form_modelo.set(event_target_value(&ev)) />
                         </div>
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Serial"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-equipo-serial-label")}</label>
                             <input class="form-input" type="text"
                                 prop:value=move || form_serial.get()
                                 on:input=move |ev| set_form_serial.set(event_target_value(&ev)) />
@@ -648,18 +647,18 @@ fn EquiposPanel() -> impl IntoView {
                     </div>
                     <div class="flex items-end gap-4 mt-4">
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Estado"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-equipo-estado-label")}</label>
                             <select class="form-select"
                                 prop:value=move || form_estado.get()
                                 on:change=move |ev| set_form_estado.set(event_target_value(&ev))>
-                                <option value="Activo">"Activo"</option>
-                                <option value="Mantenimiento">"Mantenimiento"</option>
-                                <option value="Inactivo">"Inactivo"</option>
-                                <option value="Reparacion">"Reparación"</option>
+                                <option value="Activo">{trs("adm-equipo-estado-activo")}</option>
+                                <option value="Mantenimiento">{trs("adm-equipo-estado-mantenimiento")}</option>
+                                <option value="Inactivo">{trs("adm-equipo-estado-inactivo")}</option>
+                                <option value="Reparacion">{trs("adm-equipo-estado-reparacion")}</option>
                             </select>
                         </div>
                         <button on:click=move |_| save() class="btn-primary px-6 h-10 text-sm" disabled=saving>
-                            {move || if saving.get() { "Guardando..." } else if edit_equipo.get().is_some() { "Actualizar" } else { "Crear" }}
+                            {move || if saving.get() { trs("adm-btn-saving") } else if edit_equipo.get().is_some() { trs("adm-btn-update") } else { trs("adm-btn-create") }}
                         </button>
                     </div>
                 </div>
@@ -669,13 +668,13 @@ fn EquiposPanel() -> impl IntoView {
                 <table class="w-full">
                     <thead style="background:var(--uci-bg);">
                         <tr>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Nombre"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Tipo"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Marca/Modelo"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Serial"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Estado"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Cama"</th>
-                            <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">"Acciones"</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-nombre")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-tipo")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-marca-modelo")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-serial")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-equipo-estado-label")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-cama")}</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-acciones")}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y" style="border-color:var(--uci-border);">
@@ -779,23 +778,19 @@ fn StaffPanel() -> impl IntoView {
         let user_id = edit_user.get().map(|u| u.user_id.clone());
 
         if nombre.trim().is_empty() {
-            error_msg.set(Some("El nombre es obligatorio".to_string()));
+            error_msg.set(Some(trs("adm-staff-error-name-required")));
             return;
         }
         if user_id.is_none() && username.trim().is_empty() {
-            error_msg.set(Some("El usuario es obligatorio".to_string()));
+            error_msg.set(Some(trs("adm-staff-error-user-required")));
             return;
         }
         if user_id.is_none() && password.len() < 8 {
-            error_msg.set(Some(
-                "La contraseña debe tener al menos 8 caracteres".to_string(),
-            ));
+            error_msg.set(Some(trs("adm-staff-error-pass-min")));
             return;
         }
         if user_id.is_some() && !password.is_empty() && password.len() < 8 {
-            error_msg.set(Some(
-                "La contraseña debe tener al menos 8 caracteres".to_string(),
-            ));
+            error_msg.set(Some(trs("adm-staff-error-pass-min")));
             return;
         }
 
@@ -844,23 +839,23 @@ fn StaffPanel() -> impl IntoView {
         <div>
             <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <h2 class="text-lg font-bold" style="color:var(--uci-text);">
-                    <i class="fa-solid fa-users mr-2" style="color:var(--uci-accent);"></i>"Gestión de Personal"
+                    <i class="fa-solid fa-users mr-2" style="color:var(--uci-accent);"></i>{trs("adm-staff-title")}
                 </h2>
                 <div class="flex items-center gap-3">
                     <select class="form-select" aria-label="Filtrar por rol"
                         prop:value=move || rol_filter.get()
                         on:change=move |ev| set_rol_filter.set(event_target_value(&ev))>
-                        <option value="todos">"Todos los roles"</option>
-                        <option value="Admin">"Admin"</option>
-                        <option value="Medico">"Médico"</option>
-                        <option value="Enfermero">"Enfermero"</option>
-                        <option value="Viewer">"Viewer"</option>
-                        <option value="Soporte">"Soporte"</option>
+                        <option value="todos">{trs("adm-staff-filter-all")}</option>
+                        <option value="Admin">{trs("adm-staff-role-admin")}</option>
+                        <option value="Medico">{trs("adm-staff-role-medico")}</option>
+                        <option value="Enfermero">{trs("adm-staff-role-enfermero")}</option>
+                        <option value="Viewer">{trs("adm-staff-role-viewer")}</option>
+                        <option value="Soporte">{trs("adm-staff-role-soporte")}</option>
                     </select>
                     <button on:click=move |_| { reset_form(); set_show_form.update(|v| *v = !*v); }
                         class="px-4 py-2 rounded-lg text-sm font-medium text-white"
                         style="background:var(--uci-accent);">
-                        <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { "Cancelar" } else { "Nuevo Personal" }}
+                        <i class="fa-solid fa-plus mr-1"></i>{move || if show_form.get() { trs("adm-btn-cancel") } else { trs("adm-btn-new-staff") }}
                     </button>
                 </div>
             </div>
@@ -876,39 +871,39 @@ fn StaffPanel() -> impl IntoView {
                 <div class="p-4 rounded-xl mb-6" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Nombre"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-staff-nombre-label")}</label>
                             <input class="form-input" type="text" placeholder="Nombre completo"
                                 prop:value=move || form_nombre.get()
                                 on:input=move |ev| set_form_nombre.set(event_target_value(&ev)) />
                         </div>
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Usuario"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-staff-usuario-label")}</label>
                             <input class="form-input" type="text" placeholder="username"
                                 prop:value=move || form_username.get()
                                 on:input=move |ev| set_form_username.set(event_target_value(&ev)) />
                         </div>
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Contraseña"</label>
-                            <input class="form-input" type="password" placeholder={move || if edit_user.get().is_some() { "Dejar vacío para no cambiar" } else { "Contraseña" }}
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-staff-password-label")}</label>
+                            <input class="form-input" type="password" placeholder={move || if edit_user.get().is_some() { trs("adm-staff-password-placeholder") } else { trs("adm-staff-password-label") }}
                                 prop:value=move || form_password.get()
                                 on:input=move |ev| set_form_password.set(event_target_value(&ev)) />
                         </div>
                         <div>
-                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">"Rol"</label>
+                            <label class="block text-xs font-bold mb-1" style="color:var(--uci-muted);">{trs("adm-staff-rol-label")}</label>
                             <select class="form-select"
                                 prop:value=move || form_rol.get()
                                 on:change=move |ev| set_form_rol.set(event_target_value(&ev))>
-                                <option value="Admin">"Admin"</option>
-                                <option value="Medico">"Médico"</option>
-                                <option value="Enfermero">"Enfermero"</option>
-                                <option value="Viewer">"Viewer"</option>
-                                <option value="Soporte">"Soporte"</option>
+                                <option value="Admin">{trs("adm-staff-role-admin")}</option>
+                                <option value="Medico">{trs("adm-staff-role-medico")}</option>
+                                <option value="Enfermero">{trs("adm-staff-role-enfermero")}</option>
+                                <option value="Viewer">{trs("adm-staff-role-viewer")}</option>
+                                <option value="Soporte">{trs("adm-staff-role-soporte")}</option>
                             </select>
                         </div>
                     </div>
                     <div class="flex justify-end mt-4">
                         <button on:click=move |_| save() class="btn-primary px-6 h-10 text-sm" disabled=saving>
-                            {move || if saving.get() { "Guardando..." } else if edit_user.get().is_some() { "Actualizar" } else { "Crear" }}
+                            {move || if saving.get() { trs("adm-btn-saving") } else if edit_user.get().is_some() { trs("adm-btn-update") } else { trs("adm-btn-create") }}
                         </button>
                     </div>
                 </div>
@@ -918,11 +913,11 @@ fn StaffPanel() -> impl IntoView {
                 <table class="w-full">
                     <thead style="background:var(--uci-bg);">
                         <tr>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Nombre"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Usuario"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Rol"</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Estado"</th>
-                            <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">"Acciones"</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-staff-nombre-label")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-usuario")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-rol")}</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-equipo-estado-label")}</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-table-acciones")}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y" style="border-color:var(--uci-border);">
@@ -958,7 +953,7 @@ fn StaffPanel() -> impl IntoView {
                                             class=format!("px-2 py-1 rounded-full text-xs font-medium {}",
                                                 if activo { "bg-emerald-100 text-emerald-700" } else { "bg-gray-100 text-gray-700" }
                                             )>
-                                            {if activo { "Activo" } else { "Inactivo" }}
+                                            {if activo { trs("adm-status-activo") } else { trs("adm-status-inactivo") }}
                                         </button>
                                     </td>
                                     <td class="px-4 py-3 text-right">
@@ -982,20 +977,20 @@ fn StaffPanel() -> impl IntoView {
 }
 
 const AUDIT_ACTIONS: &[(&str, &str)] = &[
-    ("", "Todas"),
-    ("LOGIN", "Login"),
-    ("LOGIN_FAILED", "Login fallido"),
-    ("LOGOUT", "Logout"),
-    ("CREATE", "Crear"),
-    ("READ", "Leer"),
-    ("UPDATE", "Actualizar"),
-    ("DELETE", "Eliminar"),
-    ("EXPORT", "Exportar"),
-    ("CONFIG_CHANGE", "Cambio de config"),
-    ("AUTH_CHANGE", "Cambio de auth"),
-    ("ACCESS_DENIED", "Acceso denegado"),
-    ("DATA_ACCESS", "Acceso a datos"),
-    ("DATA_MODIFICATION", "Modificación de datos"),
+    ("", "adm-audit-filter-todas"),
+    ("LOGIN", "adm-audit-action-login"),
+    ("LOGIN_FAILED", "adm-audit-action-login-failed"),
+    ("LOGOUT", "adm-audit-action-logout"),
+    ("CREATE", "adm-audit-action-create"),
+    ("READ", "adm-audit-action-read"),
+    ("UPDATE", "adm-audit-action-update"),
+    ("DELETE", "adm-audit-action-delete"),
+    ("EXPORT", "adm-audit-action-export"),
+    ("CONFIG_CHANGE", "adm-audit-action-config-change"),
+    ("AUTH_CHANGE", "adm-audit-action-auth-change"),
+    ("ACCESS_DENIED", "adm-audit-action-access-denied"),
+    ("DATA_ACCESS", "adm-audit-action-data-access"),
+    ("DATA_MODIFICATION", "adm-audit-action-data-modification"),
 ];
 
 fn audit_action_class(action: &str) -> &'static str {
@@ -1030,8 +1025,7 @@ fn AuditPanel() -> impl IntoView {
             api::get_audit_logs(lim, action).await
         }
     });
-
-    let uci_stats = LocalResource::new(|| async move { api::get_stats().await.ok() });
+let uci_stats = LocalResource::new(|| async move { api::get_stats().await.ok() });
 
     let do_verify = move |_| {
         set_busy.set(true);
@@ -1052,11 +1046,11 @@ fn AuditPanel() -> impl IntoView {
             match api::seal_audit_batch().await {
                 Ok(Some(b)) => set_msg.set(Some((
                     true,
-                    format!("Lote #{} sellado ({} eventos).", b.sequence, b.count),
+                    format!("{} #{}: {} {}.", trs("adm-audit-batch-sealed"), b.sequence, b.count, trs("adm-audit-events")),
                 ))),
                 Ok(None) => set_msg.set(Some((
                     true,
-                    "No hay eventos nuevos para sellar.".to_string(),
+                    trs("adm-audit-no-events-to-seal"),
                 ))),
                 Err(e) => set_msg.set(Some((false, e))),
             }
@@ -1071,12 +1065,12 @@ fn AuditPanel() -> impl IntoView {
                 {move || uci_stats.get().map(|s| match s {
                     Some(stats) => view! {
                         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                            {admin_stat_card("Pacientes", &stats.total_pacientes.to_string(), "#6366F1", "fa-users")}
-                            {admin_stat_card("Activos", &stats.pacientes_activos.to_string(), "#10B981", "fa-heart-pulse")}
-                            {admin_stat_card("Críticos", &stats.por_gravedad.criticos.to_string(), "#EF4444", "fa-triangle-exclamation")}
-                            {admin_stat_card("Severos", &stats.por_gravedad.severos.to_string(), "#F59E0B", "fa-circle-exclamation")}
-                            {admin_stat_card("Mortalidad", &format!("{:.1}%", stats.ejecutivo.mortalidad_real_pct), "#8B5CF6", "fa-chart-line")}
-                            {admin_stat_card("LOS", &format!("{:.1}d", stats.ejecutivo.los_dias_promedio), "#3B82F6", "fa-clock")}
+                            {admin_stat_card(trs("adm-stat-pacientes"), stats.total_pacientes.to_string(), "#6366F1", "fa-users")}
+                            {admin_stat_card(trs("adm-stat-activos"), stats.pacientes_activos.to_string(), "#10B981", "fa-heart-pulse")}
+                            {admin_stat_card(trs("adm-stat-criticos"), stats.por_gravedad.criticos.to_string(), "#EF4444", "fa-triangle-exclamation")}
+                            {admin_stat_card(trs("adm-stat-severos"), stats.por_gravedad.severos.to_string(), "#F59E0B", "fa-circle-exclamation")}
+                            {admin_stat_card(trs("adm-stat-mortalidad"), format!("{:.1}%", stats.ejecutivo.mortalidad_real_pct), "#8B5CF6", "fa-chart-line")}
+                            {admin_stat_card(trs("adm-stat-los"), format!("{:.1}d", stats.ejecutivo.los_dias_promedio), "#3B82F6", "fa-clock")}
                         </div>
                     }.into_any(),
                     None => ().into_any(),
@@ -1086,7 +1080,7 @@ fn AuditPanel() -> impl IntoView {
             <div class="rounded-xl p-4" style="background:var(--uci-surface); border:1px solid var(--uci-border);">
                 <div class="flex flex-wrap items-end gap-4">
                     <div>
-                        <label class="block text-xs font-medium mb-1" style="color:var(--uci-muted);">"Acción"</label>
+                        <label class="block text-xs font-medium mb-1" style="color:var(--uci-muted);">{trs("adm-audit-filter-label")}</label>
                         <select
                             class="px-3 py-2 rounded-lg text-sm"
                             style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
@@ -1097,12 +1091,12 @@ fn AuditPanel() -> impl IntoView {
                             }
                         >
                             {AUDIT_ACTIONS.iter().map(|(v, l)| view! {
-                                <option value=*v>{*l}</option>
+                                <option value=*v>{trs(l)}</option>
                             }).collect_view()}
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium mb-1" style="color:var(--uci-muted);">"Límite"</label>
+                        <label class="block text-xs font-medium mb-1" style="color:var(--uci-muted);">{trs("adm-audit-limit-label")}</label>
                         <select
                             class="px-3 py-2 rounded-lg text-sm"
                             style="background:var(--uci-bg); color:var(--uci-text); border:1px solid var(--uci-border);"
@@ -1126,14 +1120,14 @@ fn AuditPanel() -> impl IntoView {
                         disabled=move || busy.get()
                         on:click=do_verify
                     >
-                        <i class="fa-solid fa-link mr-2"></i>"Verificar cadena"
+                        <i class="fa-solid fa-link mr-2"></i>{trs("adm-btn-verify-chain")}
                     </button>
                     <button
                         class="btn-primary px-4 h-10 text-sm"
                         disabled=move || busy.get()
                         on:click=do_seal
                     >
-                        <i class="fa-solid fa-lock mr-2"></i>"Sellar lote"
+                        <i class="fa-solid fa-lock mr-2"></i>{trs("adm-btn-seal-batch")}
                     </button>
                 </div>
 
@@ -1151,26 +1145,32 @@ fn AuditPanel() -> impl IntoView {
                     view! {
                         <div class="mt-3 p-3 rounded-lg text-sm" style=format!("background:{}1A; color:{};", color, color)>
                             <div class="font-semibold mb-1">
-                                {if r.ok { "Cadena de auditoría íntegra" } else { "Integridad comprometida" }}
+                                {if r.ok { trs("adm-audit-chain-intact") } else { trs("adm-audit-chain-compromised") }}
                             </div>
                             <div>
                                 {format!(
-                                    "Eventos: {} totales · {} con hash · {} válidos · {} sin hash · {} lotes · {} firmas válidas · {} sellables",
-                                    r.logs_total, r.logs_hashed, r.logs_valid, r.logs_unhashed,
-                                    r.batches_total, r.signatures_valid, r.sealable_logs
+                                    "{} {} · {} {} · {} {} · {} {} · {} {} · {} {} · {} {}",
+                                    r.logs_total, trs("adm-audit-total"),
+                                    r.logs_hashed, trs("adm-audit-hashed"),
+                                    r.logs_valid, trs("adm-audit-valid"),
+                                    r.logs_unhashed, trs("adm-audit-unhashed"),
+                                    r.batches_total, trs("adm-audit-batches"),
+                                    r.signatures_valid, trs("adm-audit-signatures"),
+                                    r.sealable_logs, trs("adm-audit-sealable")
                                 )}
                             </div>
                         </div>
                     }
                 })}
+
             </div>
 
-            <Suspense fallback=move || view! { <LoadingState label="Cargando auditoría..."/> }>
+            <Suspense fallback=move || view! { <LoadingState label={trs("adm-audit-loading")}/> }>
                 {move || logs.get().map(|res| match res {
                     Ok(list) if list.is_empty() => view! {
                         <div class="p-8 text-center rounded-xl text-sm" style="background:var(--uci-surface); color:var(--uci-muted);">
                             <i class="fa-solid fa-inbox text-2xl mb-2"></i>
-                            <p>"Sin eventos de auditoría para el filtro seleccionado"</p>
+                            <p>{trs("adm-audit-empty")}</p>
                         </div>
                     }.into_any(),
                     Ok(list) => view! {
@@ -1192,7 +1192,7 @@ fn AuditLogsTable(logs: Vec<api::AuditLog>) -> impl IntoView {
         .map(|l| {
             let class = audit_action_class(&l.action).to_string();
             let success_color = if l.success { "#10B981" } else { "#EF4444" };
-            let success_label = if l.success { "OK" } else { "Fallo" };
+            let success_label = if l.success { trs("adm-audit-result-ok") } else { trs("adm-audit-result-fail") };
             let usuario = l
                 .username
                 .clone()
@@ -1231,13 +1231,13 @@ fn AuditLogsTable(logs: Vec<api::AuditLog>) -> impl IntoView {
             <table class="w-full">
                 <thead style="background:var(--uci-bg);">
                     <tr>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Fecha"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Usuario"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Acción"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Recurso"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"IP"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Resultado"</th>
-                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">"Detalles"</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-audit-col-fecha")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-audit-col-usuario")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-audit-col-accion")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-audit-col-recurso")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-audit-col-ip")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-audit-col-resultado")}</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium" style="color:var(--uci-muted);">{trs("adm-audit-col-detalles")}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y" style="border-color:var(--uci-border);">
