@@ -644,30 +644,28 @@ pub async fn rotate_master_key(
                 "master_key_hex debe ser 32 bytes (64 hex chars)".into(),
             ));
         }
-        let mut provider = cipher.provider.clone();
-        let new_id = provider
+        let mut provider = cipher.provider.write().expect("RwLock poisoned");
+        provider
             .add_key_from_bytes(&bytes)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        // Actualizar el provider global (esto es unsafe pero necesario para rotación en caliente)
-        // En producción se haría con un Arc<RwLock<KeyProvider>>
-        new_id
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     } else {
         // Generar clave aleatoria y rotar
-        let mut provider = cipher.provider.clone();
-        provider.rotate_key()
+        cipher.provider.write().expect("RwLock poisoned").rotate_key()
     };
 
-    // Nota: En producción real se usaría un Arc<RwLock<KeyProvider>> compartido
-    // para que la rotación sea visible globalmente sin reiniciar.
-    // Aquí devolvemos el key_id pero la rotación real requiere reinicio o shared state.
+    // La rotación es visible globalmente al instante gracias al Arc<RwLock<KeyProvider>>
+    // compartido en PhiCipher. No requiere reinicio.
 
-    let all_key_ids = vec![1, new_key_id]; // simplificado
+    let all_key_ids: Vec<u32> = {
+        let provider = cipher.provider.read().expect("RwLock poisoned");
+        (1..=provider.active().1).collect()
+    };
 
     Ok(Json(ApiResponse::ok(RotateKeyResponse {
         new_key_id,
         all_key_ids,
         message: format!(
-            "Clave rotada. Nuevo key_id: {}. Requiere reinicio para propagar.",
+            "Clave rotada. Nuevo key_id: {}. Propagación inmediata sin reinicio.",
             new_key_id
         ),
     })))

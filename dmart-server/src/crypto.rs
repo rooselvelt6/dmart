@@ -8,6 +8,7 @@ use aes_gcm::{Aes256Gcm, Nonce as AesNonce};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
 
 use rand::RngCore;
+use std::sync::{Arc, RwLock};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const NONCE_SIZE: usize = 12;
@@ -511,7 +512,9 @@ impl PhiContext {
 #[derive(Clone)]
 pub struct PhiCipher {
     pub master_key: MasterKey,
-    pub provider: KeyProvider,
+    /// Proveedor de claves compartido: permite rotación en caliente sin reiniciar.
+    /// Todas las instancias de PhiCipher (o la única global) ven los cambios.
+    pub provider: Arc<RwLock<KeyProvider>>,
     /// Cifrador con el que se escribieron los envelopes anteriores al
     /// endurecimiento: clave maestra en crudo y AAD v1.
     ///
@@ -538,7 +541,7 @@ impl PhiCipher {
     pub fn new(master_key: MasterKey) -> Self {
         let phi_key = derive_subkey(master_key.as_bytes(), LABEL_PHI);
         let index_key = derive_subkey(master_key.as_bytes(), LABEL_INDEX);
-        let provider = KeyProvider::single_key(master_key.clone());
+        let provider = Arc::new(RwLock::new(KeyProvider::single_key(master_key.clone())));
         let _cipher =
             Aes256Gcm::new_from_slice(phi_key.as_slice()).expect("AES-256 con clave de 256 bits");
         let legacy_cipher = Aes256Gcm::new_from_slice(master_key.as_bytes())
@@ -598,7 +601,8 @@ impl PhiCipher {
         AesOsRng.fill_bytes(&mut nonce_bytes);
         let aad = ctx.aad();
 
-        let (aes, key_id) = self.provider.active();
+        let provider = self.provider.read().expect("RwLock poisoned");
+        let (aes, key_id) = provider.active();
 
         let ciphertext = aes
             .encrypt(
@@ -649,7 +653,9 @@ impl PhiCipher {
             let nonce = AesNonce::from_slice(&raw[nonce_start..nonce_start + NONCE_SIZE]);
             let msg = &raw[nonce_start + NONCE_SIZE..];
 
-            if let Some(aes) = self.provider.get(key_id) {
+            let provider = self.provider.read().expect("RwLock poisoned");
+            let aes = provider.get(key_id);
+            if let Some(aes) = aes {
                 let legacy_aad = ctx.legacy_aad();
                 let current_aad = ctx.aad();
                 let attempts: [(&Aes256Gcm, &[u8]); 4] = [
@@ -681,9 +687,11 @@ impl PhiCipher {
 
             let legacy_aad = ctx.legacy_aad();
             let current_aad = ctx.aad();
+            let provider = self.provider.read().expect("RwLock poisoned");
+            let (active_aes, _active_key_id) = provider.active();
             let attempts: [(&Aes256Gcm, &[u8]); 4] = [
-                (&self.provider.active().0, &current_aad),
-                (&self.provider.active().0, legacy_aad.as_bytes()),
+                (active_aes, &current_aad),
+                (active_aes, legacy_aad.as_bytes()),
                 (&self.legacy_cipher, legacy_aad.as_bytes()),
                 (&self.legacy_cipher, &[]),
             ];
@@ -781,8 +789,8 @@ impl PhiCipher {
     /// la nueva clave (key_id incrementado). Los envelopes existentes siguen
     /// siendo legibles porque se conserva el key_id en el envelope.
     /// Devuelve el nuevo key_id.
-    pub fn rotate_key(&mut self) -> u32 {
-        self.provider.rotate_key()
+    pub fn rotate_key(&self) -> u32 {
+        self.provider.write().expect("RwLock poisoned").rotate_key()
     }
 }
 
