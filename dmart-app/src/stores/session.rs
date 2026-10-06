@@ -8,6 +8,7 @@
 use dmart_shared::models::{LoginResponse, UserInfo};
 use gloo_storage::{LocalStorage, Storage};
 use gloo_timers::future::TimeoutFuture;
+use leptos::prelude::*;
 use std::sync::{Mutex, OnceLock};
 use wasm_bindgen_futures::spawn_local;
 
@@ -70,6 +71,23 @@ pub fn clear_session() {
     }
     LocalStorage::delete(AUTH_KEY_LEGACY);
     LocalStorage::delete(USER_KEY);
+}
+
+/// Cierra sesión: revoca el refresh token en el servidor, borra la sesión local,
+/// marca `is_auth = false` y recarga. Lo usan el sidebar de escritorio y el
+/// drawer "Más" del móvil, así que vive aquí y no duplicado en dos componentes.
+pub fn logout() {
+    let set_auth = use_context::<WriteSignal<bool>>();
+    spawn_local(async move {
+        let _ = crate::api::logout().await;
+        clear_session();
+        if let Some(setter) = set_auth {
+            setter.set(false);
+        }
+        web_sys::window()
+            .map(|w| w.location().reload().unwrap_or_default())
+            .unwrap_or_default();
+    });
 }
 
 /// Renovación periódica del access token: intenta `/auth/refresh` cada 10 min

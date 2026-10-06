@@ -1,4 +1,4 @@
-use crate::components::toast::ToastContainer;
+use crate::components::{bottom_nav::BottomNavBar, toast::ToastContainer};
 use crate::pages::{
     admin::AdminPage, audit::AuditPage, cds::CdsPage, dashboard::DashboardPage,
     data_quality::DataQualityPage, devices::DevicesPage, escalation::EscalationPage,
@@ -13,7 +13,6 @@ use leptos_router::components::{A, Redirect, Route, Router, Routes};
 use leptos_router::hooks::*;
 use leptos_router::path;
 use std::sync::OnceLock;
-use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
 
 use crate::stores::start_session_refresh;
@@ -58,7 +57,6 @@ pub fn App() -> impl IntoView {
     let (is_auth, set_is_auth) = signal(has_token());
     provide_context(is_auth);
     provide_context(set_is_auth);
-    let sidebar_open = RwSignal::new(false);
 
     // Efecto de montaje: intentar reanudar sesión con refresh token si no hay access token en memoria.
     // Usa una flag para evitar loops de refresh infinitos.
@@ -99,29 +97,18 @@ pub fn App() -> impl IntoView {
         <Router>
             <div class="flex flex-col md:flex-row min-h-screen" style="background:var(--bg-primary); color:var(--text-primary);">
                 <Show when=move || is_auth.get() fallback=|| ()>
-                    <NavSidebar sidebar_open />
+                    <NavSidebar />
                 </Show>
 
                 <main
                     class=move || if is_auth.get() {
-                        "w-full md:ml-[280px] p-4 md:p-8 pt-20 md:pt-8"
+                        // `pb-24` deja sitio a la barra inferior de móvil, que
+                        // va fija al fondo; `md:pb-8` lo anula en escritorio.
+                        "w-full md:ml-[280px] p-4 pb-24 md:p-8"
                     } else {
                         "w-full p-4 md:p-8"
                     }
                 >
-                    <Show when=move || is_auth.get()>
-                        <button
-                            on:click=move |_| sidebar_open.update(|o| *o = !*o)
-                            aria-label="Abrir menú de navegación"
-                            aria-expanded=move || sidebar_open.get()
-                            class="md:hidden fixed top-4 left-4 z-30 p-2 rounded-lg shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                            style="background:var(--bg-card); border:1px solid var(--border-primary);"
-                        >
-                            <svg style="width:24px;height:24px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                            </svg>
-                        </button>
-                    </Show>
                     <Routes fallback=|| view! { "Pagina no encontrada" }>
                         // Si ya hay sesión (reanudada por cookie en el efecto de
                         // arranque, o token aún en memoria tras un soft-nav),
@@ -291,14 +278,20 @@ pub fn App() -> impl IntoView {
                     </Routes>
                 </main>
             </div>
+            // Solo con sesión: en `/login` no debe aparecer la barra de móvil.
+            <Show when=move || is_auth.get()>
+                <BottomNavBar />
+            </Show>
             <ToastContainer />
         </Router>
     }
 }
 
 /// Sidebar navigation component with glassmorphism effects
+///
+/// Solo escritorio: por debajo de `md` lo sustituye `BottomNavBar`.
 #[component]
-fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
+fn NavSidebar() -> impl IntoView {
     let location = use_location();
     let path = move || location.pathname.get();
 
@@ -324,16 +317,8 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
         None
     };
 
-    let close_sidebar = move |_: web_sys::MouseEvent| {
-        sidebar_open.set(false);
-    };
-
     view! {
-        <nav class=move || format!(
-            "nav-sidebar {} {}",
-            if sidebar_open.get() { "open" } else { "" },
-            if sidebar_open.get() { "fixed inset-0 z-50" } else { "hidden md:block fixed left-0 top-0 z-50 h-screen" }
-        ) style="background:var(--uci-surface); backdrop-filter:blur(12px);">
+        <nav class="nav-sidebar" style="background:var(--uci-surface); backdrop-filter:blur(12px);">
             <div style="padding:20px 16px 20px; border-bottom:1px solid var(--uci-border); background:linear-gradient(180deg, var(--uci-surface) 0%, rgba(59,130,246,0.03) 100%);">
                 <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
                     <div style="
@@ -347,7 +332,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                         <i class="fa-solid fa-heart-pulse" style="position:relative; z-index:1; color:white;"></i>
                         <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%); transform:translateX(-100%); animation:shimmer 3s infinite;"></div>
                     </div>
-                    <div class="hidden md:block">
+                    <div>
                         <div style="font-weight:700; font-size:17px; color:var(--uci-text); letter-spacing:-0.3px;">
                             <span style="color:#0EA5E9;">UCI</span> <span style="font-weight:800; color:var(--uci-text);">DMART</span>
                         </div>
@@ -356,15 +341,6 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                             Unidad de Cuidados Intensivos
                         </div>
                     </div>
-                    <button
-                        on:click=close_sidebar
-                        aria-label="Cerrar menú de navegación"
-                        class="md:hidden ml-auto p-2 hover:bg-uci-border/30 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                    >
-                        <svg style="width:20px;height:20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
                 </div>
                 <style>
                     {".@keyframes shimmer { 0% { transform:translateX(-100%); } 100% { transform:translateX(100%); } }"}
@@ -541,17 +517,7 @@ fn NavSidebar(sidebar_open: RwSignal<bool>) -> impl IntoView {
                     <crate::theme::LangSelector />
                 </div>
                 <button
-                    on:click=move |_| {
-                        let set_auth = use_context::<WriteSignal<bool>>();
-                        spawn_local(async move {
-                            let _ = crate::api::logout().await;
-                            clear_session();
-                            if let Some(setter) = set_auth {
-                                setter.set(false);
-                            }
-                            window().location().reload().unwrap_or_default();
-                        });
-                    }
+                    on:click=move |_| crate::stores::logout()
                     aria-label="Cerrar sesión"
                     style="
                         width:100%; padding:10px 16px;

@@ -1,3 +1,4 @@
+pub mod bottom_nav;
 pub mod chart;
 pub mod clinical_alerts;
 pub mod dashboard_kit;
