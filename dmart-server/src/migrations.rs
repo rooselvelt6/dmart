@@ -103,6 +103,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "059_hl7_idempotency",
         include_str!("../migrations/059_hl7_idempotency.surql"),
     ),
+    (
+        "060_search_trigrams",
+        include_str!("../migrations/060_search_trigrams.surql"),
+    ),
 ];
 
 pub async fn applied_versions(db: &Surreal<Db>) -> Result<Vec<u64>> {

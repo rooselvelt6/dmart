@@ -90,11 +90,21 @@ pub async fn create_measurement(
         Ok(m) => {
             crate::metrics::scale_calculated("apache");
             crate::metrics::ml_prediction("apache_mortality_v1");
-            // Actualizar estado_gravedad del paciente
+            // Actualizar estado_gravedad del paciente.
+            //
+            // Se persisten **todas** las escalas calculadas, no solo APACHE y
+            // GCS: el listado lee `ultimo_news2_score`, `ultimo_sofa_score`,
+            // `ultimo_saps3_score` y `mortality_risk` del paciente, así que
+            // dejarlos en `None` los dejaba permanentemente a `null` en la UI
+            // aunque la Medición sí los tuviera.
             if let Ok(Some(mut patient)) = db_ops::get_patient(&db, &patient_id).await {
                 patient.estado_gravedad = severity;
                 patient.ultimo_apache_score = Some(apache_score);
                 patient.ultimo_gcs_score = Some(gcs_score);
+                patient.ultimo_news2_score = Some(news2_score);
+                patient.ultimo_sofa_score = Some(sofa_score);
+                patient.ultimo_saps3_score = Some(saps3_score);
+                patient.mortality_risk = Some(mort);
                 patient.updated_at = Utc::now().to_rfc3339();
                 let _ = db_ops::update_patient(&db, &patient_id, patient).await;
             }

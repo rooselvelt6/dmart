@@ -37,6 +37,10 @@ const CAMA_RECORD_TYPE: &str = "cama";
 const F_HISTORIA_CLINICA: &str = "historia_clinica";
 const F_CEDULA: &str = "cedula";
 const F_NOMBRE: &str = "nombre";
+/// Etiqueta de los trigramas del nombre completo. Distinta de `F_NOMBRE` a
+/// propósito: el HMAC de "gust" no debe servir para comparar contra el índice
+/// exacto de `nombre` (y al revés).
+const F_TRIGRAMA: &str = "nombre_trigrama";
 
 static CIPHER: OnceLock<PhiCipher> = OnceLock::new();
 
@@ -141,6 +145,17 @@ pub struct PatientRow {
     pub bi_ced: String,
     #[serde(rename = "bi_nombre")]
     pub bi_nombre: String,
+    /// HMAC de los trigramas de `nombre apellido` normalizado.
+    ///
+    /// Es lo que permite buscar "con pocas letras": la consulta se corta en
+    /// trigramas y se exigen **todos** en la fila, lo que reduce los candidatos
+    /// a una fracción sin exponer la PHI (ver [`crate::search`]).
+    ///
+    /// `default` porque las filas selladas antes de este índice no lo tienen:
+    /// se rellenan con el backfill y, mientras tanto, la búsqueda parcial las
+    /// ignora en lugar de fallar.
+    #[serde(rename = "bi_tng", default)]
+    pub bi_tng: Vec<String>,
 }
 
 /// Traduce un error de criptografía a un error de aplicación.
@@ -256,12 +271,37 @@ pub fn seal_patient(patient: &Patient) -> Result<PatientRow> {
         ),
         bi_ced: blind(F_CEDULA, &patient.tenant_id, &patient.cedula),
         bi_nombre: blind(F_NOMBRE, &patient.tenant_id, &patient.nombre),
+        bi_tng: blind_trigrams(&patient.tenant_id, &nombre_buscable(patient)),
     })
+}
+
+/// Nombre completo normalizado que alimenta los trigramas.
+///
+/// Se incluyen nombre y apellido porque el apellido es la mitad de las
+/// búsquedas reales ("Ortiz") y SPEC-052 sólo indexaba el nombre de pila.
+fn nombre_buscable(patient: &dmart_shared::models::Patient) -> String {
+    let completo = format!("{} {}", patient.nombre, patient.apellido);
+    crate::search::normalize_search(&completo)
+}
+
+/// HMAC de cada trigrama del nombre, en el orden en que aparecen.
+fn blind_trigrams(tenant_id: &str, normalized: &str) -> Vec<String> {
+    crate::search::trigrams(normalized)
+        .iter()
+        .map(|t| cipher().blind_index(tenant_id, F_TRIGRAMA, t))
+        .filter(|h| !h.is_empty())
+        .collect()
 }
 
 /// Índice ciego con el tenant del paciente.
 fn blind(field: &str, tenant_id: &str, value: &str) -> String {
     cipher().blind_index(tenant_id, field, value)
+}
+
+/// [`blind`] con la etiqueta de trigramas, expuesto para el backfill y los
+/// tests de integración, que deben calcular el mismo valor que el store.
+pub fn hmac_trigrama_public(tenant_id: &str, trigrama: &str) -> String {
+    blind(F_TRIGRAMA, tenant_id, trigrama)
 }
 
 /// Índice ciego **formato legacy** (sin longitudes prefijadas) para compatibilidad.
@@ -1403,6 +1443,169 @@ pub async fn count_patients_exact(
     Ok(found.len() as u64)
 }
 
+/// Búsqueda de pacientes por coincidencia **parcial y tolerante a erratas**.
+///
+/// Sustituye a la exacta como camino principal (ver [`crate::search`] para el
+/// diseño y sus límites). Encadena tres filtros, del más barato al más
+/// preciso:
+///
+/// 1. `historia_clinica` / `cedula` exactos por índice ciego, que es como se
+///    busca un código y no suffer por tildes.
+/// 2. Trigramas del nombre completo: la fila tiene que contenerlos **todos**,
+///    así que "gustavo ortiz" deja pasar a "Gustabo Ortiz" pero deja fuera a
+///    medio dataset.
+/// 3. Ranking en Rust con Jaro-Winkler, que es lo que ordena de verdad.
+///
+/// Los candidatos se traen sin paginar y se paginan **después** de ordenar:
+/// paginar en SQL daría páginas arbitrarias, que es justo lo que un buscador
+/// no puede hacer. El tope es [`crate::search::MAX_CANDIDATOS`].
+pub async fn search_patients_fuzzy(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+    query: &str,
+    extra_where: &str,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Patient>> {
+    let puntuados = search_patients_fuzzy_ranked(db, tenant_id, query, extra_where).await?;
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT) as usize;
+    Ok(puntuados
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit)
+        .map(|(p, _)| p)
+        .collect())
+}
+
+/// Igual que [`search_patients_fuzzy`] pero devuelve **todos** los candidatos
+/// ordenados y su puntuación, para poder contar sin volver a puntuar.
+pub async fn search_patients_fuzzy_ranked(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+    query: &str,
+    extra_where: &str,
+) -> Result<Vec<(Patient, f64)>> {
+    use crate::search::{Campo, PUNTUACION_MINIMA, puntuar, trigram_filtro};
+
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+    let normalizado = crate::search::normalize_search(q);
+    let es_id = crate::search::parece_identificador(q);
+
+    // Los identificadores no generan trigramas útiles: "HC-100516" normalizado
+    // es "hc100516" y su trigrama inicial no distinguiría dos historias
+    // distintas. Para ellos basta (y es más seguro) la coincidencia exacta.
+    let trg = if es_id {
+        None
+    } else {
+        trigram_filtro(&normalizado)
+    };
+
+    let pacientes = if let Some(trg) = trg {
+        fetch_by_trigrams(db, tenant_id, &trg, extra_where).await?
+    } else {
+        // Con menos de 3 caracteres no hay trigrama: se cae al índice exacto,
+        // que aún encuentra a quien se llama exactamente así y resuelve
+        // historias clínicas y cédulas completas.
+        fetch_by_exact_index(db, tenant_id, q, extra_where).await?
+    };
+
+    let campo = if es_id {
+        Campo::Identificador
+    } else {
+        Campo::Nombre
+    };
+
+    let mut puntuados: Vec<(Patient, f64)> = pacientes
+        .into_iter()
+        .map(|p| {
+            let s = if es_id {
+                // Para códigos se compara el identificador del paciente, no el
+                // nombre: "HC-100516" debe casar con la historia clínica.
+                puntuar(Campo::Identificador, q, &p.historia_clinica, &p.cedula)
+            } else {
+                puntuar(campo, q, &p.nombre, &p.apellido)
+            };
+            (p, s)
+        })
+        // Entra por el trigrama pero no se parece: se descarta para no
+        // devolver la lista completa cuando el trigrama es genérico ("ero").
+        .filter(|(_, s)| *s >= PUNTUACION_MINIMA)
+        .collect();
+
+    // Desempate estable: mejor puntuación, y a igualdad el más reciente.
+    puntuados.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.0.created_at.cmp(&a.0.created_at))
+    });
+    Ok(puntuados)
+}
+
+/// Filtra candidatos por un trigrama ciego del nombre completo.
+///
+/// El `CONTAINS` sobre el array de HMAC corre en la base, así que sólo vuelve
+/// un conjunto acotado de filas. Ver `crate::search::trigram_filtro` por qué
+/// basta con uno.
+async fn fetch_by_trigrams(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+    trg: &str,
+    extra_where: &str,
+) -> Result<Vec<Patient>> {
+    let filas: Vec<Value> = db
+        .query(format!(
+            "SELECT * OMIT id FROM patients WHERE tenant_id = $tenant \
+             AND bi_tng CONTAINS $tng {extra_where} LIMIT $cap"
+        ))
+        .bind(("tenant", tenant_id.to_string()))
+        .bind(("tng", blind(F_TRIGRAMA, tenant_id, trg)))
+        .bind(("cap", crate::search::MAX_CANDIDATOS as i64))
+        .await
+        .context("buscando pacientes por trigramas ciegos")?
+        .take(0)?;
+    open_patients(filas)
+}
+
+/// Camino exacto: menos de 3 caracteres, o consulta que parece un código.
+async fn fetch_by_exact_index(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+    q: &str,
+    extra_where: &str,
+) -> Result<Vec<Patient>> {
+    let filas: Vec<Value> = db
+        .query(format!(
+            "SELECT * OMIT id FROM patients WHERE tenant_id = $tenant \
+             AND (bi_nombre = $bi_nombre OR bi_nombre = $bi_nombre_legacy \
+                  OR bi_hc = $bi_hc OR bi_ced = $bi_ced) \
+             {extra_where} LIMIT $cap"
+        ))
+        .bind(("tenant", tenant_id.to_string()))
+        .bind(("bi_nombre", blind(F_NOMBRE, tenant_id, q)))
+        .bind(("bi_nombre_legacy", blind_legacy(F_NOMBRE, tenant_id, q)))
+        .bind(("bi_hc", blind(F_HISTORIA_CLINICA, tenant_id, q)))
+        .bind(("bi_ced", blind(F_CEDULA, tenant_id, q)))
+        .bind(("cap", crate::search::MAX_CANDIDATOS as i64))
+        .await
+        .context("buscando pacientes por índice ciego exacto")?
+        .take(0)?;
+    open_patients(filas)
+}
+
+/// Cuenta pacientes que casan con la búsqueda difusa.
+pub async fn count_patients_fuzzy(
+    db: &Surreal<Db>,
+    tenant_id: &str,
+    query: &str,
+    extra_where: &str,
+) -> Result<u64> {
+    let puntuados = search_patients_fuzzy_ranked(db, tenant_id, query, extra_where).await?;
+    Ok(puntuados.len() as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1520,7 +1723,6 @@ mod tests {
 #[cfg(test)]
 mod db_tests {
     use super::*;
-    use crate::crypto::AES256_MAGIC;
     use dmart_shared::models::Patient;
     use surrealdb::engine::local::SurrealKv;
 
@@ -1584,7 +1786,10 @@ mod db_tests {
         assert!(!phi.is_empty());
         // El magic viaja dentro del base64, así que se comprueba sobre el blob.
         let blob = crate::crypto::base64_decode(phi).expect("base64 válido");
-        assert_eq!(&blob[..crate::crypto::AES256_KID_MAGIC.len()], crate::crypto::AES256_KID_MAGIC);
+        assert_eq!(
+            &blob[..crate::crypto::AES256_KID_MAGIC.len()],
+            crate::crypto::AES256_KID_MAGIC
+        );
     }
 
     /// La búsqueda por MRN debe funcionar con el valor cifrado, ignorando
@@ -1808,8 +2013,10 @@ mod db_tests {
         );
     }
 
-    /// La búsqueda exacta no debe filtrar PHI: los resultados sólo aparecen
-    /// al comparar índices ciegos, nunca por subcadena.
+    /// Los **identificadores** (historia clínica, cédula) siguen siendo
+    /// coincidencia estricta: la búsqueda parcial por nombre que sí existe
+    /// (ver [`search_patients_fuzzy_ranked`]) no se aplica a códigos, porque
+    /// "HC-100516" y "HC-100S16" no pueden ser el mismo paciente.
     #[tokio::test]
     async fn partial_search_no_longer_matches_substrings() {
         let (db, _dir) = test_db().await;

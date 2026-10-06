@@ -104,7 +104,10 @@ impl KeyProvider {
 
     /// Obtiene el cifrador para una clave dada (por key_id).
     pub fn get(&self, key_id: u32) -> Option<&Aes256Gcm> {
-        self.keys.iter().find(|(id, _)| *id == key_id).map(|(_, aes)| aes)
+        self.keys
+            .iter()
+            .find(|(id, _)| *id == key_id)
+            .map(|(_, aes)| aes)
     }
 
     /// Obtiene el cifrador activo (para cifrar nuevos datos).
@@ -607,7 +610,9 @@ impl PhiCipher {
             )
             .map_err(|_| CryptoError::EncryptionFailed)?;
 
-        let mut raw = Vec::with_capacity(AES256_KID_MAGIC.len() + KEY_ID_SIZE + NONCE_SIZE + ciphertext.len());
+        let mut raw = Vec::with_capacity(
+            AES256_KID_MAGIC.len() + KEY_ID_SIZE + NONCE_SIZE + ciphertext.len(),
+        );
         raw.extend_from_slice(AES256_KID_MAGIC);
         raw.extend_from_slice(&key_id.to_be_bytes());
         raw.extend_from_slice(&nonce_bytes);
@@ -628,7 +633,7 @@ impl PhiCipher {
     /// Abre bytes arbitrarios.
     pub fn open_bytes(&self, ctx: &PhiContext, sealed: &str) -> Result<Vec<u8>, CryptoError> {
         let raw = base64_decode(sealed).map_err(|_| CryptoError::InvalidFormat)?;
-        
+
         // Nuevo formato con key_id: DMART_K1 | key_id(4) | nonce(12) | ciphertext
         let kid_header = AES256_KID_MAGIC.len();
         if raw.len() >= kid_header + KEY_ID_SIZE + NONCE_SIZE
@@ -643,7 +648,7 @@ impl PhiCipher {
             let nonce_start = kid_header + KEY_ID_SIZE;
             let nonce = AesNonce::from_slice(&raw[nonce_start..nonce_start + NONCE_SIZE]);
             let msg = &raw[nonce_start + NONCE_SIZE..];
-            
+
             if let Some(aes) = self.provider.get(key_id) {
                 let legacy_aad = ctx.legacy_aad();
                 let current_aad = ctx.aad();

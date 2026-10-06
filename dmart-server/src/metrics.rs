@@ -597,8 +597,10 @@ pub fn touch_zero_counters(extended: bool) {
         counter!("ingest_throttled_total").increment(0);
         gauge!("ingest_error_avg").set(0.0);
         // Nuevas métricas de auditoría y cache
-        counter!("audit_events_total", "action" => "data_access", "result" => "success").increment(0);
-        counter!("audit_events_total", "action" => "data_modification", "result" => "failure").increment(0);
+        counter!("audit_events_total", "action" => "data_access", "result" => "success")
+            .increment(0);
+        counter!("audit_events_total", "action" => "data_modification", "result" => "failure")
+            .increment(0);
         gauge!("audit_chain_integrity_ok").set(1.0);
         gauge!("cache_reconnect_attempts").set(0.0);
     }

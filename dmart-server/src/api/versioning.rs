@@ -466,7 +466,10 @@ pub fn build_v1_router(
         )
         .route("/monitores/hl7", post(crate::api::monitores::hl7_ingest))
         .route("/realtime/stream", get(crate::realtime::realtime_stream))
-        .route("/admin/keys/rotate", post(crate::api::admin::rotate_master_key))
+        .route(
+            "/admin/keys/rotate",
+            post(crate::api::admin::rotate_master_key),
+        )
         .with_state(database.clone());
 
     // Apply security middleware only to protected routes

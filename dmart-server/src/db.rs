@@ -344,12 +344,14 @@ pub async fn create_patient_with_assignments(
     let cama_id = patient.cama_id.clone().unwrap_or_default();
     let paciente_nombre = patient.nombre_completo();
 
+    let mut cama_existente: Option<dmart_shared::models::Cama> = None;
     if !cama_id.is_empty() {
         let cama = get_cama(db, &cama_id).await?;
         let cama = cama.ok_or_else(|| anyhow::anyhow!("Cama no encontrada"))?;
         if cama.estado != EstadoCama::Libre {
             return Err(anyhow::anyhow!("Cama no disponible o no encontrada"));
         }
+        cama_existente = Some(cama);
     }
 
     // Se sella **antes** de abrir la transacción para que un fallo del cifrado
@@ -359,12 +361,18 @@ pub async fn create_patient_with_assignments(
     let row = serde_json::to_value(phi_store::seal_patient(&sealed_patient)?)
         .context("serializando fila cifrada del paciente")?;
 
-    // Pre-sella la cama con paciente_nombre en PHI
+    // Pre-sella la cama con paciente_nombre en PHI.
+    //
+    // La fila se escribe con `CONTENT`, que **reemplaza el documento entero**,
+    // así que hay que partir de la cama real: `..Default::default()` usaría
+    // `Cama::new(1, General)` y pisaría `numero`, `tipo` y `created_at` de la
+    // cama con valores neutros en cada ingreso.
     let tenant_id = std::env::var("DMART_TENANT_ID").unwrap_or_else(|_| "default".to_string());
-    let mut cama_for_seal = dmart_shared::models::Cama {
+    let mut cama_for_seal = cama_existente.unwrap_or_else(|| dmart_shared::models::Cama {
         cama_id: cama_id.clone(),
         ..Default::default()
-    };
+    });
+    cama_for_seal.cama_id = cama_id.clone();
     cama_for_seal.estado = EstadoCama::Ocupada;
     cama_for_seal.paciente_id = Some(patient_id.clone());
     cama_for_seal.paciente_nombre = Some(paciente_nombre.clone());
@@ -420,10 +428,15 @@ pub async fn egresar_paciente(db: &Surreal<Db>, patient: &Patient, desenlace: &s
     };
 
     let tenant_id = std::env::var("DMART_TENANT_ID").unwrap_or_else(|_| "default".to_string());
-    let mut cama_for_seal = dmart_shared::models::Cama {
+    // Igual que en el ingreso, la fila se escribe con `CONTENT`: sin leer la
+    // cama real, `..Default::default()` reiniciaría su `numero`, `tipo` y
+    // `created_at` al liberar la cama.
+    let cama_actual = get_cama(db, cama_id).await.ok().flatten();
+    let mut cama_for_seal = cama_actual.unwrap_or_else(|| dmart_shared::models::Cama {
         cama_id: cama_id.clone(),
         ..Default::default()
-    };
+    });
+    cama_for_seal.cama_id = cama_id.clone();
     cama_for_seal.estado = EstadoCama::Libre;
     cama_for_seal.paciente_id = None;
     cama_for_seal.paciente_nombre = None;
@@ -551,12 +564,43 @@ pub async fn count_patients_for_tenant(
     Ok(count.first().and_then(|v| v["count"].as_u64()).unwrap_or(0))
 }
 
-/// SPEC-052: búsqueda **exacta** de pacientes.
+/// Búsqueda **parcial y tolerante a erratas** de pacientes, acotada al tenant.
 ///
 /// Ya no es posible `nombre ~ $q`: la PHI está cifrada. Cada campo buscable
-/// tiene su índice ciego HMAC, así que el filtro corre en la base sin exponer
-/// texto y sin escanear la colección. Se pierde la búsqueda parcial por
-/// subcadena, que es el coste aceptado de cifrar la PHI.
+/// tiene su índice ciego HMAC y, además, los trigramas ciegos del nombre
+/// completo, así que el filtro previo corre en la base sin exponer texto ni
+/// escanear la colección. El ranking final es en Rust sobre los candidatos
+/// descifrados (ver [`crate::search`]).
+///
+/// Menos de 3 caracteres no genera trigrama: en ese caso cae al camino exacto,
+/// que aún encuentra historias clínicas y cédulas completas.
+pub async fn search_patients_for_tenant(
+    db: &Surreal<Db>,
+    query: &str,
+    tenant_id: &str,
+    estado: EstadoFilter,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<Patient>> {
+    phi_store::search_patients_fuzzy(db, tenant_id, query, estado.sql(), limit, offset).await
+}
+
+/// SPEC-025: recuento de la búsqueda difusa acotada al tenant (RLS).
+///
+/// Cuenta sobre el mismo conjunto ordenado que devuelve el listado, para que
+/// `total` y los elementos de la página no puedan discrepar.
+pub async fn search_patients_count_for_tenant(
+    db: &Surreal<Db>,
+    query: &str,
+    tenant_id: &str,
+    estado: EstadoFilter,
+) -> Result<u64> {
+    phi_store::count_patients_fuzzy(db, tenant_id, query, estado.sql()).await
+}
+
+/// Búsqueda exacta de pacientes, conservada para callers que necesitan
+/// coincidencia estricta (p. ej. resolver un código sin falsos positivos de
+/// similitud).
 pub async fn search_patients(
     db: &Surreal<Db>,
     query: &str,
@@ -572,8 +616,11 @@ pub async fn search_patients_count(db: &Surreal<Db>, query: &str) -> Result<u64>
         .map(|v| v.len() as u64)
 }
 
-/// SPEC-025: búsqueda exacta de pacientes acotada al tenant del solicitante.
-pub async fn search_patients_for_tenant(
+/// Búsqueda exacta de pacientes acotada al tenant del solicitante.
+///
+/// Ya no se usa en el listado (ver [`search_patients_for_tenant`]), pero se
+/// mantiene para los callers que necesitan coincidencia estricta.
+pub async fn search_patients_exact_for_tenant(
     db: &Surreal<Db>,
     query: &str,
     tenant_id: &str,
@@ -584,8 +631,8 @@ pub async fn search_patients_for_tenant(
     phi_store::search_patients_exact(db, tenant_id, query, estado.sql(), limit, offset).await
 }
 
-/// SPEC-025: recuento de la búsqueda exacta acotada al tenant (RLS).
-pub async fn search_patients_count_for_tenant(
+/// Recuento de la búsqueda exacta acotada al tenant.
+pub async fn search_patients_exact_count_for_tenant(
     db: &Surreal<Db>,
     query: &str,
     tenant_id: &str,
@@ -606,12 +653,15 @@ async fn search_patients_any_tenant(
     let mut out = Vec::new();
     for t in tenants_with_patients(db).await? {
         if let Ok(found) =
-            phi_store::search_patients_exact(db, &t, query, extra_where, limit, offset).await
+            phi_store::search_patients_fuzzy(db, &t, query, extra_where, limit, offset).await
         {
             out.extend(found);
         }
     }
-    Ok(out)
+    // Cada tenant se pagina por separado, así que el recorte global se hace
+    // después de unir: sin esto, `limit` se aplicaría por tenant.
+    let limit = limit.min(dmart_shared::models::MAX_PAGE_LIMIT) as usize;
+    Ok(out.into_iter().take(limit).collect())
 }
 
 /// Tenants que tienen al menos un paciente.

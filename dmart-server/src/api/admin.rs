@@ -628,17 +628,25 @@ pub async fn rotate_master_key(
 ) -> ApiResult<RotateKeyResponse> {
     // Solo admin puede rotar claves
     // (el middleware ya verifica config:write)
-    
+
     let cipher = crate::phi_store::cipher();
-    
+
     let new_key_id = if let Some(hex) = req.master_key_hex {
-        let bytes = hex::decode(hex.trim())
-            .map_err(|_| (StatusCode::BAD_REQUEST, "master_key_hex debe ser hex válido".into()))?;
+        let bytes = hex::decode(hex.trim()).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "master_key_hex debe ser hex válido".into(),
+            )
+        })?;
         if bytes.len() != 32 {
-            return Err((StatusCode::BAD_REQUEST, "master_key_hex debe ser 32 bytes (64 hex chars)".into()));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "master_key_hex debe ser 32 bytes (64 hex chars)".into(),
+            ));
         }
         let mut provider = cipher.provider.clone();
-        let new_id = provider.add_key_from_bytes(&bytes)
+        let new_id = provider
+            .add_key_from_bytes(&bytes)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         // Actualizar el provider global (esto es unsafe pero necesario para rotación en caliente)
         // En producción se haría con un Arc<RwLock<KeyProvider>>
@@ -648,16 +656,19 @@ pub async fn rotate_master_key(
         let mut provider = cipher.provider.clone();
         provider.rotate_key()
     };
-    
+
     // Nota: En producción real se usaría un Arc<RwLock<KeyProvider>> compartido
     // para que la rotación sea visible globalmente sin reiniciar.
     // Aquí devolvemos el key_id pero la rotación real requiere reinicio o shared state.
-    
+
     let all_key_ids = vec![1, new_key_id]; // simplificado
-    
+
     Ok(Json(ApiResponse::ok(RotateKeyResponse {
         new_key_id,
         all_key_ids,
-        message: format!("Clave rotada. Nuevo key_id: {}. Requiere reinicio para propagar.", new_key_id),
+        message: format!(
+            "Clave rotada. Nuevo key_id: {}. Requiere reinicio para propagar.",
+            new_key_id
+        ),
     })))
 }

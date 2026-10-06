@@ -51,6 +51,7 @@ pub mod rbac;
 pub mod realtime;
 #[allow(dead_code)] // SPEC-030: Retención/downsampling (job + API; ejercitado por test retention)
 pub mod retention;
+pub mod search;
 pub mod security;
 pub mod server_ingest;
 #[allow(dead_code)] // SPEC-033: Patient Similarity Engine (ejercitado por test ml_similarity)

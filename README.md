@@ -13,7 +13,7 @@ _100% Rust · WebAssembly · SurrealDB — diseñado para red hospitalaria aisla
 [![Leptos](https://img.shields.io/badge/UI-Leptos%200.8-FF4B4B?logo=leptos)](https://leptos.dev/)
 [![Axum](https://img.shields.io/badge/Backend-Axum%200.8-99A0AA)](https://github.com/tokio-rs/axum)
 [![SurrealDB](https://img.shields.io/badge/DB-SurrealKV-FF00A0?logo=surrealdb)](https://surrealdb.com/)
-[![Tests](https://img.shields.io/badge/Tests-479%20verdes-10B981)](https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-491%20verdes-10B981)](https://github.com/rooselvelt6/dmart/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/Coverage-gate%20%E2%89%A560%25-22c55e)](specs/027-coverage-gate-ci.md)
 
 </div>
@@ -49,6 +49,7 @@ _100% Rust · WebAssembly · SurrealDB — diseñado para red hospitalaria aisla
 | **AuthN** | Argon2id, JWT HS256 revocable (access 15 min / refresh 7 días), MFA TOTP RFC 6238, `JWT_SECRET` en `Zeroizing` | — |
 | **AuthZ** | RBAC `Admin·Médico·Enfermero·Viewer·Soporte`; `ResourceOwner` + `require_tenant_ownership` con verificación de pertenencia en cada acceso a recurso | — |
 | **Cifrado reposo** | **AES-256-GCM** envelope `DMART_A2` + auto-detección `DMART_V1` legacy; subclaves HMAC-SHA256 (`LABEL_PHI`, `LABEL_INDEX`); índices ciegos | Backfill de filas legacy (P0.2) |
+| **Búsqueda de PHI** | Trigramas ciegos HMAC (`bi_tng`) + ranking Jaro-Winkler en Rust — parcial, tolerante a erratas y sin exponer texto en disco | — |
 | **Secretos** | `validate_secret_strength()` fail-closed: ≥32 chars, hex de 64, rechazo de placeholders | **P1.3 ✅** — `KeyProvider` trait con `key_id` por envelope, AES-256-GCM, rotación sin downtime |
 | **Auditoría WORM** | SHA-256 encadenado (`prev_hash`), lotes firmados HMAC-SHA256, concurrencia segura (`tokio::Mutex`) | — |
 | **MLLP** | TLS 1.3 obligatorio en prod, pinning SHA-256 DER→MSH.3, fail-closed | — |
@@ -63,6 +64,8 @@ _100% Rust · WebAssembly · SurrealDB — diseñado para red hospitalaria aisla
 | Dominio | Implementación |
 |---------|----------------|
 | **Pacientes** | CRUD, ingresos/egresos con desenlace, timeline longitudinal (**PHI cifrado + índices ciegos**) |
+| **Buscador** | Parcial por pocas letras (`gus`, `jorg`, `ortiz`), nombre completo con espacio, apellidos, tildes y erratas de teclado — **trigramas ciegos HMAC + ranking difuso en Rust**, paginación sobre el conjunto ordenado |
+| **Demo a escala** | `scripts/seed_full_dataset.py` — 520 pacientes, 74 camas, 160 equipos, 90 dispositivos, 69 usuarios; stressors de distribución de riesgo |
 | **Monitores de cama** | HL7 v2 `ORU^R01` sobre **MLLP (TCP)** — drivers Mindray, Philips, genéricos; backpressure |
 | **Severidad** | **APACHE II**, **GCS**, **NEWS2**, **SOFA**, **SAPS III** — con validación clínica |
 | **Mortalidad** | Riesgo hospitalario (fórmula APACHE II) + **ensemble de ML** (DecisionTree/LR/GBM) |
@@ -82,7 +85,8 @@ dmart/
 ├─ dmart-shared/   # Modelos, escalas clínicas, validación, ML (DecisionTree/Ensemble/LOS-NN)
 ├─ dmart-server/   # Axum API · auth/RBAC · HL7+MLLP · FHIR R4 · auditoría WORM
 │  ├─ crypto.rs    #   AES-256-GCM, PhiCipher, subclaves HMAC-SHA256, zeroize
-│  ├─ phi_store.rs #   PHI envelope DMART_A2 + blind indexes
+│  ├─ phi_store.rs #   PHI envelope DMART_A2 + blind indexes + trigramas ciegos
+│  ├─ search.rs    #   Normalización, trigramas, Jaro-Winkler, ranking de búsqueda
 │  ├─ audit.rs     #   WORM chain + lotes firmados (tokio::Mutex)
 │  ├─ server_ingest.rs # Ingestión MLLP: framing, anti-DoS, ACK de rechazo
 │  ├─ security.rs  #   Rate limiter, login throttle, cabeceras, CSP/HSTS
@@ -92,6 +96,7 @@ dmart/
 │  ├─ migrations/  #   SurrealQL versionado
 │  └─ fuzz/        #   cargo-fuzz (json, hl7, scales)
 ├─ dmart-app/      # Frontend Leptos/WASM (PWA offline, Service Worker, Web Push)
+├─ scripts/        # seed_full_dataset.py (dataset de demostración a escala)
 ├─ tests/load/     # k6: autenticación y escalas clínicas
 ├─ tests/e2e/      # Playwright: login, patients, measurements, admin
 ├─ specs/          # Spec-Driven Development (SPEC-001…052)
@@ -135,17 +140,19 @@ El primer arranque siembra un usuario `admin` con la contraseña de
 
 ## 🧪 Tests y calidad
 
-**479 tests** en total. Comandos según [`AGENTS.md`](AGENTS.md):
+Comandos según [`AGENTS.md`](AGENTS.md):
 
 ```bash
 # Gate rápido (~15 s, sin compilar WASM ni fuzz) — el que se usa siempre
-cargo test -p dmart-server --lib --test api_tests --test hl7_integration
+cargo test -p dmart-server --lib --test api_tests --test hl7_integration --test search
 
 # Suites sueltas
-cargo test -p dmart-server --lib                    # 188
-cargo test -p dmart-shared --features ml-nn --lib  # 66 (Candle 0.8)
+cargo test -p dmart-server --lib                    # 208
+cargo test -p dmart-shared --lib                   # 63
 cargo test -p dmart-server --test hl7_integration   # 35 (incluye 3 idempotency HL7)
 cargo test -p dmart-server --test api_tests         # 48
+cargo test -p dmart-server --test search            # 12 (búsqueda parcial de PHI)
+cargo test -p dmart-server --test phi_backfill      # 12
 cargo test -p dmart-server --test rate_limit_distributed  # 2
 
 # Lint y formato
@@ -179,6 +186,10 @@ de `cargo audit` los extrae de ahí.
 **Plan completado — 52/52 specs entregadas.**
 
 **✅ Completado esta semana:**
+- **Búsqueda parcial de PHI** — trigramas ciegos HMAC (`patients.bi_tng`, migración `060`) + ranking Jaro-Winkler en Rust. Resuelve que "gust", "jorg", "ortiz" o "Gustavo Ortiz" devolvieran cero, sin escribir PHI en claro (SPEC-052). Backfill idempotente con `backfill_trigrams`
+- **Fix de camas en ingreso/egreso** — se preservan `numero`, `tipo` y `created_at`; antes `..Default::default()` los reiniciaba en cada movimiento
+- **Fix de escalas al guardar medición** — APACHE, GCS, NEWS2, SOFA, SAPS III y riesgo de mortalidad ahora se persisten
+- **Dataset a escala** — `scripts/seed_full_dataset.py`: 520 pacientes (480 egresados, 40 en censo), 74 camas, 160 equipos, 90 dispositivos, 69 usuarios
 - **P0.3b** i18n completo — 208 literales en 9 páginas (admin, patient_edit, patient_detail, register, dashboard, perfil, escalation, devices, support)
 - **P1.3** Rotación de claves — `KeyProvider` trait con `key_id`, envelope `DMART_K1`, `PhiCipher.rotate_key()`, API `POST /admin/keys/rotate`
 - **P1.2** Alerting real — 3 alertas críticas (`PhiAccessWithoutAudit`, `WormChainFailure`, `CacheUnhealthy`) + métricas `audit_events_total`, `audit_chain_integrity_ok`, `cache_reconnect_attempts` + 6 runbooks
