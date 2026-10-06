@@ -297,8 +297,11 @@ pub async fn list_patients(
 ) -> ApiResult<Vec<PatientListItem>> {
     let mut url = format!("{}/patients", API_BASE);
     let mut sep = '?';
+    // Sin codificar, un espacio en la búsqueda rompe la query string: el
+    // `fetch` cortaba la URL en el primer blanco y `q` llegaba truncado a
+    // "Gustavo", así que buscar el nombre completo nunca encontraba nada.
     if let Some(q) = query.filter(|q| !q.is_empty()) {
-        url.push_str(&format!("{sep}q={q}"));
+        url.push_str(&format!("{sep}q={}", encode_component(q)));
         sep = '&';
     }
     if let Some(e) = estado.filter(|e| !e.is_empty()) {
@@ -312,6 +315,22 @@ pub async fn list_patients(
         .await
         .map_err(|e| e.to_string())?;
     Ok(resp.data.map(|p| p.items).unwrap_or_default())
+}
+
+/// Percent-encoding para valores de query string.
+///
+/// Se usa el `encodeURIComponent` de JS en vez de una dependencia nueva: el
+/// frontend ya corre en WASM, así que no hay nada que implementa a mano. Lo que
+/// no escapa es `!'()*`, que son válidos sin escapar en una query y cuyo escape
+/// (`%27`…) no aporta nada aquí.
+fn encode_component(value: &str) -> String {
+    let encoded: String = js_sys::encode_uri_component(value).into();
+    encoded
+        .replace("%21", "!")
+        .replace("%27", "'")
+        .replace("%28", "(")
+        .replace("%29", ")")
+        .replace("%2A", "*")
 }
 
 #[derive(Debug, Clone, Deserialize)]
