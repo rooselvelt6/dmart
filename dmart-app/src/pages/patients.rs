@@ -16,7 +16,7 @@ const ROW_HEIGHT: f64 = 72.0;
 pub fn PatientsPage() -> impl IntoView {
     let search_debounced = RwSignal::new(String::new());
     let retry = RwSignal::new(0u32);
-    let estado_filter = RwSignal::new("activos".to_string());
+    let estado_filter = RwSignal::new("todos".to_string());
     let patients_resource = LocalResource::new(move || {
         let q = search_debounced.get();
         let estado = estado_filter.get();
