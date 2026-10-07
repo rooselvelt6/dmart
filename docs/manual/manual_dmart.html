@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<style>
+@page { size: A4; margin: 20mm 16mm 22mm 16mm;
+  @bottom-center { content: counter(page); font-family:'DejaVu Sans',sans-serif; font-size:9pt; color:#64748b; }
+  @bottom-right { content: 'dMart UCI - Manual del Sistema'; font-family:'DejaVu Sans',sans-serif; font-size:8pt; color:#94a3b8; }
+  @top-right { content: string(chap); font-family:'DejaVu Sans',sans-serif; font-size:8pt; color:#94a3b8; }
+}
+@page cover { margin:0; @bottom-center{content:none} @bottom-right{content:none} @top-right{content:none} }
+* { box-sizing: border-box; }
+html,body { margin:0; padding:0; }
+body { font-family:'DejaVu Sans','Liberation Sans',Tahoma,Arial,sans-serif; font-size:10.2pt; line-height:1.5; color:#1e293b; }
+
+/* Cover */
+.cover { page: cover; width:100%; height:297mm; padding:0; position:relative; overflow:hidden;
+  background: linear-gradient(160deg,#0b1f3a 0%, #0e2f52 35%, #0ea5e9 120%); color:#fff; }
+.cover .band { position:absolute; left:0; right:0; height:10mm; top:0; background:linear-gradient(90deg,#0ea5e9,#10b981,#f59e0b); }
+.cover .inner { position:absolute; top:0; left:0; right:0; bottom:0; padding:30mm 24mm; display:flex; flex-direction:column; }
+.cover .kicker { font-size:11pt; letter-spacing:4px; text-transform:uppercase; color:#7dd3fc; font-weight:600; }
+.cover h1 { font-size:44pt; margin:8mm 0 0; font-weight:800; letter-spacing:1px; line-height:1.05; }
+.cover h1 .sep { color:#fbbf24; }
+.cover .sub { font-size:15pt; margin-top:6mm; color:#cbd5e1; font-weight:400; max-width:150mm; }
+.cover .tagline { margin-top:10mm; font-size:10.5pt; color:#94a3b8; max-width:140mm; line-height:1.7; }
+.cover .badges { margin-top:14mm; }
+.cover .badge { display:inline-block; border:1px solid rgba(255,255,255,.25); border-radius:6px; padding:3mm 5mm; margin:0 3mm 3mm 0; font-size:9pt; color:#e2e8f0; background:rgba(255,255,255,.06);}
+.cover .meta { margin-top:auto; border-top:1px solid rgba(255,255,255,.2); padding-top:6mm; font-size:10pt; color:#cbd5e1; }
+.cover .meta b { color:#fff; }
+.cover .meta .row { margin-top:2mm; }
+.cover .footer-note { font-size:8.5pt; color:#64748b; margin-top:4mm; }
+
+/* Chapter headers */
+h2.chap { string-set: chap content(); font-size:17pt; color:#0b1f3a; border-bottom:2.5px solid #0ea5e9; padding-bottom:3mm; margin:0 0 5mm; page-break-before:always; font-weight:800;}
+h2.chap .n { color:#0ea5e9; }
+h3 { font-size:12pt; color:#0e2f52; margin:5mm 0 2.5mm; font-weight:700; page-break-after:avoid;}
+h4 { font-size:11pt; color:#0e2f52; margin:5mm 0 2mm; font-weight:700; }
+p { margin:0 0 2.4mm; text-align:justify; }
+ul,ol { margin:0 0 3mm 6mm; padding-left:5mm; }
+li { margin-bottom:1mm; text-align:justify;}
+b, strong { color:#0b1f3a; }
+
+.kv { width:100%; border-collapse:collapse; margin:2mm 0 5mm; page-break-inside:avoid; font-size:9.5pt;}
+.kv td { border:1px solid #dbe4f0; padding:2mm 3mm; vertical-align:top;}
+.kv td.k { background:#f1f7fd; color:#0e2f52; font-weight:700; width:34%; }
+
+/* Generic table */
+table.mtable { width:100%; border-collapse:collapse; margin:1.6mm 0 4mm; font-size:8.8pt; page-break-inside:avoid; }
+table.mtable th { background:#0b1f3a; color:#fff; padding:1.9mm 2.8mm; text-align:left; font-weight:600; font-size:8.6pt;}
+table.mtable td { border:1px solid #dbe4f0; padding:1.9mm 2.8mm; vertical-align:top;}
+table.mtable tr:nth-child(even) td { background:#f7fafc; }
+table.mtable tr { break-inside:avoid; }
+.note { background:#eff6ff; border-left:3px solid #0ea5e9; padding:2.6mm 3.5mm; margin:2.4mm 0 4mm; font-size:9.1pt; page-break-inside:avoid;}
+.warn { background:#fff7ed; border-left:3px solid #f59e0b; padding:2.6mm 3.5mm; margin:2.4mm 0 4mm; font-size:9.1pt; page-break-inside:avoid;}
+.ok { background:#ecfdf5; border-left:3px solid #10b981; padding:2.6mm 3.5mm; margin:2.4mm 0 4mm; font-size:9.1pt; page-break-inside:avoid;}
+code { font-family:'DejaVu Sans Mono','Liberation Mono',monospace; font-size:8.8pt; background:#eef2f7; padding:0.3mm 1mm; border-radius:3px; color:#0e2f52;}
+pre.code { font-family:'DejaVu Sans Mono',monospace; font-size:8.1pt; background:#0b1f3a; color:#e2e8f0; padding:3.4mm; border-radius:6px; white-space:pre-wrap; margin:1.6mm 0 4mm; page-break-inside:avoid; line-height:1.4;}
+pre.code .tag { color:#7dd3fc; }
+
+.fig { margin:2.4mm 0 5mm; page-break-inside:avoid; text-align:center; }
+.fig img { width:100%; border:1px solid #cbd5e1; border-radius:6px; box-shadow:0 1mm 3mm rgba(11,31,58,.12); }
+ .fig .cap { font-size:8.8pt; color:#475569; text-align:justify; margin-top:2mm; }
+.fig .cap b { color:#0e2f52; }
+.screen { page-break-before:always; break-inside:avoid; }
+.screen h3 { margin-top:0; }
+.screen.first { page-break-before:auto; }
+
+.grid2 { display:flex; gap:5mm; }
+.grid2 > div { flex:1; }
+
+.toc { font-size:9.2pt; }
+.toc .trow { display:flex; border-bottom:1px dotted #cbd5e1; padding:1.15mm 0; page-break-inside:avoid;}
+.toc .trow .t { flex:1; color:#0e2f52; font-weight:600;}
+.toc .trow.l1 { }
+.toc .trow.l2 { padding-left:6mm; }
+.toc .trow .p { width:12mm; text-align:right; color:#64748b; }
+
+.pagebreak { page-break-before:always; }
+.small { font-size:8.8pt; color:#64748b; }
+.center { text-align:center; }
+.right { text-align:right; }
+section.sec { }
+.lead { font-size:11pt; color:#334155; }
+.titlepage { text-align:center; padding-top:0; }
+.titlepage h2 { border:none; font-size:20pt; }
+</style>
+</head><body>
+
+<div class="cover"><div class="band"></div>
+<div class="inner">
+  <div class="kicker">Sistema de Gestión de Unidad de Cuidados Intensivos</div>
+  <h1>dMart <span class="sep">UCI</span></h1>
+  <div class="sub">Manual técnico y empresarial del sistema completo</div>
+  <div class="tagline">Plataforma clínica construida 100&nbsp;% en <b>Rust</b> para la gestión integral de una Unidad de Cuidados Intensivos: API REST y streaming en tiempo real, interoperabilidad HL7&nbsp;v2/FHIR&nbsp;R4, cómputo de escalas de gravedad, inteligencia artificial para mortalidad y estancia, cifrado de PHI en reposo, auditoría inmutable (WORM) y frontend WebAssembly (Leptos) ejecutado íntegramente en el navegador.<br><br>Documentación generada a partir del código real, las especificaciones del repositorio y capturas de pantalla del sistema en ejecución.</div>
+  <div class="badges">
+    <span class="badge">Rust 2024</span><span class="badge">WebAssembly</span><span class="badge">Leptos 0.8</span><span class="badge">Axum 0.8</span><span class="badge">SurrealDB</span><span class="badge">HL7 / MLLP</span><span class="badge">FHIR R4</span><span class="badge">AES-256-GCM</span><span class="badge">Argon2id</span><span class="badge">MFA TOTP</span><span class="badge">Auditoría WORM</span><span class="badge">SSE en tiempo real</span><span class="badge">PWA / Web Push</span>
+  </div>
+  <div class="meta">
+    <div class="row"><b>Producto:</b> dMart UCI v2.0 (specs 001-052, 46 especificaciones documentadas)</div>
+    <div class="row"><b>Audiencia:</b> Equipo clínico, ingenieros de software, arquitectos, DevSecOps y dirección hospitalaria</div>
+    <div class="row"><b>Metodología:</b> Spec-Driven Development (SDD)</div>
+    <div class="row"><b>Versión documento:</b> 2.0 &nbsp;|&nbsp; <b>Estado:</b> Aprobado &nbsp;|&nbsp; <b>Fecha:</b> Octubre de 2026</div>
+    <div class="footer-note">Este documento es de uso interno autorizado. Contiene referencia a datos de demostración sintética (no pacientes reales) y descripciones técnicas fieles al código del repositorio.</div>
+  </div>
+</div></div>
+
+<h2 class="chap"><span class="n">1.</span> Sobre este manual</h2>
+<p class="lead">Este manual describe, de forma completa y verificable, el sistema <b>dMart UCI</b>: qué es, qué problema resuelve, cómo está construido, cómo funciona cada uno de sus módulos, qué algoritmos utiliza, cómo se garantiza su seguridad y cómo se demuestra su calidad. Cada afirmación técnica refleja el estado real del repositorio y las capturas de pantalla corresponden al sistema ejecutándose con un dataset clínico de demostración a escala.</p>
+<table class="mtable">
+<tr><th style="width:30%">Atributo</th><th>Valor</th></tr>
+<tr><td>Nombre del producto</td><td>dMart UCI - Sistema de Gestión de Unidad de Cuidados Intensivos</td></tr>
+<tr><td>Licencia</td><td>MIT</td></tr>
+<tr><td>Lenguaje de programación</td><td>Rust 2024 (edición 1.98, rust-toolchain fijado)</td></tr>
+<tr><td>Workspace</td><td>dmart-shared, dmart-server, dmart-app (WASM), dmart-server/fuzz</td></tr>
+<tr><td>Base de datos</td><td>SurrealDB embebida (SurrealKV), migraciones versionadas SurrealQL</td></tr>
+<tr><td>Líneas de código Rust</td><td>Aproximadamente 45.600 líneas en módulos de servidor, API, HL7, frontend y lógica compartida</td></tr>
+<tr><td>Especificaciones (SDD)</td><td>46 specs numeradas SPEC-001...SPEC-052 (todas completadas en 4 fases)</td></tr>
+<tr><td>Interfaz</td><td>SPA (Leptos/WASM) con 17 rutas protegidas + PWA instalable y Web Push</td></tr>
+<tr><td>Dataset de demostración</td><td>520 pacientes, 74 camas, 160 equipos, 90 dispositivos, 69 usuarios</td></tr>
+<tr><td>Puertos</td><td>HTTP 3000 (API y frontend); HL7/MLLP 2575 (configurable, opcional)</td></tr>
+</table>
+
+<h3>Cómo leer este documento</h3>
+<ul>
+<li>Los capítulos 2 a 6 presentan el problema, la metodología, la tecnología y la arquitectura.</li>
+<li>Los capítulos 7 a 10 explican cada módulo funcional, los algoritmos clínicos y el machine learning.</li>
+<li>El capítulo 11 muestra, con capturas reales, cada pantalla del sistema y su función.</li>
+<li>Los capítulos 12 a 16 cubren seguridad, pruebas, observabilidad, despliegue y normativa.</li>
+</ul>
+<div class="note"><b>Nota de privacidad:</b> todos los nombres, cédulas e historias clínicas mostrados en las capturas pertenecen a un dataset sintético generado automáticamente; ninguno corresponde a pacientes reales.</div>
+
+<h2 class="chap"><span class="n">Índice</span> Contenido</h2>
+<div class="toc">
+  <div class="trow"><span class="t">1. Sobre este manual y datos del producto</span><span class="p">2</span></div>
+  <div class="trow"><span class="t">2. Resumen ejecutivo y glosario</span><span class="p">3</span></div>
+  <div class="trow"><span class="t">3. Contexto y problema clínico</span><span class="p">4</span></div>
+  <div class="trow"><span class="t">4. Metodología Spec-Driven Development (SDD)</span><span class="p">5</span></div>
+  <div class="trow"><span class="t">5. Stack tecnológico y conceptos aplicados</span><span class="p">6</span></div>
+  <div class="trow l2"><span class="t">5.1 Rust · 5.2 WebAssembly · 5.3 Leptos · 5.4 Axum · 5.5 SurrealDB · 5.6 SSE · 5.7 PWA · 5.8 Otras piezas</span><span class="p">6</span></div>
+  <div class="trow"><span class="t">6. Arquitectura del sistema</span><span class="p">8</span></div>
+  <div class="trow"><span class="t">7. Modelo de datos y protección de PHI</span><span class="p">9</span></div>
+  <div class="trow"><span class="t">8. Autenticación, autorización y RBAC</span><span class="p">10</span></div>
+  <div class="trow"><span class="t">9. Seguridad del perímetro y capas de defensa</span><span class="p">11</span></div>
+  <div class="trow"><span class="t">10. Algoritmos clínicos: escalas de gravedad</span><span class="p">12</span></div>
+  <div class="trow l2"><span class="t">10.1 APACHE II · 10.2 GCS · 10.3 NEWS2 · 10.4 SOFA · 10.5 SAPS III</span><span class="p">12</span></div>
+  <div class="trow"><span class="t">11. Inteligencia artificial y machine learning</span><span class="p">14</span></div>
+  <div class="trow"><span class="t">12. Interoperabilidad y tiempo real</span><span class="p">15</span></div>
+  <div class="trow"><span class="t">13. Auditoría WORM, timeline, búsqueda y calidad</span><span class="p">16</span></div>
+  <div class="trow"><span class="t">14. Pantallas del sistema (capturas reales)</span><span class="p">17</span></div>
+  <div class="trow l2"><span class="t">14.01 Acceso · 14.02 Panel · 14.03 Pacientes · 14.04 Registro · 14.05 Expediente · 14.06 Edición</span><span class="p">17</span></div>
+  <div class="trow l2"><span class="t">14.07 Medición · 14.08 Timeline · 14.09 CDS · 14.10 Escalamiento · 14.11 Dispositivos · 14.12 Calidad</span><span class="p">18</span></div>
+  <div class="trow l2"><span class="t">14.13 Administración · 14.14 Soporte · 14.15 Tenants · 14.16 Auditoría · 14.17 Perfil · 14.18 Observabilidad</span><span class="p">19</span></div>
+  <div class="trow"><span class="t">15. Pruebas y garantía de calidad</span><span class="p">20</span></div>
+  <div class="trow"><span class="t">16. Observabilidad, SLOs y operación</span><span class="p">21</span></div>
+  <div class="trow"><span class="t">17. Despliegue, GitOps y continuidad</span><span class="p">22</span></div>
+  <div class="trow"><span class="t">18. Análisis de vulnerabilidades y semántica de seguridad</span><span class="p">23</span></div>
+  <div class="trow"><span class="t">19. Cumplimiento normativo y evidencia</span><span class="p">24</span></div>
+  <div class="trow"><span class="t">20. Conclusiones y roadmap</span><span class="p">25</span></div>
+</div>
+<div class="note" style="margin-top:8mm"><b>Nota:</b> el número de páginas indicado es orientativo; el documento completo supera las 30 páginas incluyendo todas las capturas de pantalla a tamaño completo, tablas de datos y diagramas de flujo.</div>
+
+<h2 class="chap"><span class="n">2.</span> Resumen ejecutivo y glosario</h2>
+<h3>2.1 Resumen ejecutivo</h3>
+<p>dMart UCI es una plataforma clínica hospitalaria que unifica en un único binario compilado en Rust toda la operación de una Unidad de Cuidados Intensivos. El sistema fue diseñado para entornos exigentes y, en particular, para “red hospitalaria aislada sin acceso a internet”: no depende de servicios en la nube, todo el ciclo de vida del dato (ingesta, persistencia, cifrado, cómputo de escalas, inferencia de modelos, auditoría) ocurre dentro del hospital.</p>
+<p>El frontend se compila a <b>WebAssembly</b> y se ejecuta en el navegador con el framework reactivo <b>Leptos</b>: la misma lógica de cómputo clínico (escalas, validaciones, modelos) está compartida entre el backend y el frontend desde un crate común (<code>dmart-shared</code>), lo que elimina la duplicación de lógica y los desajustes entre cómo se calcula un score en el servidor y cómo se muestra en pantalla.</p>
+<p>El desarrollo siguió la metodología <b>Spec-Driven Development (SDD)</b>: 46 especificaciones formales, cada una con tests de conformidad dedicados, cobertura medida y validación en el pipeline CI antes de cada entrega.</p>
+<div class="ok"><b>Resultado medible:</b> 210 pruebas del backend en verde (82 unitarias + 128 de integración) en el gate de cobertura, 20 tests E2E end-to-end pasando, gate de cobertura >= 60 %, fuzzing continuo de tres componentes críticos y un dataset de demostración a escala con 520 pacientes en menos de 3 segundos de siembra.</div>
+
+<h3>2.2 Glosario</h3>
+<table class="mtable">
+<tr><th style="width:22%">Término</th><th>Definición</th></tr>
+<tr><td>PHI</td><td>Protected Health Information: información de salud identificable del paciente (nombre, cédula, historia clínica, constantes).</td></tr>
+<tr><td>UCI</td><td>Unidad de Cuidados Intensivos.</td></tr>
+<tr><td>EWS</td><td>Early Warning Score: puntuación de alerta temprana que resume el riesgo de deterioro del paciente.</td></tr>
+<tr><td>HL7 v2 / MLLP</td><td>Estándar de mensajería clínica (mensajes como ORU^R01) y el protocolo de capa inferior sobre TCP (Minimal Lower Layer Protocol).</td></tr>
+<tr><td>FHIR R4</td><td>Fast Healthcare Interoperability Resources, release 4: estándar de intercambio de recursos clínicos (Patient, Observation, Condition, DiagnosticReport, Bundle).</td></tr>
+<tr><td>WORM</td><td>Write Once Read Many: también denominada auditoría inmutable o de una sola escritura.</td></tr>
+<tr><td>RBAC</td><td>Role-Based Access Control: control de acceso basado en roles.</td></tr>
+<tr><td>TOTP</td><td>Time-based One-Time Password (RFC 6238): segundo factor basado en tiempo (autenticadores tipo Google Authenticator).</td></tr>
+<tr><td>JWT</td><td>JSON Web Token: token firmado que transporta la identidad y permisos de la sesión.</td></tr>
+<tr><td>SSE</td><td>Server-Sent Events: canal HTTP unidireccional para streaming de eventos.</td></tr>
+<tr><td>CDS</td><td>Clinical Decision Support: motor de reglas que asiste la decisión clínica.</td></tr>
+<tr><td>LOS</td><td>Length Of Stay: predicción de días de estancia en UCI.</td></tr>
+<tr><td>SDD</td><td>Spec-Driven Development: desarrollo guiado por especificaciones formales.</td></tr>
+<tr><td>APS</td><td>Acute Physiology Score: subcomponente del APACHE II.</td></tr>
+</table>
+
+<h2 class="chap"><span class="n">3.</span> Contexto y problema clínico</h2>
+<h3>3.1 El problema</h3>
+<p>Las Unidades de Cuidados Intensivos operan con pacientes en estado crítico cuyo deterioro puede producirse en minutos. La vigilancia clínica depende de datos complejos: constantes vitales provenientes de monitores de cama, escalas de gravedad estandarizadas, historial acumulado y guías de práctica. Sin una plataforma integrada, este trabajo se realiza con hojas de cálculo, papel y sistemas fragmentados que no conversan entre sí, lo que genera:</p>
+<ul>
+<li><b>Datos dispersos:</b> cada monitor, laboratorio y servicio conserva su propia base sin consolidación.</li>
+<li><b>Cálculo manual de escalas:</b> APACHE II, GCS, NEWS2, SOFA y SAPS III se puntúan a mano, con riesgo de error y sin reutilización histórica.</li>
+<li><b>Retraso en la alerta:</b> la detección de un paciente que se deteriora depende de la frecuencia de las rondas.</li>
+<li><b>Ausencia de interoperabilidad:</b> los monitores emiten HL7 v2, pero el hospital no tiene quién lo interprete y persista.</li>
+<li><b>Riesgo de privacidad:</b> la PHI viaja sin cifrar ni registro de quién la consultó.</li>
+<li><b>Sin trazabilidad:</b> no existe auditoria inmutable de accesos y modificaciones.</li>
+</ul>
+<h3>3.2 La propuesta de valor</h3>
+<p>dMart UCI resuelve estas carencias con un único sistema autocontenido:</p>
+<table class="mtable">
+<tr><th style="width:26%">Necesidad clínica</th><th>Solución de dMart UCI</th></tr>
+<tr><td>Censo y expediente consolidado</td><td>Módulo de pacientes con ingresos, egresos, expediente longitudinal y búsqueda difusa instantánea.</td></tr>
+<tr><td>Vigilancia continua</td><td>Streaming SSE en tiempo real por cama: cada nueva medición recalcula el EWS y notifica a las tarjetas del panel.</td></tr>
+<tr><td>Escalas estandarizadas</td><td>APACHE II, GCS, NEWS2, SOFA y SAPS III en Rust con validación clínica por vectores de referencia.</td></tr>
+<tr><td>Predicción de riesgo</td><td>Ensemble de ML (DecisionTree + regresión logística + gradient boosting) con calibración isotónica/Platt para mortalidad, y red neuronal MLP para estancia.</td></tr>
+<tr><td>Interoperabilidad</td><td>Listener HL7 v2 sobre MLLP con drivers por fabricante (Mindray, Philips, genérico) y salida FHIR R4.</td></tr>
+<tr><td>Seguridad y cumplimiento</td><td>PHI cifrada en reposo (AES-256-GCM), MFA TOTP, RBAC, auditoría WORM encadenada y evidencia normativa HIPAA/ISO 27001.</td></tr>
+<tr><td>Funcionamiento sin internet</td><td>Todo el stack es local: servidor, base de datos embebida y PWA instalable en los terminales de enfermería.</td></tr>
+</table>
+
+<h2 class="chap"><span class="n">4.</span> Metodología: Spec-Driven Development (SDD)</h2>
+<h3>4.1 Qué es SDD</h3>
+<p><b>Spec-Driven Development (desarrollo guiado por especificaciones)</b> es una metodología en la que cada requirerimiento funcional o no funcional del sistema se redacta primero como una <b>especificación formal</b> (“spec”) y solo después se implementa, se prueba y se valida contra esa especificación. A diferencia de un documento de requisitos pasivo, cada spec en este proyecto tiene una entidad de control: se exige un formato mínimo (objetivo, alcance, decisiones, criterios de aceptación, riesgos), se valida en CI (“Spec Lint / SDD Gate”) y no puede cerrarse sin los tests de conformidad y cobertura asociados.</p>
+<p>La metodología garantiza que <i>ninguna funcionalidad queda sin enunciar</i>, que el código es trazable a un documento y que el estado de avance (specs aprobadas, tests verdes) es medible en todo momento.</p>
+<h3>4.2 Por qué se eligió para un sistema clínico</h3>
+<ul>
+<li><b>Auditabilidad:</b> cada función clínica tiene un documento de referencia; es la base ideal para evidencia normativa (HIPAA/ISO 27001).</li>
+<li><b>Seguridad por defecto (fail-closed):</b> cada spec de seguridad define el comportamiento seguro como caso por defecto y los tests lo comprueban.</li>
+<li><b>Calidad medible:</b> el pipeline exige lint de specs, clippy -D warnings, tests y cobertura por módulo.</li>
+<li><b>Colaboración clínico-técnica:</b> un médico puede validar la definición de una escala antes de que se programe.</li>
+</ul>
+<h3>4.3 El flujo SDD aplicado en el repositorio</h3>
+<pre class="code">1. Definición      spec-XXX en `specs/` (formato validado por el SDD Gate)
+2. Validación     CI: `Validate spec format`, lint, revisión obligatoria
+3. Implementación  Código Rust/Leptos trazable a la spec
+4. Tests          cargo test -p dmart-server --lib --test api_tests
+5. Cobertura      cargo llvm-cov -p dmart-server --lib --test api_tests  (gate >= 60 %)
+6. Conformidad    HL7/FHIR/scales con tests de conformance dedicados (SPEC-028, specs HL7)
+7. Entrega        imagenes multi-stage, Helm, GitOps (ArgoCD/Flux)</pre>
+<h3>4.4 Mapa de especificaciones por fase</h3>
+<table class="mtable">
+<tr><th style="width:9%">Fase</th><th style="width:14%">Alcanzada</th><th>Entregables principales (specs)</th></tr>
+<tr><td>1</td><td>SPEC-001 ... 008</td><td>Fijar build WASM, modelo de datos, persistencia de modelos ML, integración HL7/MLLP, hardening de auth, observabilidad (Prometheus/Grafana), pipeline CI completo, alertas operativas.</td></tr>
+<tr><td>2</td><td>SPEC-009 ... 038</td><td>Backup/restore (DR), runbook, staging en Docker, ingesta FHIR, streaming EWS, timeline, motor CDS, registro de dispositivos, calidad de datos, escalamiento, tele-ICU, Helm/Kubernetes, GitOps, cluster SurrealDB, multi-tenancy, cobertura CI, vectores clínicos, huellas de scores, retención, hardening de ingesta, ML (ONNX/serving, similitud, LOS NN, feature store, ensemble de mortalidad).</td></tr>
+<tr><td>3</td><td>SPEC-039 ... 043</td><td>Producción: composición multi-stage, evidencia normativa, optimización de costos, despliegue canary/blue-green, mediciones operativas.</td></tr>
+<tr><td>4</td><td>SPEC-044 ... 052</td><td>Consola de soporte, versionado de API y gateway, feature flags, seguridad de cadena de suministro (cargo deny/audit, cosign, gitleaks), auditoría WORM, SLO/error budgets, UI operativas, Web Push con VAPID y mTLS para MLLP.</td></tr>
+</table>
+<div class="note"><b>Principio SDD aplicado:</b> el código declara su especificación. Por ejemplo, el módulo <code>server_ingest.rs</code> documenta el endurecimiento de la ingesta (SPEC-031) y el listener HL7 está “fail-closed”: sin mTLS o handshake no arranca en despliegues declarados productivos.</div>
+
+<h2 class="chap"><span class="n">5.</span> Stack tecnológico y conceptos aplicados</h2>
+<p>Este capítulo explica, para cada tecnología del sistema, qué es, cómo funciona por dentro y de qué manera concreta se aplica en dMart UCI.</p>
+
+<h3>5.1 Rust (2024 edition)</h3>
+<p><b>Qué es:</b> un lenguaje de programación de sistemas enfocado en rendimiento y seguridad de memoria. El compilador impide, en tiempo de compilación, los errores clásicos de C/C++ (use-after-free, carreras de datos, desbordamientos) mediante el sistema de propiedad y préstamos, sin necesidad de un recolector de basura.</p>
+<p><b>Cómo se aplica:</b> todo el backend (servidor HTTP Axum, parser HL7, cifrado, auditoría, ML) y toda la lógica compartida están escritos en Rust. El perfil de release usa <code>opt-level="z"</code>, LTO y <code>strip</code> para minimizar el binario (un único ejecutable que aloja API + frontend estático + listener de monitores). Características de seguridad directas: tipos <code>Zeroizing</code> para secretos (borran la memoria al soltarse), comparación en tiempo constante con <code>subtle</code>, y ausencia de GC (latencias deterministas para la ingesta de monitores).</p>
+
+<h3>5.2 WebAssembly (WASM)</h3>
+<p><b>Qué es:</b> un formato binario de bytecodes portátil que se ejecuta en una máquina virtual integrada en los navegadores. Permite compilar código de sistemas (C, C++, Rust) y ejecutarlo a velocidad casi nativa en el cliente, con un modelo de memoria aislado (sandbox).</p>
+<p><b>Cómo se aplica:</b> la aplicación de interfaz (<code>dmart-app</code>) se compila con Trunk a un módulo WASM de aproximadamente 3,2 MB (<code>dmart-app-*-_bg.wasm</code>) y un pequeño pegamento JavaScript. Al abrir el sistema, el navegador instancia el WASM y ejecuta <i>toda</i> la aplicación: ruteo, reactividad, i18n, temas y llamadas a la API. El resultado es una SPA rápida que funciona sin framework JavaScript en el host y que es instalable como PWA para operar sin una conexión a internet estable.</p>
+
+<h3>5.3 Leptos 0.8 (framework reactivo)</h3>
+<p><b>Qué es:</b> un framework de interfaz de usuario escrito en Rust que compila a WASM. Su modelo es la <b>reactividad por señales</b>: los datos se envuelven en <code>Signal</code> y la interfaz se declara como una función de esas señales; cuando una señal cambia, solo las partes dependientes se recalculan y se vuelven a renderizar (sin algoritmos de reconciliación masiva).</p>
+<p><b>Cómo se aplica:</b> las 17 rutas de la SPA (login, panel, pacientes, expediente, medición, timeline, CDS, escalamiento, dispositivos, calidad, administración, soporte, tenants, auditoría y perfil) están declaradas en <code>app.rs</code> con protección de ruta por rol. El estado de sesión se mantiene en señales globales: el access token vive únicamente en memoria (nunca en localStorage) y se renueva por cookie httpOnly; la identidad (nombre/rol para mostrarse en la barra) sí se persiste de forma segura. El sistema es multilingüe (es, en, fr, pt) y tiene tres temas (claro, oscuro, sistema).</p>
+
+<h3>5.4 Axum 0.8 (framework web)</h3>
+<p><b>Qué es:</b> el framework HTTP asíncrono del ecosistema Tokio/Tower para Rust: routers tipados, extracción de argumentos por tipos, middlewares componibles y soporte de streaming (SSE, WebSockets).</p>
+<p><b>Cómo se aplica:</b> el servidor monta el API versionado (<code>/api/v1</code> y ruta heredada <code>/api</code>), el router de observabilidad (<code>/obs/health</code>, <code>/obs/live</code>, <code>/obs/ready</code>, <code>/metrics</code>) y el servicio de estáticos del frontend desde <code>dist/</code>. Los middlewares de seguridad (rate limiting, throttle de login y de MFA, cabeceras de seguridad) son capas de Tower sobre el router. El streaming SSE de eventos clínicos sale del mismo proceso.</p>
+
+<h3>5.5 SurrealDB (SurrealKV embebida)</h3>
+<p><b>Qué es:</b> una base de datos multi-modelo (documentos, grafos y consultas tipo SQL llamadas SurrealQL) distribuible. En su modo embebido (SurrealKV) funciona como una librería dentro del proceso del servidor, sin procesos externos.</p>
+<p><b>Cómo se aplica:</b> se persiste en el archivo local <code>data/dmart.db</code>. Provee transacciones atómicas para ingresos/egresos, múltiples tablas (<code>patient</code>, <code>measurement</code>, <code>user</code>, <code>refresh_token</code>, <code>audit_event</code>, <code>hl7_ingest_key</code>, <code>tenant</code>, ...) y <b>27 migraciones versionadas</b> en SurrealQL que evolucionan el esquema de forma ordenada (desde <code>001_baseline_indexes.surql</code> hasta la más reciente). Para alta disponibilidad, las specs definen un cluster SurrealDB de 3 nodos en Kubernetes.</p>
+
+<h3>5.6 Server-Sent Events (SSE)</h3>
+<p><b>Qué es:</b> un canal HTTP unidireccional donde el servidor empuja eventos al cliente de forma continua. A diferencia de WebSocket, es más simple y robusto en proxies que filtran por HTTP.</p>
+<p><b>Cómo se aplica:</b> el módulo <code>realtime.rs</code> mantiene un hub de conexiones SSE (con máximo 10 por IP para evitar acaparar el hub). Cuando se ingiere una medición (manualmente o desde un monitor HL7), el evento se emite a los clientes suscritos, filtrado por tenant, y el panel actualiza las tarjetas de cama al instante.</p>
+
+<h3>5.7 PWA / Service Worker / Web Push</h3>
+<p><b>Qué es:</b> Progressive Web App: una web con manifiesto, service worker y APIs de notificaciones que se puede instalar y usar offline.</p>
+<p><b>Cómo se aplica:</b> el manifiesto y el service worker (<code>sw.js</code>) se copian al <code>dist/</code>; el frontend declara las APIs <code>PushManager</code>/<code>PushSubscription</code> (SPEC-052) y el backend las suscripciones con claves VAPID para enviar alertas de escalamiento a los dispositivos, incluso cuando la app no está en primer plano.</p>
+
+<h3>5.8 Otras piezas relevantes</h3>
+<table class="mtable">
+<tr><th style="width:22%">Componente</th><th>Rol en el sistema</th></tr>
+<tr><td>candle 0.8</td><td>Backend de tensores para la red neuronal de estancia (MLP/LSTM) ejecutada en el servidor.</td></tr>
+<tr><td>linfa</td><td>Biblioteca de ML en Rust: DecisionTree, regresión logística, gradient boosting del ensemble de mortalidad.</td></tr>
+<tr><td>argon2</td><td>KDF resistente para el hash de contraseñas (HIPAA/OWASP).</td></tr>
+<tr><td>jsonwebtoken</td><td>Emisión y validación de JWT HS256 revocables.</td></tr>
+<tr><td>totp-rs</td><td>Segundo factor TOTP RFC 6238 con generación de secretos y otpauth URI.</td></tr>
+<tr><td>aes-gcm / chacha20poly1305</td><td>Cifrado autenticado AEAD para PHI: envelope vigente AES-256-GCM y legacy ChaCha20-Poly1305 auto-detectado.</td></tr>
+<tr><td>rustls</td><td>TLS 1.3 para el listener MLLP con cifrados restringidos a AES-256-GCM.</td></tr>
+<tr><td>cel 0.12</td><td>Motor de expresiones para las reglas clínicas del CDS.</td></tr>
+<tr><td>printpdf / csv / qrcode</td><td>Exportación de informes PDF, CSV y códigos QR del export de auditoría.</td></tr>
+<tr><td>metrics / metrics-exporter-prometheus</td><td>Métricas internas expuestas en formato Prometheus en <code>/metrics</code>.</td></tr>
+<tr><td>redis / Valkey</td><td>Backend de rate limiting distribuido y caché cuando está disponible; fallback en memoria en desarrollo.</td></tr>
+<tr><td>utoipa</td><td>Generación de la especificación OpenAPI 3 expuesta en <code>/api/v1/openapi.json</code>.</td></tr>
+</table>
+
+<h2 class="chap"><span class="n">6.</span> Arquitectura del sistema</h2>
+<p>dMart UCI se organiza en cuatro capas dentro de un único binario. El frontend (WASM) se sirve como contenido estático desde el mismo proceso HTTP, lo que simplifica el despliegue a un contenedor de k8s con un StatefulSet para SurrealDB.</p>
+<h3>6.1 Capas</h3>
+<table class="mtable">
+<tr><th style="width:20%">Capa</th><th style="width:22%">Componentes</th><th>Responsabilidad</th></tr>
+<tr><td>Presentación</td><td>Leptos/WASM (SPA, 17 rutas), PWA</td><td>Interfaz clínica, reactividad, i18n, temas, notificaciones push.</td></tr>
+<tr><td>Aplicación</td><td>Axum (API v1 + legado), middlewares, SSE hub, listener MLLP</td><td>Endpoints REST versionados, autorización, streaming en tiempo real, ingestión de monitores.</td></tr>
+<tr><td>Dominio / lógica</td><td>dmart-shared (scales, ML, validación, modelos)</td><td>Cómputo de escalas, ensemble de mortalidad, red neuronal LOS, validación clínica, modelos compartidos frontend/backend.</td></tr>
+<tr><td>Persistencia y seguridad</td><td>SurrealDB, phi_store, crypto, audit, search</td><td>Almacenamiento multi-modelo, cifrado de PHI con índices ciegos, búsqueda difusa, auditoría WORM.</td></tr>
+</table>
+<h3>6.2 Vista de módulos del servidor</h3>
+<table class="mtable">
+<tr><th style="width:26%">Módulo</th><th>Función</th></tr>
+<tr><td>api/versioning.rs</td><td>Router versionado, API legacy, cabeceras X-API-Version / X-API-Deprecated y OpenAPI.</td></tr>
+<tr><td>api/{auth,mfa,rbac}.rs</td><td>Login, refresh, logout, MFA TOTP, me() y permisos por rol.</td></tr>
+<tr><td>crypto.rs / phi_store.rs</td><td>Envelope AES-256-GCM DMART_A2, subclaves HMAC-SHA256, índices ciegos y trigramas.</td></tr>
+<tr><td>audit.rs</td><td>Cadena WORM SHA-256 con lotes firmados HMAC y retención de 6 años.</td></tr>
+<tr><td>search.rs</td><td>Búsqueda de pacientes: trigramas ciegos + ranking Jaro-Winkler.</td></tr>
+<tr><td>server_ingest.rs / hl7/*</td><td>Listener MLLP, parser ORU^R01, drivers Mindray/Philips/genérico, ACK de rechazo, backpressure.</td></tr>
+<tr><td>mllp_tls.rs</td><td>mTLS TLS 1.3 con pín SHA-256 del certificado vs MSH.3.</td></tr>
+<tr><td>security.rs / rate_limit_store.rs</td><td>Rate limiting (Valkey o memoria), throttle de login y MFA, cabeceras y CSP/HSTS.</td></tr>
+<tr><td>cds_rules.rs / patient_timeline.rs</td><td>Motor de reglas clínicas (CEL) y timeline append-only con fingerprint.</td></tr>
+<tr><td>ml_serving.rs / similarity.rs / forecasting.rs</td><td>Serving de modelos, embeddings de 128-d por feature hashing, búsqueda de pacientes similares, forecaster de estancia u ocupación.</td></tr>
+<tr><td>fhir_bundle.rs / teleicu.rs</td><td>Recursos FHIR R4 y export Bundle; observación remota de tele-UCI.</td></tr>
+<tr><td>data_quality.rs / device_registry.rs / escalation.rs / retention.rs</td><td>Calidad de datos, registro de dispositivos, escalamiento de alertas, retención y downsampling.</td></tr>
+<tr><td>slo.rs / observability.rs / metrics.rs</td><td>SLOs y error budgets, health checks, métricas Prometheus extendidas.</td></tr>
+<tr><td>push.rs / support.rs / tenant.rs / deployment.rs</td><td>Web Push VAPID, consola de soporte y self-healing, multi-tenancy, despliegue/canary.</td></tr>
+</table>
+<h3>6.3 Flujo de una medición de cama (caso extremo a extremo)</h3>
+<pre class="code">Monitor de cama (HL7 v2) --(MLLP/TCP, mTLS)--> server_ingest
+  validate + quality --> cpu_measurement (escalas en dmart-shared)
+  persist (PHI cifrada en reposo) --> realtime hub --(SSE)--> navegador (WASM)
+  recompute EWS --> escalation (si umbral) --> web push VAPID</pre>
+<p class="small">El mismo camino vale para una medición registrada desde la interfaz: el frontend llama al API, el backend valida, calcula escalas en dmart-shared y publica el evento SSE al pool de conexiones.</p>
+
+<h2 class="chap"><span class="n">7.</span> Modelo de datos y protección de PHI</h2>
+<h3>7.1 Modelo de datos (SurrealDB)</h3>
+<p>El esquema evoluciona con 27 migraciones SurrealQL versionadas. Las tablas principales se agrupan por dominio:</p>
+<table class="mtable">
+<tr><th style="width:24%">Dominio</th><th>Tablas / registros</th></tr>
+<tr><td>Pacientes</td><td><code>patient</code> (expediente, cédula, historia clínica, estado, gravedad, scores), <code>patient_event</code> (timeline), <code>admission</code>/historial de camas.</td></tr>
+<tr><td>Clínico</td><td><code>measurement</code> (constantes y escalas), vectores de referencia clínica para validación de rangos.</td></tr>
+<tr><td>Identidad</td><td><code>user</code> (staff), <code>refresh_token</code>, <code>audit_event</code>, sesiones MFA.</td></tr>
+<tr><td>Operación</td><td><code>cama</code>, <code>equipo</code>, <code>dispositivo</code> (monitores), <code>alert</code>, <code>cds_plan</code>, <code>tenant</code>.</td></tr>
+<tr><td>Integridad</td><td><code>hl7_ingest_key</code> (clave unique tenant+message_id para idempotencia), <code>audit_event</code>, <code>support_event</code>.</td></tr>
+</table>
+<p>Las claves únicas compuestas (p. ej. <code>tenant_id</code> + <code>message_id</code> en <code>hl7_ingest_key</code>) dan idempotencia a la ingesta: si un monitor reenvía el mismo mensaje (mismo MSH.10), se responde el ACK idempotente sin duplicar la medición.</p>
+<h3>7.2 Cifrado de PHI en reposo</h3>
+<p>La información de salud identificable nunca se guarda en claro:</p>
+<ul>
+<li><b>Envelope vigente DMART_A2:</b> cada campo PHI se cifra con <b>AES-256-GCM</b> (cifrado autenticado: detecta cualquier alteración). Se usa un <b>envelope con clave por registro</b> (DEK) derivada de una clave maestra, de forma que diferentes registros con la misma cédula no tengan el mismo texto cifrado (nonce aleatorio de 12 bytes).</li>
+<li><b>Envelope legacy DMART_V1:</b> ChaCha20-Poly1305. Se conserva para descifrar datos antiguos y se detecta automáticamente por el "magic" del sobre (backfill transparente).</li>
+<li><b>Subclaves HMAC-SHA256:</b> la clave maestra se deriva en subclaves etiquetadas <code>LABEL_PHI</code> y <code>LABEL_INDEX</code>, separando cifrado de datos y cómputo de índices.</li>
+<li><b>Claves en memoria:</b> los secretos se guardan en <code>Zeroizing</code> (cero al soltar) y el proveedor de claves (<code>KeyProvider</code>) permite rotación sin downtime anotando el <code>key_id</code> por envelope.</li>
+</ul>
+<h3>7.3 Índices ciegos y búsqueda sin exponer PHI</h3>
+<p>Para permitir consultas rápidas sin escribir texto en claro en disco, el sistema calcula <b>HMAC-SHA256</b> (clave = subclave de índice) de la cédula, historia clínica, nombre exacto y de los <b>trigramas</b> del nombre normalizado (campo <code>bi_tng</code>). Una búsqueda:</p>
+<ol>
+<li>Normaliza la consulta (mayúsculas, sin tildes),</li>
+<li>calcula los trigramas y sus HMAC,</li>
+<li>busca filas candidatas por coincidencia de trigramas (solo se comparan HMAC, nunca texto),</li>
+<li>descifra los pocos candidatos y los ordena con <b>Jaro-Winkler</b> en Rust, con bonificación por prefijo y coincidencia exacta.</li>
+</ol>
+<div class="ok"><b>Efecto:</b> se puede buscar "gus", "jorg" u "ortiz" y tolerar erratas de teclado, sin que un atacante con acceso al disco pueda leer ningún nombre paciente.</div>
+
+<h2 class="chap"><span class="n">8.</span> Autenticación, autorización y RBAC</h2>
+<h3>8.1 Autenticación</h3>
+<p>El sistema aplica un esquema de sesión de tokens de corta vida con renovación segura:</p>
+<table class="mtable">
+<tr><th style="width:26%">Mecanismo</th><th>Detalle</th></tr>
+<tr><td>Contraseñas</td><td>Hash con <b>Argon2id</b> (parámetros OWASP), nunca en claro, con fuerza validada (min. 12 caracteres por política, rechazo de placeholders).</td></tr>
+<tr><td>Access token</td><td><b>JWT HS256</b> de 15 minutos con expiración, claim <code>tenant_id</code>, lista de permisos y versión; revocable. Vive solo en memoria del navegador.</td></tr>
+<tr><td>Refresh token</td><td>7 días, persistido en cookie <b>httpOnly + SameSite=Strict</b>; rota en cada renovación y se revoca en logout. El hilo de sesión lo renueva cada 10 minutos.</td></tr>
+<tr><td>Segundo factor</td><td><b>MFA TOTP RFC 6238</b> (ventana de 30 s, tolerancia de deriva) con códigos de respaldo de un solo uso; flujo de challenge antes de entregar token.</td></tr>
+<tr><td>Anti fuerza bruta</td><td>Throttle de login, throttle específico del flujo MFA y rate limit global; en producción el límite se distribuye con Valkey/Redis (INCR + EXPIRE atómicos).</td></tr>
+</table>
+<h3>8.2 Autorización basada en roles (RBAC)</h3>
+<p>El modelo define roles y permisos granulares. Cada endpoint verifica el permiso requerido desde el token; no basta "estar autenticado".</p>
+<table class="mtable">
+<tr><th style="width:16%">Rol</th><th style="width:40%">Permisos clave</th><th>Uso típico</th></tr>
+<tr><td>Admin</td><td>Todos (<code>*</code>), gestión de usuarios, camas, equipos, tenants, audit</td><td>Administración del sistema y de la unidad</td></tr>
+<tr><td>Médico</td><td>patients:*, measurements:*, scales:*, cds, escalamiento, devices</td><td>Diagnóstico, prescripción y revisión de escalas</td></tr>
+<tr><td>Enfermero</td><td>patients:read, measurements:create/read, escalamiento</td><td>Ingreso de constantes y vigilancia de cama</td></tr>
+<tr><td>Viewer</td><td>patients:read, measurements:read, quality:read</td><td>Consulta de solo lectura (reportes, auditoría clínica)</td></tr>
+<tr><td>Soporte</td><td>support:read/act + contexto clínico de solo lectura</td><td>Operaciones técnicas sin alterar clínica</td></tr>
+</table>
+<p>Cada acceso a un recurso verifica además la <b>pertenencia al tenant</b> (<code>require_tenant_ownership</code>): un usuario de un hospital no puede leer pacientes de otro aunque tenga el rol adecuado. En el frontend, la barra lateral muestra u oculta opciones según permisos (<code>user_has(...)</code>) y las rutas protegidas redirigen ante falta de permiso.</p>
+<h3>8.3 Flujo de ingreso interactivo</h3>
+<ol>
+<li>El profesional introduce usuario y contraseña en la vista de login.</li>
+<li>El backend valida Argon2id; si el usuario tiene MFA activo devuelve un <i>challenge</i>.</li>
+<li>La interfaz muestra el paso TOTP (o código de respaldo).</li>
+<li>Con el challenge resuelto se entrega access token (memoria) + refresh (cookie) y la app navega al panel.</li>
+<li>El panel carga estadísticas, censo y suscripción SSE.</li>
+</ol>
+
+<h2 class="chap"><span class="n">9.</span> Seguridad del perímetro y capas de defensa</h2>
+<h3>9.1 Frontera MLLP (monitores de cama)</h3>
+<p>MLLP es un protocolo de texto plano sobre TCP: sin protección, las constantes vitales viajarían en claro y cualquier host de la red podría inyectar datos. La frontera se endurece en capas:</p>
+<ul>
+<li><b>mTLS obligatorio en producción:</b> TLS 1.3 exclusivo, cifrado únicamente AES-256-GCM (<code>TLS13_AES_256_GCM_SHA384</code>), certificado de cliente verificado contra la CA propia de monitores, no contra la CA pública.</li>
+<li><b>Pinning de identidad:</b> el fingerprint SHA-256 del certificado se vincula al <code>MSH.3</code> que la conexión declara (<code>DMART_MLLP_CLIENT_IDS</code>). Un monitor no puede hacerse pasar por otro.</li>
+<li><b>Handshake de secreto compartido</b> (<code>DMART_MLLP_AUTH_SECRET</code>) como capa 2 cuando no hay mTLS; comparación en tiempo constante y buffer <code>Zeroizing</code>.</li>
+<li><b>Allowlist de emisores</b> sobre <code>MSH.3</code>, bind por defecto a loopback.</li>
+<li><b>Anti slow-loris:</b> timeouts de lectura/escritura y tope de conexiones global y por IP.</li>
+<li><b>Fail-closed:</b> sin mTLS ni handshake, el listener no arranca en despliegues productivos.</li>
+<li><b>Idempotencia:</b> deduplicación por <code>MSH.10</code> con clave UNIQUE (tenant, message_id) y ACK de rechazo para mensajes inválidos.</li>
+</ul>
+<h3>9.2 Protecciones web</h3>
+<table class="mtable">
+<tr><th style="width:28%">Control</th><th>Implementación</th></tr>
+<tr><td>Rate limiting</td><td>Trait <code>RateLimitStore</code>: Valkey/Redis (INCR+EXPIRE, aislamiento por tenant via JWT) o memoria; cabeceras <code>X-RateLimit-Limit/Remaining/Reset</code>.</td></tr>
+<tr><td>Cabeceras de seguridad</td><td><code>X-Frame-Options</code> (anti clickjacking), CSP, HSTS en producción, CORS restringido a orígenes conocidos.</td></tr>
+<tr><td>Cifrado en tránsito (HTTP)</td><td>TLS en el proxy/gateway (Caddy en dev, Ingress en k8s); la cookie de refresh exige segura en producción.</td></tr>
+<tr><td>Gestión de secretos</td><td><code>JWT_SECRET</code> y <code>DMART_MASTER_KEY</code> obligatorios, <code>validate_secret_strength()</code> fail-closed (64 hex ó más, rechazo de placeholders), <code>Zeroizing</code> en memoria.</td></tr>
+<tr><td>Cadena de suministro</td><td><code>cargo deny</code> + <code>cargo audit</code> en CI, firma de imágenes <b>cosign keyless</b>, escaneo <b>gitleaks</b> SARIF, lakefile de expediente por evidencia.</td></tr>
+</table>
+<h3>9.3 Modelo de amenazas resumido</h3>
+<table class="mtable">
+<tr><th style="width:26%">Amenaza</th><th style="width:40%">Vector</th><th>Contramedida en dMart UCI</th></tr>
+<tr><td>Robo de sesión</td><td>XSS, token en log</td><td>Access token solo en memoria; JWT revocable; CSP; nunca loguear tokens. El access token de 15 min limita la ventana de abuso.</td></tr>
+<tr><td>Fuerza bruta</td><td>Login / TOTP</td><td>Throttle de login y MFA, rate limit distribuido, códigos de respaldo de un solo uso.</td></tr>
+<tr><td>Fuga de PHI en reposo</td><td>Acceso físico al disco, backup</td><td>AES-256-GCM por campo, subclaves HMAC, índices ciegos: el disco no contiene texto legible.</td></tr>
+<tr><td>Inyección en MLLP</td><td>Host en la red hospitalaria</td><td>mTLS + pinning a MSH.3, allowlist de emisores, fail-closed, timeouts y tope de conexiones.</td></tr>
+<tr><td>Alteración de auditoría</td><td>DBA malintencionado, ransomware</td><td>Cadena WORM con prev_hash y lotes firmados HMAC; export verificable de integridad.</td></tr>
+<tr><td>Escalada vertical</td><td>Endpoint abusivo</td><td>RBAC con permiso por recurso y verificación de pertenencia al tenant en cada acceso.</td></tr>
+</table>
+
+<h2 class="chap"><span class="n">10.</span> Algoritmos clínicos: escalas de gravedad</h2>
+<p>Los cálculos de escalas viven en <code>dmart-shared/src/scales.rs</code>, compartidos entre servidor y frontend, con vectores de referencia clínica (SPEC-028) que validan rangos normales y críticos en tests y en la consola de calidad de datos.</p>
+
+<h3>10.1 APACHE II (Acute Physiology And Chronic Health Evaluation II)</h3>
+<p><b>Qué es:</b> el sistema de clasificación de gravedad más extendido en UCI (Knaus et al., 1985). Estima la probabilidad de mortalidad hospitalaria a partir de datos fisiológicos del primer día de ingreso.</p>
+<table class="mtable">
+<tr><th>Componente</th><th style="width:16%">Rango de puntos</th><th>Detalle</th></tr>
+<tr><td>Acute Physiology Score (APS)</td><td>0-60</td><td>12 variables: temperatura, PAM, frecuencia cardíaca, frecuencia respiratoria, oxigenación (PaO2/a/A), pH arterial o HCO3, sodio y potasio sérico, creatinina, hematocrito, leucocitos y GCS corregido.</td></tr>
+<tr><td>Puntuación por edad</td><td>0-6</td><td>Escalones desde &lt;=44 años (0) hasta &gt;=75 años (6).</td></tr>
+<tr><td>Enfermedad crónica grave</td><td>0-5</td><td>Insuficiencia orgánica crónica o inmunodepresión, con restricciones quirúrgicas/electivas.</td></tr>
+</table>
+<p>Total máximo: <b>71 puntos</b>. La probabilidad de mortalidad hospitalaria se obtiene con una función logística sobre el score y el grupo diagnóstico (la implementación incluye la fórmula y su constante de regresión).</p>
+
+<h3>10.2 Escala de Coma de Glasgow (GCS)</h3>
+<p><b>Qué es:</b> mide el nivel de conciencia (Teasdale &amp; Jennett, 1974) puntuando tres respuestas.</p>
+<table class="mtable">
+<tr><th>Componente</th><th style="width:14%">Puntos</th><th>Descripción</th></tr>
+<tr><td>Apertura ocular</td><td>1-4</td><td>Espontánea (4), a la voz (3), al dolor (2), ninguna (1).</td></tr>
+<tr><td>Respuesta verbal</td><td>1-5</td><td>Orientado (5)... ninguna (1); intubados se codifican como "1T".</td></tr>
+<tr><td>Respuesta motora</td><td>1-6</td><td>Obedece órdenes (6)... ninguna (1).</td></tr>
+</table>
+<p>Total: <b>3-15</b>; menor de 8 suele indicar coma y alerta para asegurar vía aérea.</p>
+
+<h3>10.3 NEWS2 (National Early Warning Score 2)</h3>
+<p><b>Qué es:</b> sistema de alerta temprana del Royal College of Physicians (2017) para detectar deterioro clínico con datos de cabecera.</p>
+<table class="mtable">
+<tr><th style="width:30%">Parámetro</th><th>Puntos por desviación</th></tr>
+<tr><td>Frecuencia respiratoria, SpO2, tensión arterial sistólica, pulso, conciencia (CVPU) y temperatura</td><td>0-3 por parámetro según rango; +2 si se requiere oxígeno suplementario.</td></tr>
+<tr><td>Escala</td><td>Total <b>0-20</b>; umbrales de alerta en 5 (bajo), 6-7 (medio) y >=8 (alto).</td></tr>
+</table>
+<p>En el sistema, NEWS2 alimenta el streaming EWS por cama: cada medición nueva lo recalcula y si supera umbral se dispara el escalamiento.</p>
+
+<h3>10.4 SOFA (Sequential Organ Failure Assessment)</h3>
+<p><b>Qué es:</b> puntúa la disfunción de seis sistemas de órganos (Vincent et al., 1996); cada sistema aporta 0-4 puntos.</p>
+<table class="mtable">
+<tr><th>Sistema</th><th style="width:14%">Puntos</th><th>Variable proxy</th></tr>
+<tr><td>Respiratorio</td><td rowspan="6">0-4</td><td>PaO2/FiO2 (relación de oxigenación)</td></tr>
+<tr><td>Coagulación</td><td>Plaquetas</td></tr>
+<tr><td>Hepático</td><td>Bilirrubina</td></tr>
+<tr><td>Cardiovascular</td><td>PAM / vazoactivos</td></tr>
+<tr><td>Neurológico</td><td>GCS</td></tr>
+<tr><td>Renal</td><td>Creatinina o diuresis</td></tr>
+</table>
+<p>Total <b>0-24</b>. Normal &lt; 5; &gt;=5 se asocia a disfunción multiorgánica.</p>
+
+<h3>10.5 SAPS III (Simplified Acute Physiology Score III)</h3>
+<p><b>Qué es:</b> score de admisión (Moreno et al., 2005) con variables fisiológicas, demográficas y de admisión (origen, motivo, comorbilidades, uso de vasopresores, GCS): total <b>0-217</b>, convertido a probabilidad de mortalidad hospitalaria. En el sistema es uno de los scores que se calculan al registrar una medición con los datos soportados.</p>
+<div class="note"><b>Validación clínica automática:</b> los tests usan vectores de referencia con pacientes "normales" y "críticos" (p. ej. SAPS III normal &lt; 30, crítico &gt;= 50; NEWS2 normal &lt; 5, crítico &gt;= 10; SOFA normal &lt; 5) y fallan si el cálculo no se ajusta a esos límites (fixtures en <code>dmart-shared/testdata/scales</code>).</div>
+
+<h2 class="chap"><span class="n">11.</span> Inteligencia artificial y machine learning</h2>
+<h3>11.1 Ensemble de mortalidad hospitalaria</h3>
+<p>El módulo <code>ml_ensemble.rs</code> combina tres modelos para estimar la probabilidad de mortalidad durante la hospitalización:</p>
+<table class="mtable">
+<tr><th style="width:30%">Modelo base</th><th>Rol</th></tr>
+<tr><td>DecisionTree (linfa)</td><td>Captura interacciones no lineales entre variables y es interpretable (reglas).</td></tr>
+<tr><td>Regresión logística (GLM binomial)</td><td>Referencia lineal calibrada en probabilidades.</td></tr>
+<tr><td>Gradient Boosting</td><td>Refuerza la precisión sobre residuos del conjunto.</td></tr>
+<tr><td>Stacking (opcional)</td><td>Meta-modelo que combina las salidas de los base.</td></tr>
+</table>
+<p>Las probabilidades crudas de cada modelo se <b>calibran</b> (isotónica o <b>Platt scaling</b>, resolviendo el problema de la singularidad de la matriz con regularización) para que el valor de salida sea una probabilidad honesta: un riesgo del 0,80 significa realmente 80 % en la población de calibración. Las features provienen de <code>ml_features.rs</code> (escalas, constantes y datos demográficos).</p>
+<h3>11.2 Red neuronal de estancia (LOS)</h3>
+<p>El módulo <code>ml_los.rs</code> predice la Estancia (Length of Stay). Usa un backend de tensores <b>candle 0.8</b>:</p>
+<ul>
+<li>Arquitectura <b>MLP multi-capa</b> con window fija sobre el historial de mediciones y capas recurrentes opcionales (<b>LSTM/GRU</b>).</li>
+<li>Entrenamiento con descenso de gradiente (Adam) sobre múltiples épocas, con dropout para regularizar y normalización de entradas.</li>
+<li>Pesos persistidos y cargables (<code>ModelWeights</code>) para rehidratar el modelo sin retraducción.</li>
+<li>Métricas de inferencia expuestas a Prometheus.</li>
+</ul>
+<h3>11.3 Motor de similitud de pacientes</h3>
+<p>El módulo <code>similarity.rs</code> (SPEC-033) genera <b>embeddings clínicos de 128 dimensiones</b> mediante feature hashing de las variables del paciente y calcula coseno entre vectores para devolver los <b>top-K</b> pacientes más parecidos (con explicación por feature y scope de tenant). La API ofrece búsqueda, explicabilidad, estado y regeneración de embeddings. Es una base para "pacientes como éste" en el CDS.</p>
+<h3>11.4 Forecasting de operaciones</h3>
+<p>El módulo <code>forecasting.rs</code> produce proyecciones de ocupación y estancia con cuantiles normales (naive forecaster implementado sobre <code>statrs</code>), usado por los paneles de administración y los scripts de costos (<code>cost_forecast.sh</code>).</p>
+<div class="note"><b>Serving:</b> <code>ml_serving.rs</code> implementa un registro de modelos (<code>Predictor</code> trait) con swap en caliente vía API (<code>/ml/models/swap</code>), batch inference y métricas <code>ml_inference_*</code>. La especificación contaba también con un backend de inferencia sobre ONNX/WASM (SPEC-032).</div>
+
+<h2 class="chap"><span class="n">12.</span> Interoperabilidad y tiempo real</h2>
+<h3>12.1 HL7 v2 + MLLP</h3>
+<p>Los monitores de cama emiten mensajes <b>HL7 v2</b> (el estándar de mensajería de salud más desplegado en equipos médicos). El tipo de mensaje soportado es <b>ORU^R01</b> (Observation Result Unsolicited), que transporta las observaciones (constantes y parámetros) de un paciente.</p>
+<p><b>Protocolo MLLP:</b> encuadra cada mensaje HL7 entre un byte de inicio (0x0B VT), el bloque de datos y un bloque de fin (0x1C FS + 0x0D CR). El parser ASN.1-like de <code>hl7/parser.rs</code> interpreta los segmentos (MSH, PID, OBR, OBX...), valida el <code>MSH.10</code> (idempotencia), aplica control de calidad (<code>ingest/quality.rs</code>: plausibilidad de rangos) y persiste la medición. Los ACK de aceptación y rechazo siguen las reglas de HL7.</p>
+<p>El sistema incluye <b>drivers por fabricante</b> (Mindray, Philips y genérico) que normalizan el mapeo de código de observación a las escalas internas, y <b>backpressure</b>: si el sistema se satura, la ingesta regula la tasa y abre un <b>circuit breaker</b> ante fallos repetidos (recuperable desde la consola de soporte o automáticamente HalfOpen).</p>
+<h3>12.2 FHIR R4</h3>
+<p>El módulo <code>fhir_bundle.rs</code> genera recursos FHIR R4 para el intercambio institucional:</p>
+<table class="mtable">
+<tr><th style="width:28%">Recurso FHIR</th><th>Contenido emitido</th></tr>
+<tr><td>Patient</td><td>Expediente del paciente (identificadores, demografía) con PHI ya protegida por política de export.</td></tr>
+<tr><td>Observation (LOINC)</td><td>Constantes y escalas codificadas con LOINC.</td></tr>
+<tr><td>Condition (CIE-10)</td><td>Diagnósticos con códigos CIE-10 (p. ej. I63.9, I60.9, G61.0).</td></tr>
+<tr><td>DiagnosticReport / Bundle</td><td>Informes y paquetes para consumo externo (hv, sistemas institucionales).</td></tr>
+</table>
+<h3>12.3 Streaming de alertas tempranas (EWS)</h3>
+<p>El módulo <code>ews_stream.rs</code> combina las escalas (NEWS2/APACHE/SOFA) con las últimas mediciones de cada cama y emite el estado por <b>SSE</b>. Las conexiones se limitan por IP, se filtran por tenant y el panel las consume para pintar tarjetas en vivo. La especificación SPEC-014 garantiza además que el streaming siga funcionando cuando llegan datos de varios monitores a la vez.</p>
+<h3>12.4 Tele-UCI</h3>
+<p>El módulo <code>teleicu.rs</code> permite a un centro remoto observar el estado agregado de la unidad (espejo de censo y alertas) respetando el aislamiento de tenant y los permisos, pensado para modelos de tele-intensivismo.</p>
+
+<h2 class="chap"><span class="n">13.</span> Auditoría WORM, timeline, búsqueda y calidad</h2>
+<h3>13.1 Auditoría inmutable (WORM)</h3>
+<p><code>audit.rs</code> implementa un registro de auditoría con garantía de no manipulación:</p>
+<ul>
+<li><b>Cadena encadenada:</b> cada evento incluye el <code>prev_hash</code> (SHA-256) del anterior; la génesis es un hash de 64 ceros.</li>
+<li><b>Lotes firmados:</b> los eventos se agrupan en lotes de hasta 1.000 registros firmados con <b>HMAC-SHA256</b> usando subclave derivada. Alterar un evento invalida su hash, el siguiente eslabón y la firma del lote.</li>
+<li><b>Concurrencia segura:</b> la escritura está serializada con <code>tokio::Mutex</code>; ninguna operación introduce huecos.</li>
+<li><b>Retención:</b> 6 años, con tarea de limpieza <code>POST /api/admin/audit/cleanup</code> y verificación de integridad de la cadena en la exportación.</li>
+<li><b>Visor forense:</b> el frontend muestra la cadena y permite copiar el resumen del export (SPEC-049).</li>
+</ul>
+<h3>13.2 Timeline clínico append-only</h3>
+<p>El <code>patient_timeline.rs</code> construye la línea de tiempo del paciente (ingreso, mediciones, planes CDS, egreso) como eventos de solo añadido. Cada evento tiene un <b>fingerprint</b> criptográfico, de modo que cualquier edición o borrado posterior es detectable. Esto complementa la auditoría WORM con la vista clínica temporal.</p>
+<h3>13.3 Búsqueda de pacientes</h3>
+<p>Ya descrita en 7.3: normalización, trigramas ciegos (HMAC), reducción de candidatos y ranking difuso Jaro-Winkler con bonificaciones. Soporta búsqueda parcial por pocas letras, nombres con espacio, apellidos, tildes y erratas; exige como mínimo 3 caracteres para el camino difuso y cae a coincidencia exacta por debajo (por cédula, historia o nombre).</p>
+<h3>13.4 Calidad de datos</h3>
+<p>El módulo <code>data_quality.rs</code> audita el dataset: <b>completitud</b> (campos requeridos por registro), <b>plausibilidad</b> (rangos fisiológicos por escala y variable), <b>integridad referencial</b> (mediciones sin paciente válido, camas huérfanas) y <b>consistencia de scores</b> (que la escala calculada coincida con la persistida). La consola muestra el estado por métrica y permite accionar correcciones. El validador de ingesta comparte estas reglas (<code>ValidationReason</code>) antes de aceptar una medición.</p>
+
+<h2 class="chap"><span class="n">14.</span> Pantallas del sistema (capturas reales)</h2>
+<p>Este capítulo documenta, una por una, las pantallas del sistema en ejecución. Las capturas fueron tomadas con el sistema corriendo contra la base de datos de demostración (520 pacientes, 74 camas, 40 pacientes activos en cama, 160 equipos, 90 dispositivos y 69 usuarios). El orden recorre el ciclo de uso real: acceso, operación diaria, administración y técnica. Las rutas del SPA son: <code>/login</code>, <code>/</code>, <code>/patients</code>, <code>/patients/new</code>, <code>/patients/:id</code>, <code>/patients/:id/edit</code>, <code>/patients/:id/measure</code>, <code>/patients/:id/timeline</code>, <code>/cds</code>, <code>/escalation</code>, <code>/devices</code>, <code>/data-quality</code>, <code>/admin</code>, <code>/admin/soporte</code>, <code>/admin/tenants</code>, <code>/admin/audit</code> y <code>/perfil</code>.</p>
+<section class="screen first"><h3>14.1 Acceso al sistema (/login)</h3><p>El punto de entrada valida credenciales con Argon2id y, si el usuario tiene MFA, solicita el código TOTP. Incluye selector de idioma y tema, y el aviso de acceso restringido en la versión de la interfaz.</p><div class="fig"><img src="img/01-login.png" alt="Login"><p class="cap"><b>Figura 1.</b> Pantalla de acceso (login) con diseño responsivo, selector de tema e idioma y aviso de acceso restringido. Combina usuario, contraseña y, si está habilitado, segundo factor TOTP.</p></div></section><section class="screen"><h3>14.2 Panel de control (/)</h3><p>El dashboard consolida los KPIs de la unidad: censo activo, ocupación de camas, pacientes por estado de gravedad y tarjetas por cama con su último EWS. Se alimenta de /api/stats y del streaming SSE, de modo que una nueva medición actualiza las tarjetas sin recargar la página.</p><div class="fig"><img src="img/02-dashboard.png" alt="Dashboard"><p class="cap"><b>Figura 2.</b> Panel de control: KPIs de la unidad, censo de camas, ocupación y tarjetas de pacientes activos con último EWS (APACHE II, NEWS2, SOFA, SAPS III) en tiempo real.</p></div></section><section class="screen"><h3>14.3 Censo de pacientes (/patients)</h3><p>Listado paginado del catálogo clínico con la búsqueda difusa (trigramas ciegos + Jaro-Winkler), filtros por estado y gravedad, y columnas de últimos scores. Cada fila permite abrir el expediente, medir o ver la timeline.</p><div class="fig"><img src="img/03-pacientes.png" alt="Pacientes"><p class="cap"><b>Figura 3.</b> Censo de pacientes con búsqueda difusa (trigramas ciegos + Jaro-Winkler), filtros por estado/gravedad y paginación sobre el catálogo clínico.</p></div></section><section class="screen"><h3>14.4 Registro de paciente (/patients/new)</h3><p>Formulario de ingreso a UCI. La cédula y el número de historia se cifran en reposo y se indexan ciegos para permitir búsqueda rápida sin exponer PHI en disco.</p><div class="fig"><img src="img/04-nuevo-paciente.png" alt="Registro de paciente"><p class="cap"><b>Figura 4.</b> Registro de nuevo paciente (ingreso a UCI): datos demográficos, cédula y n.º de historia clínica cifrados en reposo con envelope AES-256-GCM.</p></div></section><section class="screen"><h3>14.5 Expediente del paciente (/patients/:id)</h3><p>Vista de detalle: últimas mediciones, gráficos de tendencia, escalas calculadas, riesgos de mortalidad y estancia (ML), y acciones clínicas accesibles según rol.</p><div class="fig"><img src="img/05-detalle-paciente.png" alt="Detalle"><p class="cap"><b>Figura 5.</b> Expediente del paciente: últimas mediciones, escalas clínicas, riesgos de mortalidad y estancia (ML) y acciones clínicas (medir, editar, egreso).</p></div></section><section class="screen"><h3>14.6 Edición del expediente (/patients/:id/edit)</h3><p>Actualización de datos demográficos y diagnóstico con validación de campos; cualquier cambio queda registrado en la auditoría WORM. Los permisos de edición se verifican en servidor.</p><div class="fig"><img src="img/06-editar-paciente.png" alt="Editar paciente"><p class="cap"><b>Figura 6.</b> Edición del expediente con validación de campos (edad, sexo, diagnóstico) y guardado auditado en el registro WORM.</p></div></section><section class="screen"><h3>14.7 Registro de medición (/patients/:id/measure)</h3><p>Pantalla de captura de constantes: al guardar, el backend calcula las cinco escalas y publica el evento SSE. La validación clínica de plausibilidad se aplica antes de persistir.</p><div class="fig"><img src="img/07-medicion.png" alt="Medición"><p class="cap"><b>Figura 7.</b> Registro de medición y cálculo en vivo de las cinco escalas (APACHE II, GCS, NEWS2, SOFA, SAPS III) sobre las constantes introducidas.</p></div></section><section class="screen"><h3>14.8 Timeline clínico (/patients/:id/timeline)</h3><p>Línea de tiempo append-only del paciente con fingerprint por evento: mediciones, planes CDS y eventos administrativos quedan encadenados y verificables.</p><div class="fig"><img src="img/08-timeline.png" alt="Timeline"><p class="cap"><b>Figura 8.</b> Timeline clínico append-only con huella criptográfica (fingerprint) por evento; cada evento está encadenado y es verificable.</p></div></section><section class="screen"><h3>14.9 Decisiones clínicas (/cds)</h3><p>Motor CDS (SPEC-016): planes de cuidado disparados por reglas (motor CEL) según perfil de gravedad y contexto, con recomendaciones accionables y registro de la activación.</p><div class="fig"><img src="img/09-cds.png" alt="CDS"><p class="cap"><b>Figura 9.</b> Motor de decisión clínica (CDS): planes de cuidado basados en reglas (motor CEL) y recomendaciones accionables por perfil de gravedad.</p></div></section><section class="screen"><h3>14.10 Escalamiento (/escalation)</h3><p>Centro de alertas y escalamiento: umbrales EWS vencidos, severidad por cama y acción inmediata. Las alertas pueden enviarse por Web Push (VAPID) a los profesionales suscritos.</p><div class="fig"><img src="img/10-escalation.png" alt="Escalamiento"><p class="cap"><b>Figura 10.</b> Centro de escalamiento: alertas clínicas por umbrales EWS, estados de severidad y acción inmediata desde la misma pantalla.</p></div></section><section class="screen"><h3>14.11 Dispositivos y monitores (/devices)</h3><p>Registro de dispositivos de cama: identificación, tenant, cama asignada, estado de sincronización y último latido. Los monitores se asocian a los drivers MLLP por MSH.3.</p><div class="fig"><img src="img/11-devices.png" alt="Dispositivos"><p class="cap"><b>Figura 11.</b> Registro de dispositivos/monitores de cama (drivers HL7 v2 por MSH.3), estado de sincronización e identificación por cama-tenant.</p></div></section><section class="screen"><h3>14.12 Calidad de datos (/data-quality)</h3><p>Consola de completitud, plausibilidad, integridad referencial y consistencia de scores sobre el dataset; detección de mediciones fuera de rango y acciones de corrección.</p><div class="fig"><img src="img/12-data-quality.png" alt="Calidad de datos"><p class="cap"><b>Figura 12.</b> Consola de calidad de datos: completitud, plausibilidad clínica, integridad referencial y validación por escala sobre el dataset.</p></div></section><section class="screen"><h3>14.13 Administración (/admin)</h3><p>Gestión de usuarios y roles (RBAC), camas y equipos médicos, con toggles de acceso y panel de operación de la unidad.</p><div class="fig"><img src="img/13-admin.png" alt="Administración"><p class="cap"><b>Figura 13.</b> Panel de administración: gestión de usuarios y roles (RBAC), camas, equipos médicos y operación de la unidad.</p></div></section><section class="screen"><h3>14.14 Consola de soporte (/admin/soporte)</h3><p>Telemetría por subsistema (db, ingest, realtime, ml, monitores, audit, backup), acciones idempotentes (reintento de ingesta, reset de circuit breaker, backup, rotación de modelo, verify de fingerprints) y self-healing automático.</p><div class="fig"><img src="img/14-soporte.png" alt="Soporte técnico"><p class="cap"><b>Figura 14.</b> Consola técnica de soporte (SPEC-044): telemetría por subsistema, acciones idempotentes (reintento de ingesta, reset de circuit breaker, backup, rotación de modelo) y self-healing.</p></div></section><section class="screen"><h3>14.15 Multi-tenancy (/admin/tenants)</h3><p>Organizaciones aisladas: cada tenant filtra sus pacientes, mediciones y alertas; la impersonación acotada permite al soporte operar dentro de permisos.</p><div class="fig"><img src="img/15-tenants.png" alt="Tenants"><p class="cap"><b>Figura 15.</b> Gestión de multi-tenancy: organizaciones aisladas con filtrado por tenant en cada consulta y soporte de impersonación acotada.</p></div></section><section class="screen"><h3>14.16 Auditoría forense (/admin/audit)</h3><p>Visor de la cadena WORM: eventos encadenados por prev_hash, lotes firmados y export verificable de integridad. Base de libertad ante auditorías externas e investigaciones.</p><div class="fig"><img src="img/16-audit.png" alt="Auditoría WORM"><p class="cap"><b>Figura 16.</b> Visor forense de auditoría WORM: cadena SHA-256 encadenada, lotes firmados HMAC y export verificable de integridad.</p></div></section><section class="screen"><h3>14.17 Perfil del usuario (/perfil)</h3><p>Cambio de contraseña, alta/baja de MFA TOTP con códigos de respaldo y datos de la cuenta; los cambios sensibles quedan auditados.</p><div class="fig"><img src="img/17-perfil.png" alt="Perfil"><p class="cap"><b>Figura 17.</b> Perfil de usuario: cambio de contraseña, alta/baja de MFA TOTP con códigos de respaldo y datos de cuenta (opcionalmente PHI protegida).</p></div></section><section class="screen"><h3>14.18 Observabilidad: health checks (/obs/health)</h3><p>El servidor expone el estado operativo en formato JSON: base de datos conectada, caché (opcional), uptime y versión del binario. Lo consumen los probes de Kubernetes, el proxy y las alertas.</p><div class="fig"><img src="img/18-health.png" alt="Health"><p class="cap"><b>Figura 18.</b> Endpoint de salud /obs/health: estado de base de datos, caché, uptime y versión del binario. Complementado por /obs/live y /obs/ready.</p></div></section><section class="screen"><h3>14.19 Observabilidad: métricas Prometheus (/metrics)</h3><p>El endpoint de métricas alimenta Grafana: latencias y contadores HTTP, métricas de ML, de ingesta y de soporte, en formato Prometheus consumible directamente por los scrapers.</p><div class="fig"><img src="img/19-metrics.png" alt="Metrics"><p class="cap"><b>Figura 19.</b> Endpoint /metrics en formato Prometheus: latencias HTTP, contadores de la API, métricas de ML e ingesta para el panel Grafana.</p></div></section><section class="screen"><h3>14.20 Contrato OpenAPI 3 (/api/v1/openapi.json)</h3><p>La API se documenta sola (utoipa): la especificación JSON describe todos los endpoints con sus esquemas, agrupados en ya conocidos tags funcionais (auth, patients, ingestion, ML, support, sandbox, export, ...).</p><div class="fig"><img src="img/20-openapi.png" alt="OpenAPI"><p class="cap"><b>Figura 20.</b> Especificación OpenAPI 3 (JSON de /api/v1/openapi.json) generada por utoipa: 5 grupos funcionales y contratos documentados de todos los endpoints.</p></div></section>
+<h2 class="chap"><span class="n">15.</span> Pruebas y garantía de calidad</h2>
+<p>La calidad se demuestra en cuatro niveles: unitario, integración/E2E, carga y fuzzing. Todos se ejecutan como parte del pipeline CI y en local de forma acotada.</p>
+<table class="mtable">
+<tr><th style="width:22%">Nivel</th><th style="width:34%">Descripción</th><th>Números</th></tr>
+<tr><td>Unitario (lib)</td><td>Tests de módulos: escalas y vectores de referencia, parser HL7, cifrado, auditoría, rate limiting, ML.</td><td>82 tests</td></tr>
+<tr><td>Integración HTTP</td><td>E2E in-process con tower::oneshot sobre el router Axum: auth/RBAC, pacientes, mediciones, HL7, FHIR, tenants, WORM.</td><td>128+ tests (SPEC-004, api_tests, hl7_integration)</td></tr>
+<tr><td>End-to-end UI (Playwright)</td><td>Flujos reales de navegador: login, pacientes, mediciones, admin.</td><td>20 tests, 0 errores</td></tr>
+<tr><td>Carga (k6)</td><td>Scripts de autenticación, escalas, FHIR, HL7 y métricas.</td><td>5 escenarios</td></tr>
+<tr><td>Fuzzing (cargo-fuzz)</td><td>Cobertura de entradas adversariales en JSON de API, parser HL7 y escalas.</td><td>3 targets</td></tr>
+<tr><td>Benchmark (criterion)</td><td>Rendimiento de cálculo de escalas.</td><td>scale_bench</td></tr>
+</table>
+<h3>15.1 Cómo se ejecutan</h3>
+<pre class="code"><span class="tag"># Relevant tests del backend (rápido)</span>
+cargo test -p dmart-server --test api_tests --test hl7_integration
+cargo test -p dmart-server --lib
+
+<span class="tag"># Coverage gate (>= 60 % global + por módulos)</span>
+cargo llvm-cov -p dmart-server --lib --test api_tests
+
+<span class="tag"># E2E UI</span>
+npm run test:e2e          # Playwright contra el servidor levantado
+
+<span class="tag"># Carga</span>
+k6 run tests/load/auth.js tests/load/scales.js</pre>
+<div class="note"><b>Regla operativa:</b> en este repositorio nunca se ejecuta <code>cargo test --workspace</code> en local porque compila el frontend WASM y el fuzzing (horas); el backend se valida con los targets acotados anteriores (~15 s) y el resto lo resuelve el CI.</div>
+<h3>15.2 Especificación 027 - Gate de cobertura</h3>
+<p>SPEC-027 define el gate: cobertura global <b>&gt;= 60 %</b> medida con llvm-cov, verificada por <code>check-coverage-thresholds.sh</code> con umbrales por módulos. El pipeline falla (rojo) si no se alcanza, impidiendo que código sin probar llegue a producción. El badge del repositorio refleja el último estado del gate.</p>
+
+<h2 class="chap"><span class="n">16.</span> Observabilidad, SLOs y operación</h2>
+<h3>16.1 Métricas y health checks</h3>
+<p>El servidor expone, sobre el mismo puerto, tres contratos de operación:</p>
+<table class="mtable">
+<tr><th style="width:22%">Endpoint</th><th>Contenido</th></tr>
+<tr><td>/obs/health, /obs/live, /obs/ready</td><td>Liveness/readiness: estado de DB, caché (opcional), uptime y versión. Usado por los probes de Kubernetes y por el proxy.</td></tr>
+<tr><td>/metrics</td><td>Prometheus: latencias y contadores HTTP, métricas de ML (<code>ml_inference_*</code>), de ingesta, de soporte (<code>support_actions_total</code>, <code>self_healing_total</code>) y de proceso.</td></tr>
+<tr><td>/api/v1/openapi.json</td><td>Contrato OpenAPI 3 de la API para generación de clientes y verificación.</td></tr>
+</table>
+<p>La observabilidad se completa con <b>Grafana</b> (dashboards por dominio), <b>Prometheus</b> y <b>Alertmanager</b> con reglas por directorio de despliegue, métricas de proceso y alertas regionalizadas.</p>
+<h3>16.2 SLOs y error budgets (SPEC-050)</h3>
+<table class="mtable">
+<tr><th style="width:30%">SLO</th><th>Objetivo mensual</th></tr>
+<tr><td>Disponibilidad de la API</td><td>99,9 % (error budget ~43 min/mes)</td></tr>
+<tr><td>Latencia p95 de endpoints clínicos</td><td>&lt; 300 ms internos (sin red)</td></tr>
+<tr><td>Entrega SSE de eventos</td><td>Pérdida de eventos &lt; 0,1 % de los emitidos</td></tr>
+<tr><td>Ingesta HL7 sin pérdida</td><td>100 % de mensajes válidos persistidos</td></tr>
+</table>
+<p>Los SLOs alimentan los error budgets mostrados en el panel de escalation; si el budget se agota entran en acción las alertas de escalamiento operativo.</p>
+<h3>16.3 Operación y runbook</h3>
+<ul>
+<li><b>Arranque:</b> validar variables críticas, secretos, iniciar <code>dmart-server</code> y comprobar los logs (DB conectada, listeners, servidor en :3000).</li>
+<li><b>Apagado seguro:</b> captura de SIGTERM con timeout configurable, flush de métricas, cierre de DB y caché.</li>
+<li><b>Backup/DR:</b> scripts <code>backup.sh</code>, <code>dr_backup.sh</code>, <code>dr_restore.sh</code>, <code>dr_verify.sh</code> y simulacros <code>dr_drill.sh</code> (restore probado).</li>
+<li><b>Consola de soporte:</b> subsistemas, acciones y self-healing descritos en 14.14.</li>
+</ul>
+
+<h2 class="chap"><span class="n">17.</span> Despliegue, GitOps y continuidad</h2>
+<h3>17.1 Build multi-stage</h3>
+<p>El pipeline produce una imagen de contenedor multi-stage: etapa de compilación Rust (host), build del frontend WASM (Trunk) y etapa final slim con el único binario y el <code>dist/</code> incrustado. La imagen se firma con <b>cosign keyless</b> y se escanea con <code>cargo deny</code>/<code>cargo audit</code> en CI.</p>
+<h3>17.2 Kubernetes / Helm</h3>
+<table class="mtable">
+<tr><th style="width:26%">Recurso</th><th>Función</th></tr>
+<tr><td>Deployment dmart-server</td><td>Replicas del API+frontend con HPA, probes de liveness/readiness, PDB e Ingress TLS.</td></tr>
+<tr><td>StatefulSet SurrealDB</td><td>Con o sin cluster de 3 nodos (SPEC-023) y volumen persistente.</td></tr>
+<tr><td>NetworkPolicy / ServiceAccount</td><td>Segregación de red y mínimo privilegio.</td></tr>
+<tr><td>Secrets</td><td>JWT_SECRET, DMART_MASTER_KEY, claves VAPID y CA de monitores como secretos del cluster.</td></tr>
+</table>
+<h3>17.3 GitOps (ArgoCD / Flux)</h3>
+<p>El repositorio incluye manifiestos <b>ArgoCD</b> (AppProject + Application) y <b>Flux</b> (GitRepository + HelmRelease + Kustomization). El flujo es: cambio en el repo -> CI verde -> imagen firmada -> GitOps sincroniza el cluster. Los scripts <code>deploy_blue_green.sh</code>, <code>deploy_canary.sh</code> y <code>deploy_rollback.sh</code> implementan estrategias de liberación con verdes/azules y canario con regresión rápida.</p>
+<h3>17.4 Entornos</h3>
+<p>Se mantienen tres perfiles de configuración (dev, staging, prod) con variables separadas. En prod: CORS cerrado, cookies seguras, HSTS, MFA obligatorio, rate limit distribuido (Valkey) e ingesta MLLP con mTLS y fail-closed. En desarrollo se usan desactivaciones explícitas (rate limit, throttles) marcadas como tales.</p>
+
+<h2 class="chap"><span class="n">18.</span> Análisis de vulnerabilidades y sem&#225;ntica de seguridad</h2>
+<h3>18.1 Postura de seguridad actual</h3>
+<table class="mtable">
+<tr><th style="width:24%">Pilar</th><th style="width:44%">Implementado</th><th>Pendiente / plan</th></tr>
+<tr><td>AuthN</td><td>Argon2id, JWT HS256 revocable (access 15 min / refresh 7 días), MFA TOTP RFC 6238, JWT_SECRET en Zeroizing.</td><td>Thelogy operativa de adopción de MFA en todos los usuarios.</td></tr>
+<tr><td>AuthZ</td><td>RBAC Admin/Médico/Enfermero/Viewer/Soporte; ResourceOwner y verificación de tenant en cada acceso.</td><td>Auditoría periódica de asignación de roles.</td></tr>
+<tr><td>Cifrado en reposo</td><td>AES-256-GCM envelope DMART_A2 + auto-detección DMART_V1 legacy; subclaves HMAC-SHA256 (PHI/INDEX); índices ciegos.</td><td>Backfill completo de filas legacy (P0.2).</td></tr>
+<tr><td>Búsqueda de PHI</td><td>Trigramas ciegos HMAC + ranking Jaro-Winkler en Rust, sin texto en disco.</td><td>Ampliar cobertura a otros campos PHI.</td></tr>
+<tr><td>MLLP</td><td>mTLS TLS 1.3, pinning SHA-256 DER a MSH.3, allowlist de emisores, fail-closed.</td><td>Monitorización de revocaciones por CA.</td></tr>
+<tr><td>Rate limit</td><td>Trait RateLimitStore, Valkey/Redis INCR+EXPIRE, tenant isolation por claim JWT, headers X-RateLimit-*.</td><td>WAF perimetral en el gateway.</td></tr>
+<tr><td>Supply chain</td><td>cargo deny + cargo audit, cosign keyless, gitleaks SARIF.</td><td>Rotación de PAT de GitHub.</td></tr>
+<tr><td>Auditoría</td><td>Cadena WORM SHA-256, lotes HMAC, mutex async, export verificable.</td><td>Notarización temporal externa (timestamping).</td></tr>
+</table>
+<h3>18.2 Superficie de ataque y riesgos residuales</h3>
+<table class="mtable">
+<tr><th style="width:28%">Riesgo</th><th style="width:36%">Exposición</th><th>Mitigación / recomendación</th></tr>
+<tr><td>AES-NI sin módulo FIPS</td><td>El crate aes-gcm no tiene módulo validado FIPS 140-3.</td><td>Si el requisito es FIPS, sustituir el proveedor (ej. openssl/rustls-fips).</td></tr>
+<tr><td>Refresh token en cookie</td><td>Robo de cookie (malware de terminal).</td><td>SameSite=Strict, httpOnly, HTTPS obligatorio, rotación en cada uso.</td></tr>
+<tr><td>Ingesta HL7 maliciosa</td><td>Valores extremos o mensajes infinitos.</td><td>Validación de plausibilidad, idempotencia, rate limit, timeouts, tope de conexiones, circuit breaker.</td></tr>
+<tr><td>XSS en interfaz</td><td>Datos de pacientes renderizados.</td><td>Leptos escapa por defecto el contenido; CSP activa; sin <code>innerHTML</code> dinámico con PHI.</td></tr>
+<tr><td>Dependencias</td><td>CVEs en crates.</td><td>cargo audit en CI, pinning y policy scan con cargo deny.</td></tr>
+<tr><td>Operador humano</td><td>Errores de configuración (secretos débiles).</td><td>validate_secret_strength fail-closed + runbooks de arranque.</td></tr>
+</table>
+<div class="warn"><b>Conclusión de riesgo:</b> el diseño prioriza la confidencialidad de la PHI (cifrado de extremo a extremo interno, índices ciegos, auditoría inmutable) y la integridad de la ingesta. Los riesgos residuales son operativos y de cadena de suministro, con controles de mitigación planificados en el roadmap de seguridad.</div>
+
+<h2 class="chap"><span class="n">19.</span> Cumplimiento normativo y evidencia</h2>
+<h3>19.1 HIPAA</h3>
+<table class="mtable">
+<tr><th style="width:34%">Requisito HIPAA</th><th>Evidencia en dMart UCI</th></tr>
+<tr><td>Confidencialidad / cifrado</td><td>PHI en reposo AES-256-GCM (envelope DMART_A2), tránsito TLS, mTLS en MLLP.</td></tr>
+<tr><td>Integridad</td><td>Cadenas WORM, fingerprint de timeline, firmas HMAC de lotes, validación de plausibilidad.</td></tr>
+<tr><td>Disponibilidad</td><td>DR con scripts de backup/restore probados, cluster SnDD, SLOs con error budget.</td></tr>
+<tr><td>Auditoría de accesos</td><td>Registro WORM encadenado de eventos sensibles y export verifiable.</td></tr>
+<tr><td>Último uso / notificación</td><td>Tracker de accesos en auditoría y consola de soporte.</td></tr>
+</table>
+<h3>19.2 ISO/IEC 27001</h3>
+<p>El evidence pack (<code>docs/compliance/</code>) cataloga controles aplicables: A.5 (políticas), A.8 (gestión de activos y PHI), A.9 (control de acceso: RBAC, mínimo privilegio), A.10 (criptografía), A.12 (operaciones: backup, logs, vuln management) y A.14 (desarrollo seguro: SDD, CI, revisión). Los scripts <code>compliance_generate.sh</code>/<code>compliance_check.sh</code> generan y verifican el pack como parte de CI.</p>
+<h3>19.3 FDA SaMD y protección de datos</h3>
+<ul>
+<li><b>FDA Software as a Medical Device:</b> la lógica de cómputo de escalas está en un crate de dominio validado por vectores de referencia clínica y tests de conformidad, sentando la base de un expediente de validación de software.</li>
+<li><b>GDPR / LOPD:</b> minimización (solo PHI necesaria), cifrado, índices ciegos, derecho de acceso mediante export, retención definida (auditoría 6 años) y registro de decisiones automatizadas (ML) expuesto y explicable.</li>
+</ul>
+<div class="ok"><b>Dato relevante:</b> las especificaciones 034 y 039 definen el pack de evidencia (control catalog, data flows, incidentes, marco legal y backfill de PHI) de modo que la evidencia normativa se genera y se valida de forma automatizada.</div>
+
+<h2 class="chap"><span class="n">20.</span> Conclusiones y roadmap</h2>
+<h3>20.1 Resumen de capacidades en números</h3>
+<table class="mtable">
+<tr><th style="width:48%">Métrica</th><th>Valor</th></tr>
+<tr><td>Especificaciones SDD completadas</td><td>46 specs (SPEC-001 a SPEC-052, 4 fases)</td></tr>
+<tr><td>Pruebas backend (gate)</td><td>210 (82 unitarias + 128 de integración)</td></tr>
+<tr><td>Tests E2E UI (Playwright)</td><td>20, 0 errores</td></tr>
+<tr><td>Gate de cobertura</td><td>&gt;= 60 % global con umbrales por módulo</td></tr>
+<tr><td>Fuzz targets</td><td>3 (API JSON, parser HL7, escalas)</td></tr>
+<tr><td>Rutas de la SPA</td><td>17 protegidas + salud/métricas/OpenAPI</td></tr>
+<tr><td>Escalas de gravedad</td><td>5 (APACHE II, GCS, NEWS2, SOFA, SAPS III)</td></tr>
+<tr><td>Modelos ML</td><td>Ensemble de mortalidad, red LOS, similitud, forecaster</td></tr>
+<tr><td>Migraciones de esquema</td><td>27 versionadas (SurrealQL)</td></tr>
+<tr><td>Tamaño del binario (debug)</td><td>~760 MB; release con LTO/opt-z minimizado</td></tr>
+<tr><td>Módulo WASM del frontend</td><td>~3,2 MB compilado con Trunk</td></tr>
+</table>
+<h3>20.2 Logros frente a los requisitos del hospital aislado</h3>
+<ul>
+<li>Despliegue autocontenido: un binario + archivo de base de datos local; PWA instalable para terminales.</li>
+<li>Interoperabilidad real: HL7 v2/MLLP para monitores y FHIR R4 para el resto del ecosistema hospitalario.</li>
+<li>Vigilancia continua: EWS en streaming con notificación push.</li>
+<li>Calidad clínica: escalas validadas por vectores de referencia y ML explicable.</li>
+<li>Gobernanza: RBAC, cifrado de PHI, índices ciegos y auditoría WORM verificable.</li>
+</ul>
+<h3>20.3 Próximos pasos del roadmap</h3>
+<ol>
+<li>Completar el backfill de filas PHI legacy (P0.2) y rotación de claves con drill documentado.</li>
+<li>Validación FIPS 140-3 del proveedor criptográfico si lo exige el cliente.</li>
+<li>Ampliar la cobertura de búsqueda difusa a otros campos clínicos.</li>
+<li>Notarización de la cadena de auditoría con sellado de tiempo externo.</li>
+<li>Integrar WAF perimetral y métricas de superficie de ataque en el panel de escalamiento.</li>
+<li>Certificación formal del evidence pack (ISO 27001 / HIPAA) con auditoría de terceros.</li>
+</ol>
+<h3>20.4 Aviso final</h3>
+<p>Este manual se generó desde el código real y las especificaciones del repositorio, con capturas del sistema en ejecución sobre un dataset de demostración. La documentación técnica fiel al código es el primer requisito de la metodología SDD: <b>especificación, implementación, prueba y evidencia van siempre juntas.</b></p>
+
+</body></html>
