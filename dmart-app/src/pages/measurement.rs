@@ -125,12 +125,29 @@ pub fn MeasurementPage() -> impl IntoView {
                 }
                 EscalaMedir::SAPS3 => {
                     let d = apache_data.get();
+                    let g = gcs_data.get();
                     api::calc_saps3(
                         &pid,
                         d.edad,
-                        0,
+                        d.dias_pre_uci,
                         d.tipo_admision.clone(),
                         d.fuente_admision.clone(),
+                        d.infeccion_admision.clone(),
+                        d.sistema_anatomico.clone(),
+                        d.temperatura,
+                        d.presion_sistolica,
+                        d.frecuencia_cardiaca,
+                        g.total(),
+                        d.bilirrubina,
+                        d.creatinina,
+                        d.plaquetas,
+                        d.ph_arterial,
+                        d.ventilacion_mecanica,
+                        d.vasopresores,
+                        d.inmunocomprometido,
+                        d.leucocitos,
+                        d.fio2,
+                        d.pao2,
                         n,
                     )
                     .await

@@ -9,6 +9,7 @@ use dmart_shared::scales::{
     calculate_saps_iii_score, calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction,
     sofa_mortality_estimate,
 };
+use dmart_shared::models::News2Level;
 
 // Función helper para crear un paciente con todos los valores en rango normal (0 puntos)
 fn paciente_base() -> ApacheIIData {
@@ -584,6 +585,347 @@ mod apache_ii {
         assert!(mort > 80.0, "Mortalidad debe ser >80%");
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Fronteras exactas por variable (SPEC-028: cada corte con assert_eq!)
+    // Referencia: tabla APS de Knaus 1985 (Crit Care Med 13(10):818-29)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fronteras_temperatura() {
+        for (valor, esperado) in [
+            (41.0, 4),
+            (40.9, 3),
+            (39.0, 3),
+            (38.9, 1),
+            (38.5, 1),
+            (38.4, 0),
+            (36.0, 0),
+            (35.9, 1),
+            (34.0, 1),
+            (33.9, 2),
+            (32.0, 2),
+            (31.9, 3),
+            (30.0, 3),
+            (29.9, 4),
+        ] {
+            let mut data = paciente_base();
+            data.temperatura = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).temperatura,
+                esperado,
+                "temp {}°C → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_pam() {
+        for (valor, esperado) in [(160.0, 4), (130.0, 3), (110.0, 2), (70.0, 0), (50.0, 2), (49.9, 4)] {
+            let mut data = paciente_base();
+            data.presion_arterial_media = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).pam,
+                esperado,
+                "PAM {} mmHg → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_fc() {
+        for (valor, esperado) in [(180.0, 4), (140.0, 3), (110.0, 2), (70.0, 0), (55.0, 2), (40.0, 3), (39.9, 4)] {
+            let mut data = paciente_base();
+            data.frecuencia_cardiaca = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).fc,
+                esperado,
+                "FC {} lpm → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_fr() {
+        for (valor, esperado) in [(50.0, 4), (35.0, 3), (25.0, 1), (12.0, 0), (10.0, 1), (6.0, 2), (5.9, 4)] {
+            let mut data = paciente_base();
+            data.frecuencia_respiratoria = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).fr,
+                esperado,
+                "FR {} rpm → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_pao2() {
+        for (valor, esperado) in [(70.0, 0), (61.0, 1), (55.0, 3), (54.9, 4)] {
+            let mut data = paciente_base();
+            data.fio2 = 0.21;
+            data.pao2 = Some(valor);
+            data.a_ado2 = None;
+            assert_eq!(
+                apache_ii_breakdown(&data).oxigenacion,
+                esperado,
+                "PaO2 {} con FiO2{} → puntos esperados {}",
+                valor,
+                data.fio2,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_aado2() {
+        for (valor, esperado) in [(500.0, 4), (350.0, 3), (200.0, 2), (199.9, 0)] {
+            let mut data = paciente_base();
+            data.fio2 = 0.5;
+            data.pao2 = None;
+            data.a_ado2 = Some(valor);
+            assert_eq!(
+                apache_ii_breakdown(&data).oxigenacion,
+                esperado,
+                "A-aDO2 {} con FiO2{} → puntos esperados {}",
+                valor,
+                data.fio2,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_ph() {
+        for (valor, esperado) in [
+            (7.70, 4),
+            (7.60, 3),
+            (7.50, 1),
+            (7.33, 0),
+            (7.25, 2),
+            (7.15, 3),
+            (7.14, 4),
+        ] {
+            let mut data = paciente_base();
+            data.ph_arterial = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).ph,
+                esperado,
+                "pH {} → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_sodio() {
+        for (valor, esperado) in [(180.0, 4), (160.0, 3), (155.0, 2), (150.0, 1), (130.0, 0), (120.0, 2), (111.0, 3), (110.9, 4)] {
+            let mut data = paciente_base();
+            data.sodio_serico = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).sodio,
+                esperado,
+                "Na {} mEq/L → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_potasio() {
+        for (valor, esperado) in [(7.0, 4), (6.0, 3), (5.5, 1), (3.5, 0), (3.0, 1), (2.5, 2), (2.4, 4)] {
+            let mut data = paciente_base();
+            data.potasio_serico = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).potasio,
+                esperado,
+                "K {} mEq/L → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_creatinina() {
+        for (valor, esperado) in [(3.5, 4), (2.0, 3), (1.5, 2), (0.6, 0), (0.5, 2)] {
+            let mut data = paciente_base();
+            data.creatinina = valor;
+            data.falla_renal_aguda = false;
+            assert_eq!(
+                apache_ii_breakdown(&data).creatinina,
+                esperado,
+                "Cr {} mg/dL sin ARF → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_creatinina_con_arf() {
+        // Con falla renal aguda se duplica la puntuación (SPEC por Knaus 1985)
+        for (valor, esperado) in [(3.5, 8), (2.0, 6), (1.5, 4), (0.6, 0), (0.5, 4)] {
+            let mut data = paciente_base();
+            data.creatinina = valor;
+            data.falla_renal_aguda = true;
+            assert_eq!(
+                apache_ii_breakdown(&data).creatinina,
+                esperado,
+                "Cr {} mg/dL con ARF → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_hematocrito() {
+        for (valor, esperado) in [(60.0, 4), (50.0, 2), (46.0, 1), (30.0, 0), (20.0, 2), (19.9, 4)] {
+            let mut data = paciente_base();
+            data.hematocrito = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).hematocrito,
+                esperado,
+                "Hto {}% → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_leucocitos() {
+        for (valor, esperado) in [(40.0, 4), (20.0, 2), (15.0, 1), (3.0, 0), (1.0, 2), (0.9, 4)] {
+            let mut data = paciente_base();
+            data.leucocitos = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).leucocitos,
+                esperado,
+                "WBC {} → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_gcs_aps() {
+        // GCS aporta (15 - gcs_total) al APS, 0..=12
+        for (valor, esperado) in [(15, 0), (14, 1), (13, 2), (10, 5), (9, 6), (8, 7), (3, 12)] {
+            let mut data = paciente_base();
+            data.gcs_total = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).gcs_pts,
+                esperado,
+                "GCS {} → puntos APS esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_edad() {
+        for (valor, esperado) in [(44, 0), (45, 2), (54, 2), (55, 3), (64, 3), (65, 5), (74, 5), (75, 6)] {
+            let mut data = paciente_base();
+            data.edad = valor;
+            assert_eq!(
+                apache_ii_breakdown(&data).edad_pts,
+                esperado,
+                "Edad {} años → puntos esperados {}",
+                valor,
+                esperado
+            );
+        }
+    }
+
+    #[test]
+    fn test_fronteras_cronicas() {
+        // Sin crónicas → 0; con cirugía no operada/emergencia → 5; electiva → 2
+        let mut data = paciente_base();
+        data.insuficiencia_hepatica = false;
+        assert_eq!(apache_ii_breakdown(&data).cronicas_pts, 0);
+
+        let mut data = paciente_base();
+        data.insuficiencia_renal = true;
+        data.cirugia_no_operado = true;
+        assert_eq!(apache_ii_breakdown(&data).cronicas_pts, 5, "emergencia/no operado → 5");
+
+        let mut data = paciente_base();
+        data.inmunocomprometido = true;
+        data.cirugia_no_operado = false;
+        assert_eq!(apache_ii_breakdown(&data).cronicas_pts, 2, "electiva → 2");
+    }
+
+    // Score exacto 67 puntos: máximo REALMENTE alcanzable.
+    // El máximo teórico Knaus (71) asume APS=60, pero GCS puntúa (15-gcs)=0..12,
+    // así que el APS máximo es 11*4 + 12 = 56; + edad 6 + crónica 5 = 67.
+    #[test]
+    fn test_score_max_alcanzable() {
+        let data = ApacheIIData {
+            // 11 variables en el peor valor (4 pts) + GCS 3 (12 pts) = 56 APS
+            temperatura: 29.0,               // 4
+            presion_arterial_media: 49.0,    // 4
+            presion_sistolica: 220.0,
+            frecuencia_cardiaca: 39.0,       // 4
+            frecuencia_respiratoria: 5.0,    // 4
+            fio2: 0.21,
+            pao2: Some(30.0),                // 4
+            a_ado2: None,
+            spo2: 85.0,
+            ph_arterial: 7.10,               // 4
+            sodio_serico: 185.0,             // 4
+            potasio_serico: 7.5,             // 4
+            creatinina: 4.0,                 // 4
+            falla_renal_aguda: false,
+            bilirrubina: 12.0,
+            hematocrito: 65.0,               // 4
+            leucocitos: 45.0,                // 4
+            plaquetas: 20.0,
+            gcs_ojos: 1,
+            gcs_verbal: 1,
+            gcs_motor: 1,
+            gcs_total: 3,                    // 12
+            edad: 80,                        // 6
+            insuficiencia_hepatica: true,
+            cardiovascular_severa: true,
+            insuficiencia_respiratoria: true,
+            insuficiencia_renal: true,
+            inmunocomprometido: true,
+            cirugia_no_operado: true,        // 5
+            ventilacion_mecanica: false,
+            vasopresores: false,
+            dosis_vasopresor: 0.0,
+            diuresis_diaria: 200,
+            alerta: false,
+            o2_suplementario: false,
+            nivel_conciencia: String::new(),
+            bicarbonate: 12.0,
+            tipo_admision: None,
+            fuente_admision: None,
+            dias_pre_uci: 0,
+            infeccion_admision: None,
+            sistema_anatomico: None,
+        };
+
+        let breakdown = apache_ii_breakdown(&data);
+        let score = calculate_apache_ii_score(&data);
+
+        assert_eq!(breakdown.aps_total, 56, "APS máximo alcanzable = 56");
+        assert_eq!(breakdown.edad_pts, 6);
+        assert_eq!(breakdown.cronicas_pts, 5);
+        assert_eq!(score, 67, "Máximo APACHE II alcanzable = 67");
+    }
+
     // Test score 0 (paciente saudável)
     #[test]
     fn test_score_0() {
@@ -678,6 +1020,95 @@ mod gcs {
             respuesta_motora: 3,
         };
         assert_eq!(gcs.total(), 7, "GCS trauma severo = 7");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Fronteras de interpretación clínica (Teasdale & Jennett 1974)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_gcs_fronteras_interpretacion() {
+        // El total determina la banda: 3-8 grave, 9-12 moderada, 13-14 leve, 15 normal
+        for (total, ojos, verbal, motor, esperada) in [
+            (3, 1, 1, 1, "grave"),
+            (8, 2, 2, 4, "grave"),
+            (9, 3, 2, 4, "moderada"),
+            (12, 3, 3, 6, "moderada"),
+            (13, 3, 4, 6, "leve"),
+            (14, 4, 4, 6, "leve"),
+            (15, 4, 5, 6, "Consciente"),
+        ] {
+            let build = GcsData { apertura_ocular: ojos, respuesta_verbal: verbal, respuesta_motora: motor };
+            assert_eq!(build.total(), total, "construcción del fixture no suma a {}", total);
+            let interp = build.interpret();
+            assert!(
+                interp.to_lowercase().contains(&esperada.to_lowercase()),
+                "GCS {} debe clasificarse como '{}', interpretación real: '{}'",
+                total,
+                esperada,
+                interp
+            );
+        }
+    }
+
+    #[test]
+    fn test_gcs_frontera_exacta_9() {
+        // 8 → grave; 9 → moderada
+        let grave = GcsData { apertura_ocular: 2, respuesta_verbal: 3, respuesta_motora: 3 };
+        let moderada = GcsData { apertura_ocular: 3, respuesta_verbal: 3, respuesta_motora: 3 };
+        assert_eq!(grave.total(), 8);
+        assert_eq!(moderada.total(), 9);
+        assert!(grave.interpret().contains("grave"));
+        assert!(moderada.interpret().contains("moderada"));
+    }
+
+    #[test]
+    fn test_gcs_frontera_exacta_13() {
+        // 12 → moderada; 13 → leve
+        let moderada = GcsData { apertura_ocular: 3, respuesta_verbal: 3, respuesta_motora: 6 };
+        let leve = GcsData { apertura_ocular: 3, respuesta_verbal: 4, respuesta_motora: 6 };
+        assert_eq!(moderada.total(), 12);
+        assert_eq!(leve.total(), 13);
+        assert!(moderada.interpret().contains("moderada"));
+        assert!(leve.interpret().contains("leve"));
+    }
+
+    #[test]
+    fn test_gcs_frontera_exacta_14() {
+        // 14 → leve; 15 → Consciente/Normal
+        let leve = GcsData { apertura_ocular: 4, respuesta_verbal: 4, respuesta_motora: 6 };
+        let normal = GcsData { apertura_ocular: 4, respuesta_verbal: 5, respuesta_motora: 6 };
+        assert_eq!(leve.total(), 14);
+        assert_eq!(normal.total(), 15);
+        assert!(leve.interpret().contains("leve"));
+        assert!(normal.interpret().contains("Consciente"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Clamping (SPEC-002: totales fuera de rango se acotan a 3..=15)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_gcs_clamping_componentes() {
+        // Componentes > máximo clínico se acotan: 4+5+6 = 15 (no 16+)
+        let over = GcsData { apertura_ocular: 10, respuesta_verbal: 20, respuesta_motora: 30 };
+        assert_eq!(over.total(), 15, "totales sobre-clínicos se clampan a 15");
+
+        // Componentes < mínimo clínico se acotan: 1+1+1 = 3 (no 0)
+        let under = GcsData { apertura_ocular: 0, respuesta_verbal: 0, respuesta_motora: 0 };
+        assert_eq!(under.total(), 3, "totales sub-clínicos se clampan a 3");
+    }
+
+    #[test]
+    fn test_gcs_score_from_total_clamps() {
+        use dmart_shared::scales::calculate_gcs_score_from_total;
+        for total in 3..=15 {
+            assert_eq!(calculate_gcs_score_from_total(total), total, "GCS {} válido se mantiene", total);
+        }
+        assert_eq!(calculate_gcs_score_from_total(0), 3);
+        assert_eq!(calculate_gcs_score_from_total(2), 3);
+        assert_eq!(calculate_gcs_score_from_total(16), 15);
+        assert_eq!(calculate_gcs_score_from_total(200), 15);
     }
 
     #[test]
@@ -874,6 +1305,77 @@ mod news2_tests {
         let score = calculate_news2_score(&data);
         assert!(score >= 3, "NEWS2 con hipoxemia debe dar puntos");
     }
+
+    #[test]
+    fn test_news2_max_score_20_emergent() {
+        let mut data = paciente_base();
+        // Respiración ≤8 rpm -> 3
+        data.frecuencia_respiratoria = 6.0;
+        // SpO2 ≤91% -> 3
+        data.spo2 = 90.0;
+        // O2 suplementario -> 2 (o SpO2 ≤92 en aire -> 2)
+        data.o2_suplementario = true;
+        // PAS ≤90 -> 3
+        data.presion_sistolica = 85.0;
+        // FC ≤40 -> 3
+        data.frecuencia_cardiaca = 35.0;
+        // Temp ≤35.0 -> 2
+        data.temperatura = 34.0;
+        // No alerta -> 3
+        data.alerta = false;
+
+        let score = calculate_news2_score(&data);
+        assert_eq!(score, 20, "NEWS2 máximo debe ser 20, got: {}", score);
+
+        // Verificar que Emergent es alcanzable
+        let level = News2Level::from_score(score);
+        assert_eq!(
+            level,
+            News2Level::Emergent,
+            "NEWS2 20 debe clasificar como Emergent"
+        );
+    }
+
+    #[test]
+    fn test_news2_fronteras_respiracion() {
+        let mut data = paciente_base();
+        data.frecuencia_respiratoria = 8.0;
+        let base = calculate_news2_score(&data);
+
+        data.frecuencia_respiratoria = 9.0;
+        let next = calculate_news2_score(&data);
+        assert!(next < base, "FR 9 (punto 1) debe dar menos que FR 8 (punto 3)");
+
+        data.frecuencia_respiratoria = 12.0;
+        let normal = calculate_news2_score(&data);
+        assert_eq!(normal, next - 1, "FR 12 (punto 0) debe restar 1 vs FR 9 (punto 1)");
+    }
+
+    #[test]
+    fn test_news2_fronteras_pas() {
+        let mut data = paciente_base();
+        data.presion_sistolica = 90.0;
+        let base = calculate_news2_score(&data);
+
+        data.presion_sistolica = 91.0;
+        let next = calculate_news2_score(&data);
+        assert_eq!(base, next + 1, "PAS 90 (3pts) vs PAS 91 (2pts) debe diferir 1");
+
+        data.presion_sistolica = 220.0;
+        let high = calculate_news2_score(&data);
+        assert!(high > next, "PAS 220 (3pts) > PAS 91 (2pts)");
+    }
+
+    #[test]
+    fn test_news2_fronteras_fc() {
+        let mut data = paciente_base();
+        data.frecuencia_cardiaca = 40.0;
+        let base = calculate_news2_score(&data);
+
+        data.frecuencia_cardiaca = 41.0;
+        let next = calculate_news2_score(&data);
+        assert_eq!(base, next + 2, "FC 40 (3pts) vs FC 41 (1pts) debe diferir 2");
+    }
 }
 
 mod saps3_tests {
@@ -1005,5 +1507,29 @@ mod sofa_tests {
         data.plaquetas = 50.0;
         let score = calculate_sofa_score(&data);
         assert!(score >= 1, "SOFA con plaquetas bajas debe dar puntos");
+    }
+
+    #[test]
+    fn test_sofa_max_score_24() {
+        let mut data = paciente_base();
+        // Respiratorio: PaO2/FiO2 < 100 -> 4
+        data.fio2 = 1.0;
+        data.pao2 = Some(50.0);
+        // Coagulación: plaquetas < 20 -> 4
+        data.plaquetas = 10.0;
+        // Hepático: bilirrubina >= 12 -> 4
+        data.bilirrubina = 15.0;
+        // Cardiovascular: vasopresores dosis > 15 -> 4 (fix aplicado)
+        data.vasopresores = true;
+        data.dosis_vasopresor = 20.0;
+        data.presion_arterial_media = 60.0;
+        // Neurológico: GCS < 6 -> 4
+        data.gcs_total = 3;
+        // Renal: creatinina >= 5.0 -> 4
+        data.creatinina = 6.0;
+        data.diuresis_diaria = 100;
+
+        let score = calculate_sofa_score(&data);
+        assert_eq!(score, 24, "SOFA máximo debe ser 24 (era 23 antes del fix), got: {}", score);
     }
 }

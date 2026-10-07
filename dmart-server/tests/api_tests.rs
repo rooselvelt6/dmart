@@ -3081,3 +3081,69 @@ async fn test_hl7_ingest_requires_authentication() {
         "POST /monitores/hl7 sin token debe ser 401/403, status={status}"
     );
 }
+
+#[tokio::test]
+async fn test_measurements_validation_rejects_impossible_vitals() {
+    // SPEC validation.rs conectado en ingesta: medición con un valor
+    // físicamente imposible (temperatura 50 °C) debe rechazarse con 400 y no
+    // persistir ningún registro.
+    let (db, _dir) = test_db().await;
+    dmart_server::migrations::run_migrations(&db)
+        .await
+        .expect("migrations");
+
+    dmart_server::tenant::create_tenant(&db, "hosp-a", "Hospital A")
+        .await
+        .ok();
+    let pid = seed_patient_in_tenant(&db, "hosp-a", "MRN-VAL-001").await;
+
+    seed_user_in_tenant(
+        &db,
+        "clin_val",
+        "SuperSecreto_01!",
+        dmart_shared::models::UserRole::Enfermero,
+        "hosp-a",
+    )
+    .await;
+
+    let app = build_app(&db).await;
+    let token = login_token(&app, "clin_val", "SuperSecreto_01!").await;
+
+    let mut apache = dmart_shared::models::ApacheIIData::default();
+    apache.temperatura = 50.0;
+    let body = serde_json::json!({
+        "apache_data": serde_json::to_value(&apache).expect("apache json"),
+        "gcs_data": serde_json::to_value(dmart_shared::models::GcsData {
+            apertura_ocular: 4,
+            respuesta_verbal: 5,
+            respuesta_motora: 6,
+        }).expect("gcs json"),
+        "notas": "medición imposible",
+    });
+
+    let (status, json) = send(
+        &app,
+        Method::POST,
+        &format!("/patients/{pid}/measurements"),
+        Some(&token),
+        Some(body),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "valor imposible debe rechazarse con 400, body={json}"
+    );
+    assert!(
+        json.to_string().contains("temperatura"),
+        "el error debe nombrar el campo, body={json}"
+    );
+
+    let measurements = dmart_server::db::get_measurements_for_patient(&db, &pid)
+        .await
+        .expect("query measurements");
+    assert!(
+        measurements.is_empty(),
+        "no debe persistirse medición inválida"
+    );
+}

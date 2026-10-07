@@ -584,8 +584,14 @@ pub struct GcsData {
 }
 
 impl GcsData {
+    /// Total GCS (3-15). Los sub-scores se clampan a sus rangos clínicos
+    /// (ojos 1-4, verbal 1-5, motor 1-6) antes de sumar, garantizando que el
+    /// resultado siempre cae en 3..=15 sea cual sea la entrada.
     pub fn total(&self) -> u8 {
-        self.apertura_ocular + self.respuesta_verbal + self.respuesta_motora
+        let ojos = self.apertura_ocular.clamp(1, 4);
+        let verbal = self.respuesta_verbal.clamp(1, 5);
+        let motor = self.respuesta_motora.clamp(1, 6);
+        (ojos + verbal + motor).clamp(3, 15)
     }
 
     pub fn apertura_label(v: u8) -> &'static str {
@@ -710,7 +716,7 @@ impl Measurement {
         gcs: GcsData,
     ) -> Self {
         use crate::scales::{
-            ALGO_VERSION, calculate_apache_ii_score, calculate_news2_score,
+            ALGO_VERSION, SCORE_ALGO_MULTISCALE, calculate_apache_ii_score, calculate_news2_score,
             calculate_saps_iii_score, calculate_sofa_score, mortality_risk,
             saps_iii_mortality_prediction, score_fingerprint, sofa_mortality_estimate,
         };
@@ -731,7 +737,7 @@ impl Measurement {
         // SPEC-029: versionado + fingerprint de los inputs ya normalizados.
         let algorithm_version = ALGO_VERSION.to_string();
         let normalized_inputs = serde_json::to_value(&apache).unwrap_or(serde_json::Value::Null);
-        let fingerprint = score_fingerprint("apache_ii", ALGO_VERSION, &normalized_inputs);
+        let fingerprint = score_fingerprint(SCORE_ALGO_MULTISCALE, ALGO_VERSION, &normalized_inputs);
 
         Self {
             id: None,

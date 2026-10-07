@@ -187,3 +187,85 @@ async fn cds_evaluate_anticoag_plan_always_triggers() {
     );
     assert_eq!(anticoag_result.actions.len(), 2); // Alert + Order
 }
+
+fn ctx_scores(
+    patient_ref: &str,
+    scores: &[(&str, f64)],
+    spo2: f64,
+) -> EvaluationContext {
+    let mut map = std::collections::HashMap::new();
+    for (k, v) in scores {
+        map.insert(k.to_string(), *v);
+    }
+    EvaluationContext {
+        tenant_id: TENANT_TEST.to_string(),
+        patient_id: patient_ref.to_string(),
+        patient: None,
+        current_vitals: Some(dmart_server::hl7::parser::VitalsMessage {
+            message_id: uuid::Uuid::new_v4().to_string(),
+            sender: "TEST".into(),
+            patient_ref: patient_ref.to_string(),
+            patient_ref_is_uuid: false,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            vitals: vec![dmart_server::hl7::parser::Vital {
+                loinc: Some("2708-6".into()),
+                name: "SpO2".into(),
+                value: spo2 as f32,
+                unit: "%".into(),
+            }],
+            source: dmart_server::hl7::parser::MonitorSource::Generic,
+            sequence_number: None,
+        }),
+        current_scores: map,
+        recent_events: vec![],
+        timestamp: chrono::Utc::now().timestamp_millis(),
+    }
+}
+
+async fn plan_triggered(engine: &dmart_server::cds_rules::CdsEngine, ctx: EvaluationContext, plan: &str) -> bool {
+    let results = engine.evaluate(ctx).await.unwrap();
+    results
+        .iter()
+        .find(|r| r.plan_id == plan)
+        .map(|r| r.triggered)
+        .unwrap_or(false)
+}
+
+#[tokio::test]
+async fn cds_sepsis_frontera_exacta_news2_5() {
+    // Frontera exacta (plan9 FASE 3.3): NEWS2=5.0 dispara sepsis; NEWS2=4.9 no.
+    let (db, _tmp) = make_test_db().await;
+    let engine = dmart_server::cds_rules::CdsEngine::new(db.clone());
+    engine.load_active_plans().await.unwrap();
+
+    assert!(
+        plan_triggered(&engine, ctx_scores("SR-500", &[("news2", 5.0), ("sofa", 0.0)], 97.0), "sepsis-3-bundle").await,
+        "NEWS2=5.0 debe disparar el plan de sepsis (>= 5)"
+    );
+    assert!(
+        !plan_triggered(&engine, ctx_scores("SR-499", &[("news2", 4.9), ("sofa", 0.0)], 97.0), "sepsis-3-bundle").await,
+        "NEWS2=4.9 no debe disparar el plan de sepsis"
+    );
+    // Y el brazo alternativo: SpO2<90 con NEWS2>=3 sí dispara.
+    assert!(
+        plan_triggered(&engine, ctx_scores("SR-300", &[("news2", 3.0), ("sofa", 0.0)], 85.0), "sepsis-3-bundle").await,
+        "SpO2<90 con NEWS2=3.0 debe disparar sepsis"
+    );
+}
+
+#[tokio::test]
+async fn cds_ards_frontera_exacta_sofa_2() {
+    // Frontera exacta: SOFA=2.0 con SpO2<88 dispara ARDS; SOFA=1.9 no.
+    let (db, _tmp) = make_test_db().await;
+    let engine = dmart_server::cds_rules::CdsEngine::new(db.clone());
+    engine.load_active_plans().await.unwrap();
+
+    assert!(
+        plan_triggered(&engine, ctx_scores("AR-200", &[("news2", 0.0), ("sofa", 2.0)], 85.0), "ardsnet-ventilation").await,
+        "SOFA=2.0 con SpO2<88 debe disparar ARDS (>= 2)"
+    );
+    assert!(
+        !plan_triggered(&engine, ctx_scores("AR-199", &[("news2", 0.0), ("sofa", 1.9)], 85.0), "ardsnet-ventilation").await,
+        "SOFA=1.9 no debe disparar ARDS"
+    );
+}

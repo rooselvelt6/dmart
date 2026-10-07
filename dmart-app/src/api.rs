@@ -596,12 +596,28 @@ pub async fn calc_sofa(
 pub async fn calc_saps3(
     patient_id: &str,
     edad: u8,
-    dias: u8,
-    tipo: Option<String>,
-    fuente: Option<String>,
+    dias_pre_uci: u8,
+    tipo_admision: Option<String>,
+    fuente_admision: Option<String>,
+    infeccion_admision: Option<String>,
+    sistema_anatomico: Option<String>,
+    temperatura: f32,
+    presion_sistolica: f32,
+    frecuencia_cardiaca: f32,
+    gcs_total: u8,
+    bilirrubina: f32,
+    creatinina: f32,
+    plaquetas: f32,
+    ph_arterial: f32,
+    ventilacion_mecanica: bool,
+    vasopresores: bool,
+    inmunocomprometido: bool,
+    leucocitos: f32,
+    fio2: f32,
+    pao2: Option<f32>,
     notas: Option<String>,
 ) -> ApiResult<Value> {
-    let body = serde_json::json!({ "edad": edad, "dias_pre_uci": dias, "tipo_admision": tipo, "fuente_admision": fuente, "presion_sistolica": 120.0, "frecuencia_cardiaca": 80.0, "gcs_total": 15, "bilirrubina": 0.8, "creatinina": 1.0, "plaquetas": 250.0, "ph_arterial": 7.4, "ventilacion_mecanica": false, "vasopresores": false, "notas": notas });
+    let body = serde_json::json!({ "edad": edad, "dias_pre_uci": dias_pre_uci, "tipo_admision": tipo_admision, "fuente_admision": fuente_admision, "infeccion_admision": infeccion_admision, "sistema_anatomico": sistema_anatomico, "temperatura": temperatura, "presion_sistolica": presion_sistolica, "frecuencia_cardiaca": frecuencia_cardiaca, "gcs_total": gcs_total, "bilirrubina": bilirrubina, "creatinina": creatinina, "plaquetas": plaquetas, "ph_arterial": ph_arterial, "ventilacion_mecanica": ventilacion_mecanica, "vasopresores": vasopresores, "inmunocomprometido": inmunocomprometido, "leucocitos": leucocitos, "fio2": fio2, "pao2": pao2, "notas": notas });
     let resp: ApiResponse<Value> = authed_post(&format!(
         "{}/patients/{}/scales/saps3",
         API_BASE, patient_id

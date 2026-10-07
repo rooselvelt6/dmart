@@ -64,6 +64,7 @@ pub struct Saps3Request {
     pub fuente_admision: Option<String>,
     pub infeccion_admision: Option<String>,
     pub sistema_anatomico: Option<String>,
+    pub temperatura: f32,
     pub presion_sistolica: f32,
     pub frecuencia_cardiaca: f32,
     pub gcs_total: u8,
@@ -73,6 +74,10 @@ pub struct Saps3Request {
     pub ph_arterial: f32,
     pub ventilacion_mecanica: bool,
     pub vasopresores: bool,
+    pub inmunocomprometido: bool,
+    pub leucocitos: f32,
+    pub fio2: f32,
+    pub pao2: Option<f32>,
     pub notas: Option<String>,
 }
 
@@ -195,7 +200,7 @@ pub async fn calc_apache(
     let news2 = calculate_news2_score(&body.data);
     let sofa = calculate_sofa_score(&body.data);
 
-    // SPEC-029: versionado + fingerprint.
+// SPEC-029: versionado + fingerprint.
     let algorithm_version = ALGO_VERSION.to_string();
     let fingerprint = score_fingerprint(
         "apache_ii",
@@ -308,7 +313,7 @@ pub async fn calc_gcs(
     // SPEC-029: versionado + fingerprint.
     let algorithm_version = ALGO_VERSION.to_string();
     let fingerprint = score_fingerprint(
-        "apache_ii",
+        "gcs",
         ALGO_VERSION,
         &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
     );
@@ -319,7 +324,7 @@ pub async fn calc_gcs(
         patient_id: patient_id.clone(),
         timestamp: now.clone(),
         apache_data,
-        gcs_data: gcs,
+        gcs_data: gcs.clone(),
         apache_score,
         gcs_score: total,
         severity: severity.clone(),
@@ -348,9 +353,9 @@ pub async fn calc_gcs(
                 measurement_id: mid,
                 patient_id,
                 timestamp: now,
-                apertura_ocular: body.apertura_ocular,
-                respuesta_verbal: body.respuesta_verbal,
-                respuesta_motora: body.respuesta_motora,
+                apertura_ocular: gcs.apertura_ocular,
+                respuesta_verbal: gcs.respuesta_verbal,
+                respuesta_motora: gcs.respuesta_motora,
                 total,
                 interpretacion,
                 notas: body.notas.unwrap_or_default(),
@@ -413,7 +418,7 @@ pub async fn calc_news2(
     // SPEC-029: versionado + fingerprint.
     let algorithm_version = ALGO_VERSION.to_string();
     let fingerprint = score_fingerprint(
-        "apache_ii",
+        "news2",
         ALGO_VERSION,
         &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
     );
@@ -514,7 +519,7 @@ pub async fn calc_sofa(
     // SPEC-029: versionado + fingerprint.
     let algorithm_version = ALGO_VERSION.to_string();
     let fingerprint = score_fingerprint(
-        "apache_ii",
+        "sofa",
         ALGO_VERSION,
         &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
     );
@@ -597,6 +602,7 @@ pub async fn calc_saps3(
         fuente_admision: body.fuente_admision.clone(),
         infeccion_admision: body.infeccion_admision.clone(),
         sistema_anatomico: body.sistema_anatomico.clone(),
+        temperatura: body.temperatura,
         presion_sistolica: body.presion_sistolica,
         frecuencia_cardiaca: body.frecuencia_cardiaca,
         gcs_total: body.gcs_total,
@@ -606,6 +612,10 @@ pub async fn calc_saps3(
         ph_arterial: body.ph_arterial,
         ventilacion_mecanica: body.ventilacion_mecanica,
         vasopresores: body.vasopresores,
+        inmunocomprometido: body.inmunocomprometido,
+        leucocitos: body.leucocitos,
+        fio2: body.fio2,
+        pao2: body.pao2,
         ..ApacheIIData::default()
     };
 
@@ -617,10 +627,10 @@ pub async fn calc_saps3(
 
     let nivel = level.label().to_string();
 
-    // SPEC-029: versionado + fingerprint.
+// SPEC-029: versionado + fingerprint.
     let algorithm_version = ALGO_VERSION.to_string();
     let fingerprint = score_fingerprint(
-        "apache_ii",
+        "saps3",
         ALGO_VERSION,
         &serde_json::to_value(&apache_data).unwrap_or(serde_json::Value::Null),
     );

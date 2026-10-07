@@ -66,6 +66,57 @@ pub struct GcsExpected {
     pub interpretation: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct News2Fixture {
+    pub id: String,
+    pub source: String,
+    #[serde(default)]
+    pub comment: Option<String>,
+    pub inputs: ApacheIIData,
+    pub expected: News2Expected,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct News2Expected {
+    pub news2: u32,
+    #[serde(default)]
+    pub level: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SofaFixture {
+    pub id: String,
+    pub source: String,
+    #[serde(default)]
+    pub comment: Option<String>,
+    pub inputs: ApacheIIData,
+    pub expected: SofaExpected,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SofaExpected {
+    pub sofa: u32,
+    #[serde(default)]
+    pub mortality: Option<f32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Saps3Fixture {
+    pub id: String,
+    pub source: String,
+    #[serde(default)]
+    pub comment: Option<String>,
+    pub inputs: ApacheIIData,
+    pub expected: Saps3Expected,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Saps3Expected {
+    pub saps3: u32,
+    #[serde(default)]
+    pub mortality: Option<f32>,
+}
+
 #[derive(Debug, Clone)]
 pub enum FixtureError {
     DirectoryNotFound(PathBuf),
@@ -150,6 +201,114 @@ pub fn load_gcs_fixtures() -> Result<Vec<GcsFixture>, FixtureError> {
         ));
     }
     Ok(fixtures)
+}
+
+/// Carga todos los fixtures NEWS2 (SPEC-028, RCP 2017).
+pub fn load_news2_fixtures() -> Result<Vec<News2Fixture>, FixtureError> {
+    let dir = testdata_dir().join("scales").join("news2");
+    let paths = list_json_files(&dir)?;
+    let mut fixtures = Vec::new();
+    for path in &paths {
+        let fixture: News2Fixture = load_json(path)?;
+        validate_news2_invariants(&fixture)?;
+        fixtures.push(fixture);
+    }
+    if fixtures.is_empty() {
+        return Err(FixtureError::MissingFixtures(
+            "NEWS2: no hay fixtures en testdata".into(),
+        ));
+    }
+    Ok(fixtures)
+}
+
+/// Carga todos los fixtures SOFA (SPEC-028, Vincent 1996).
+pub fn load_sofa_fixtures() -> Result<Vec<SofaFixture>, FixtureError> {
+    let dir = testdata_dir().join("scales").join("sofa");
+    let paths = list_json_files(&dir)?;
+    let mut fixtures = Vec::new();
+    for path in &paths {
+        let fixture: SofaFixture = load_json(path)?;
+        validate_sofa_invariants(&fixture)?;
+        fixtures.push(fixture);
+    }
+    if fixtures.is_empty() {
+        return Err(FixtureError::MissingFixtures(
+            "SOFA: no hay fixtures en testdata".into(),
+        ));
+    }
+    Ok(fixtures)
+}
+
+/// Carga todos los fixtures SAPS III (variante dMart, SPEC-028).
+pub fn load_saps3_fixtures() -> Result<Vec<Saps3Fixture>, FixtureError> {
+    let dir = testdata_dir().join("scales").join("saps3");
+    let paths = list_json_files(&dir)?;
+    let mut fixtures = Vec::new();
+    for path in &paths {
+        let fixture: Saps3Fixture = load_json(path)?;
+        validate_saps3_invariants(&fixture)?;
+        fixtures.push(fixture);
+    }
+    if fixtures.is_empty() {
+        return Err(FixtureError::MissingFixtures(
+            "SAPS3: no hay fixtures en testdata".into(),
+        ));
+    }
+    Ok(fixtures)
+}
+
+fn validate_news2_invariants(fixture: &News2Fixture) -> Result<(), FixtureError> {
+    if fixture.expected.news2 > 20 {
+        return Err(FixtureError::InvalidInvariant(format!(
+            "{}: news2 esperado {} excede el máximo 20 de la escala (RCP 2017)",
+            fixture.id, fixture.expected.news2
+        )));
+    }
+    if let Some(level) = &fixture.expected.level {
+        if !["Bajo", "Medio", "Alto", "Emergencia"].contains(&level.as_str()) {
+            return Err(FixtureError::InvalidInvariant(format!(
+                "{}: nivel NEWS2 '{}' inválido",
+                fixture.id, level
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_sofa_invariants(fixture: &SofaFixture) -> Result<(), FixtureError> {
+    if fixture.expected.sofa > 24 {
+        return Err(FixtureError::InvalidInvariant(format!(
+            "{}: sofa esperado {} excede el máximo 24 de la escala",
+            fixture.id, fixture.expected.sofa
+        )));
+    }
+    if let Some(m) = fixture.expected.mortality {
+        if !(0.0..=100.0).contains(&m) {
+            return Err(FixtureError::InvalidInvariant(format!(
+                "{}: mortalidad {} fuera de 0-100",
+                fixture.id, m
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_saps3_invariants(fixture: &Saps3Fixture) -> Result<(), FixtureError> {
+    if fixture.expected.saps3 > 145 {
+        return Err(FixtureError::InvalidInvariant(format!(
+            "{}: saps3 esperado {} excede el máximo 145 de la variante dMart",
+            fixture.id, fixture.expected.saps3
+        )));
+    }
+    if let Some(m) = fixture.expected.mortality {
+        if !(0.0..=100.0).contains(&m) {
+            return Err(FixtureError::InvalidInvariant(format!(
+                "{}: mortalidad {} fuera de 0-100",
+                fixture.id, m
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_apache_ii_invariants(fixture: &ApacheIiFixture) -> Result<(), FixtureError> {

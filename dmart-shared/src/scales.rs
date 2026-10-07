@@ -28,6 +28,16 @@ use std::collections::BTreeMap;
 /// - `patch` : refactor sin cambio de valor
 pub const ALGO_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Identificador de algoritmo para el fingerprint (SPEC-029) de una medición
+/// **completa**: `Measurement::new_for_tenant` (HTTP + HL7/MLLP) computa las 5
+/// escalas (APACHE II, GCS, NEWS2, SOFA, SAPS III) sobre la misma entrada
+/// normalizada, así que el fingerprint cubre el cálculo multiescala completo.
+///
+/// Los endpoints de cálculo individual (`/api/scales/*`) usan en cambio la
+/// etiqueta de la escala medida (`"apache_ii"`, `"gcs"`, `"news2"`, `"sofa"`,
+/// `"saps3"`), de modo que el hash identifica el algoritmo real de cada score.
+pub const SCORE_ALGO_MULTISCALE: &str = "apache_ii_multiscale";
+
 /// Normaliza un `Value` a una forma canónica: claves de objetos ordenadas
 /// lexicográficamente y sin espacios de formato. De este modo el hash es
 /// insensible al orden/espaciado del JSON de entrada.
@@ -261,13 +271,15 @@ fn points_cronicas(data: &ApacheIIData) -> u32 {
 // Score total Apache II (0-71)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Calculates total APACHE II score (max 71 points).
+// Calculates total APACHE II score (Knaus 1985, max published 71).
 ///
-/// - Acute Physiology Score (APS): 0-60 points from vital signs + lab values
+/// - Acute Physiology Score (APS): 0-56 points from vital signs + lab values
+///   (11 variables × 4 puntos + GCS (15-gcs) 0-12 = 56; el máximo teórico
+///   60 publicado asume un GCS de 4 puntos, no alcanzable con 15-gcs)
 /// - Age: 0-6 points
 /// - Chronic health points: 0-5 points
 ///
-/// Follows Knaus 1985 standard.
+/// Total máximo alcanzable: 67. Follows Knaus 1985 standard.
 pub fn calculate_apache_ii_score(data: &ApacheIIData) -> u32 {
     let aps = points_temperatura(data.temperatura)
         + points_pam(data.presion_arterial_media)
@@ -465,6 +477,7 @@ mod tests {
         data.vasopresores = true;
         data.dosis_vasopresor = 15.0;
         data.diuresis_diaria = 100;
+        data.alerta = false;
         data.tipo_admision = Some("medical".to_string());
         data.fuente_admision = Some("emergency_room".to_string());
         data.dias_pre_uci = 2;
@@ -674,7 +687,10 @@ mod tests {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SAPS III Scoring (0-104 points)
+// SAPS III Scoring (variante simplificada dMart, 0-145 points)
+// NOTA: El SAPS III publicado (Moreno et al. 2005) alcanza 0-217 puntos con
+// tablas de búsqueda completas. Esta implementación usa una variante acotada
+// con las variables disponibles en ApacheIIData; su máximo calculado es 145.
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn points_saps_edad(edad: u8) -> u32 {
@@ -826,8 +842,10 @@ fn points_saps_oxigenacion(vm: bool, pao2fio2: f32) -> u32 {
     }
 }
 
-/// Calculates SAPS III score (0-100).
-/// Includes: age, comorbidities, surgical status, VS, lab values.
+/// Calculates SAPS III score, variante simplificada (0-145).
+/// Incluye: edad, comorbilidades, estado quirúrgico, signos vitales, laboratorios.
+/// El SAPS III publicado (Moreno 2005) va hasta 217; este modelo acotado a las
+/// variables de ApacheIIData alcanza un máximo real de 145.
 pub fn calculate_saps_iii_score(data: &ApacheIIData) -> u32 {
     let edad_pts = points_saps_edad(data.edad);
     let comorb_pts = points_saps_comorbilidad(data.inmunocomprometido);
@@ -880,36 +898,33 @@ pub fn saps_iii_mortality_prediction(score: u32) -> f32 {
 // Saps3Breakdown and saps_iii_breakdown moved to consolidated section below
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NEWS2 Scoring (0-64 points)
+// NEWS2 Scoring (0-20 points) - RCP 2017 standard
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn points_news2_respiracion(fr: f32) -> u32 {
     match fr {
-        fr if fr >= 25.0 => 3,
-        fr if fr >= 21.0 => 2,
-        fr if fr >= 12.0 => 1,
-        fr if fr >= 9.0 => 0,
-        _ => 2,
+        fr if fr <= 8.0 => 3,
+        fr if fr <= 11.0 => 1,
+        fr if fr <= 20.0 => 0,
+        fr if fr <= 24.0 => 2,
+        _ => 3,
     }
 }
 
 fn points_news2_spo2(spo2: f32) -> u32 {
     match spo2 {
-        s if s >= 96.0 => 0,
-        s if s >= 94.0 => 1,
-        s if s >= 92.0 => 2,
-        s if s >= 88.0 => 3,
-        _ => 3,
+        s if s <= 91.0 => 3,
+        s if s <= 93.0 => 2,
+        s if s <= 95.0 => 1,
+        _ => 0,
     }
 }
 
-fn points_news2_airway(escala2: bool, spo2: f32) -> u32 {
-    if escala2 && spo2 < 92.0 {
-        match spo2 {
-            s if s >= 88.0 => 2,
-            s if s >= 86.0 => 3,
-            _ => 3,
-        }
+fn points_news2_air_o2(o2_suplementario: bool, spo2: f32) -> u32 {
+    if o2_suplementario {
+        2
+    } else if spo2 <= 92.0 {
+        2
     } else {
         0
     }
@@ -917,56 +932,51 @@ fn points_news2_airway(escala2: bool, spo2: f32) -> u32 {
 
 fn points_news2_pas(pas: f32) -> u32 {
     match pas {
-        p if p >= 220.0 => 3,
-        p if p >= 110.0 => 0,
-        p if p >= 100.0 => 2,
-        p if p >= 90.0 => 3,
+        p if p <= 90.0 => 3,
+        p if p <= 100.0 => 2,
+        p if p <= 110.0 => 1,
+        p if p <= 219.0 => 0,
         _ => 3,
     }
 }
 
 fn points_news2_fc(fc: f32) -> u32 {
     match fc {
-        f if f >= 130.0 => 3,
-        f if f >= 110.0 => 2,
-        f if f >= 50.0 => 0,
-        f if f >= 40.0 => 1,
+        f if f <= 40.0 => 3,
+        f if f <= 50.0 => 1,
+        f if f <= 90.0 => 0,
+        f if f <= 110.0 => 1,
+        f if f <= 130.0 => 2,
         _ => 3,
     }
 }
 
 fn points_news2_temperatura(temp: f32) -> u32 {
     match temp {
-        t if t >= 39.0 => 2,
-        t if t >= 38.0 => 1,
-        t if t >= 36.0 => 0,
-        t if t >= 35.0 => 1,
+        t if t <= 35.0 => 3,
+        t if t <= 36.0 => 1,
+        t if t <= 38.0 => 0,
+        t if t <= 39.0 => 1,
         _ => 2,
     }
 }
 
-fn points_news2_conciencia(gcs: u8) -> u32 {
-    match gcs {
-        15 => 0,
-        14 => 1,
-        10..=13 => 2,
-        _ => 3,
-    }
+fn points_news2_conciencia(alerta: bool) -> u32 {
+    if alerta { 0 } else { 3 }
 }
 
-/// Calculates NEWS2 score (0-100+).
-/// UK early warning score for acute illness severity.
+/// Calculates NEWS2 score (0-20) per RCP 2017.
+/// UK National Early Warning Score 2 for acute illness severity.
 pub fn calculate_news2_score(data: &ApacheIIData) -> u32 {
     let fr_pts = points_news2_respiracion(data.frecuencia_respiratoria);
     let spo2_pts = points_news2_spo2(data.spo2);
-    let airway_pts = points_news2_airway(false, data.spo2);
-    let o2_pts = if data.o2_suplementario { 2 } else { 0 };
+    let air_o2_pts = points_news2_air_o2(data.o2_suplementario, data.spo2);
     let pas_pts = points_news2_pas(data.presion_sistolica);
     let fc_pts = points_news2_fc(data.frecuencia_cardiaca);
     let temp_pts = points_news2_temperatura(data.temperatura);
-    let conciencia_pts = points_news2_conciencia(data.gcs_total);
+    let conciencia_pts = points_news2_conciencia(data.alerta);
 
-    fr_pts + spo2_pts + airway_pts + o2_pts + pas_pts + fc_pts + temp_pts + conciencia_pts
+    fr_pts + spo2_pts + air_o2_pts + pas_pts + fc_pts + temp_pts + conciencia_pts
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1084,19 +1094,18 @@ pub fn calculate_saps3_breakdown(data: &ApacheIIData) -> Saps3Breakdown {
 pub fn news2_breakdown(data: &ApacheIIData) -> News2Breakdown {
     let fr = points_news2_respiracion(data.frecuencia_respiratoria);
     let spo2 = points_news2_spo2(data.spo2);
-    let airway = points_news2_airway(false, data.spo2);
-    let o2 = if data.o2_suplementario { 2 } else { 0 };
+    let air_o2 = points_news2_air_o2(data.o2_suplementario, data.spo2);
     let pas = points_news2_pas(data.presion_sistolica);
     let fc = points_news2_fc(data.frecuencia_cardiaca);
     let temp = points_news2_temperatura(data.temperatura);
-    let conciencia = points_news2_conciencia(data.gcs_total);
-    let total = fr + spo2 + airway + o2 + pas + fc + temp + conciencia;
+    let conciencia = points_news2_conciencia(data.alerta);
+    let total = fr + spo2 + air_o2 + pas + fc + temp + conciencia;
 
     News2Breakdown {
         fr,
         spo2,
-        airway,
-        o2,
+        airway: air_o2,
+        o2: 0,
         pas,
         fc,
         temp,
@@ -1140,18 +1149,18 @@ fn points_sofa_hepatico(bilirrubina: f32) -> u32 {
 }
 
 fn points_sofa_cardiovascular(pam: f32, vasoactivos: bool, dosis: f32) -> u32 {
-    if pam >= 70.0 {
-        if !vasoactivos {
+    if !vasoactivos {
+        if pam >= 70.0 {
             0
         } else {
-            match dosis {
-                d if d <= 0.1 => 2,
-                d if d <= 5.0 => 2,
-                _ => 3,
-            }
+            1
         }
     } else {
-        1
+        match dosis {
+            d if d <= 5.0 => 2,
+            d if d <= 15.0 => 3,
+            _ => 4,
+        }
     }
 }
 
@@ -1317,7 +1326,7 @@ mod proptests {
         #[test]
         fn saps3_score_bounded(data in arb_apache_data()) {
             let score = calculate_saps_iii_score(&data);
-            prop_assert!(score <= 104, "SAPS III score must be <= 104, got {}", score);
+            prop_assert!(score <= 145, "SAPS III score must be <= 145, got {}", score);
         }
 
         #[test]
@@ -1355,8 +1364,10 @@ mod proptests {
             let gcs = data.gcs_total as u32;
 
             // Todos los scores deben ser finitos y en rango esperado
-            prop_assert!(apache <= 71);
-            prop_assert!(saps3 <= 104);
+            // APACHE II: techo teórico Knaus 71, máximo alcanzable 67
+            // (APS máx = 11*4 + GCS 12 = 56; + edad 6 + crónica 5)
+            prop_assert!(apache <= 67);
+            prop_assert!(saps3 <= 145);
             prop_assert!(news2 <= 20);
             prop_assert!(sofa <= 24);
             prop_assert!((3..=15).contains(&gcs));
@@ -1395,9 +1406,9 @@ mod proptests {
             let breakdown = calculate_saps3_breakdown(&data);
             let score = calculate_saps_iii_score(&data);
             prop_assert_eq!(breakdown.total, score);
-            prop_assert!(breakdown.box1 <= 42);
-            prop_assert!(breakdown.box2 <= 14);
-            prop_assert!(breakdown.box3 <= 48);
+            prop_assert!(breakdown.box1 <= 47);
+            prop_assert!(breakdown.box2 <= 15);
+            prop_assert!(breakdown.box3 <= 83);
         }
 
         #[test]

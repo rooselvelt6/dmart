@@ -1,10 +1,12 @@
 //! SPEC-029: Auditoría de fingerprints de scores (GET /admin/audit/scores).
 //!
-//! Para cada `measurement` persistido se recomputa el fingerprint de APACHE II
-//! a partir de los inputs ya normalizados (`apache_data`) y se compara contra
-//! el fingerprint guardado en el momento de la escritura. Los registros
-//! históricos sin fingerprint (previos a la migración 029) se marcan como
-//! "sin fingerprint" (`reproducible=false`, `algorithm_version="<legacy>"`).
+//! Para cada `measurement` persistido se recomputa el fingerprint del cálculo
+//! multiescala completo (APACHE II + GCS + NEWS2 + SOFA + SAPS III sobre la
+//! misma entrada normalizada) a partir de los inputs ya normalizados
+//! (`apache_data`) y se compara contra el fingerprint guardado en el momento de
+//! la escritura. Los registros históricos sin fingerprint (previos a la
+//! migración 029) se marcan como "sin fingerprint" (`reproducible=false`,
+//! `algorithm_version="<legacy>"`).
 
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use dmart_shared::models::{ApiResponse, Measurement};
@@ -17,8 +19,9 @@ use crate::db::Database;
 
 /// Versión por defecto de mediciones históricas sin fingerprint (migración 029).
 const LEGACY_VERSION: &str = "<legacy>";
-/// Algoritmo sobre el que se calcula/reproduce el fingerprint.
-const ALGO: &str = "apache_ii";
+/// Algoritmo de la medición completa: el fingerprint cubre las 5 escalas
+/// compartidas sobre la misma entrada normalizada (SPEC-029, `SCORE_ALGO_MULTISCALE`).
+const ALGO: &str = dmart_shared::scales::SCORE_ALGO_MULTISCALE;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScoreAuditEntry {

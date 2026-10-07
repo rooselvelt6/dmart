@@ -205,6 +205,17 @@ async fn do_ingest_vitals(
         .or(Some(GcsData::default()))
         .expect("gte");
 
+    // Validación clínica no bloqueante (dmart-shared/src/validation.rs): la
+    // ingesta HL7 es automática, así que los valores imposibles solo se loguean
+    // y siguen generando score (clamped) en lugar de descartar el mensaje.
+    let v_apache = dmart_shared::validation::validate_apache_measurement(&apache);
+    let v_gcs = dmart_shared::validation::validate_gcs_measurement(&gcs);
+    for v in [&v_apache, &v_gcs] {
+        for err in &v.errors {
+            tracing::warn!(patient_id = %patient.patient_id, field = %err.field, value = %err.value, "HL7 ingesta: medición con valor fuera de rango físico ({})", err.message);
+        }
+    }
+
     let mut measurement =
         Measurement::new_for_tenant(&patient.patient_id, &patient.tenant_id, apache, gcs);
     measurement.timestamp = msg.timestamp.clone();

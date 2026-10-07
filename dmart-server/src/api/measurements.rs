@@ -10,9 +10,9 @@ use axum::{
 use chrono::Utc;
 use dmart_shared::models::*;
 use dmart_shared::scales::{
-    ALGO_VERSION, calculate_apache_ii_score, calculate_gcs_score, calculate_news2_score,
-    calculate_saps_iii_score, calculate_sofa_score, mortality_risk, saps_iii_mortality_prediction,
-    score_fingerprint, sofa_mortality_estimate,
+    ALGO_VERSION, SCORE_ALGO_MULTISCALE, calculate_apache_ii_score, calculate_gcs_score,
+    calculate_news2_score, calculate_saps_iii_score, calculate_sofa_score, mortality_risk,
+    saps_iii_mortality_prediction, score_fingerprint, sofa_mortality_estimate,
 };
 use uuid::Uuid;
 
@@ -44,6 +44,21 @@ pub async fn create_measurement(
         }
     };
 
+    // Validación clínica de rangos físicos antes de calcular scores
+    // (dmart-shared/src/validation.rs): valores físicamente imposibles se
+    // rechazan con 400; los críticos posibles solo generan warnings.
+    let v_apache = dmart_shared::validation::validate_apache_measurement(&body.apache_data);
+    let v_gcs = dmart_shared::validation::validate_gcs_measurement(&body.gcs_data);
+    for v in [&v_apache, &v_gcs] {
+        if let Some(err) = v.errors.first() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<Measurement>::err(&err.message)),
+            )
+                .into_response();
+        }
+    }
+
     // Calcular todos los scores
     let apache_score = calculate_apache_ii_score(&body.apache_data);
     let gcs_score = calculate_gcs_score(&body.gcs_data);
@@ -61,7 +76,7 @@ pub async fn create_measurement(
     let algorithm_version = ALGO_VERSION.to_string();
     let normalized_inputs =
         serde_json::to_value(&body.apache_data).unwrap_or(serde_json::Value::Null);
-    let fingerprint = score_fingerprint("apache_ii", ALGO_VERSION, &normalized_inputs);
+    let fingerprint = score_fingerprint(SCORE_ALGO_MULTISCALE, ALGO_VERSION, &normalized_inputs);
 
     let measurement = Measurement {
         id: None,
